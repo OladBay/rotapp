@@ -61,5 +61,23 @@ export const mockUsers = [
     role: 'relief',
     activeRole: 'relief',
     home: null
-  }
+  },
+  {
+    id: 'u8',
+    name: 'Marco Testa',
+    email: 'marco@rotapp.com',
+    password: 'test123',
+    role: 'rcw',
+    activeRole: 'rcw',
+    home: 'meadowview'
+  },
+  {
+    id: 'u9',
+    name: 'Tyler Beckett',
+    email: 'tyler@rotapp.com',
+    password: 'test123',
+    role: 'relief',
+    activeRole: 'relief',
+    home: null
+  },
 ]

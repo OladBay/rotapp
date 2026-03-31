@@ -1,0 +1,26 @@
+export const mockShifts = {
+  's6': [
+    { date: '2025-03-31', day: 'Mon', type: 'late',  time: '14:00–23:00', sleepIn: true,  home: 'Meadowview House', status: 'confirmed' },
+    { date: '2025-04-02', day: 'Wed', type: 'early', time: '07:00–14:30', sleepIn: false, home: 'Meadowview House', status: 'confirmed' },
+    { date: '2025-04-04', day: 'Fri', type: 'late',  time: '14:00–23:30', sleepIn: false, home: 'Meadowview House', status: 'confirmed' },
+    { date: '2025-04-05', day: 'Sat', type: 'early', time: '07:00–14:30', sleepIn: false, home: 'Meadowview House', status: 'confirmed' },
+  ],
+  's4': [
+    { date: '2025-03-31', day: 'Mon', type: 'early', time: '07:00–14:30', sleepIn: false, home: 'Meadowview House', status: 'confirmed' },
+    { date: '2025-04-01', day: 'Tue', type: 'late',  time: '14:00–23:00', sleepIn: true,  home: 'Meadowview House', status: 'confirmed' },
+    { date: '2025-04-03', day: 'Thu', type: 'early', time: '07:00–14:30', sleepIn: false, home: 'Meadowview House', status: 'confirmed' },
+    { date: '2025-04-06', day: 'Sun', type: 'late',  time: '14:00–23:00', sleepIn: false, home: 'Meadowview House', status: 'confirmed' },
+  ],
+  's8': [
+    { date: '2025-04-01', day: 'Tue', type: 'early', time: '07:00–14:30', sleepIn: false, home: 'Meadowview House', status: 'confirmed' },
+    { date: '2025-04-02', day: 'Wed', type: 'late',  time: '14:00–23:00', sleepIn: false, home: 'Riverside Home',   status: 'confirmed' },
+    { date: '2025-04-04', day: 'Fri', type: 'early', time: '07:00–14:30', sleepIn: false, home: 'Meadowview House', status: 'confirmed' },
+    { date: '2025-04-05', day: 'Sat', type: 'late',  time: '14:00–23:30', sleepIn: false, home: 'Oakfield',         status: 'confirmed' },
+  ],
+}
+
+export const staffIdMap = {
+  'marco@rotapp.com':  's6',
+  'dayo@rotapp.com':   's4',
+  'tyler@rotapp.com':  's8',
+}
