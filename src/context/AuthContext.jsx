@@ -16,25 +16,27 @@ export function AuthProvider({ children }) {
   }
 
   const switchRole = (role, home) => {
-    setUser(prev => ({
+    setUser((prev) => ({
       ...prev,
       activeRole: role,
       activeHome: home,
-      originalRole: prev.role
+      originalRole: prev.role,
     }))
   }
 
   const revertRole = () => {
-    setUser(prev => ({
+    setUser((prev) => ({
       ...prev,
       activeRole: prev.originalRole,
       activeHome: null,
-      originalRole: null
+      originalRole: null,
     }))
   }
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, switchRole, revertRole }}>
+    <AuthContext.Provider
+      value={{ user, login, logout, switchRole, revertRole }}
+    >
       {children}
     </AuthContext.Provider>
   )

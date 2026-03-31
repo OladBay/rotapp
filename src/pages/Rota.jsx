@@ -1,45 +1,115 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import Navbar from '../components/layout/Navbar'
+import GenerateModal from '../components/layout/GenerateModal'
 import { mockRota, mockStaff } from '../data/mockRota'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import {
+  getWeekDates,
+  formatDate,
+  formatShort,
+  getDayLabel,
+  getMondayOfWeek,
+  addWeeks,
+  getMonthDates,
+  isSameDay,
+  dateKey,
+} from '../utils/dateUtils'
 
-const DAYS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun']
-const DATES = ['31 Mar','1 Apr','2 Apr','3 Apr','4 Apr','5 Apr','6 Apr']
-const TODAY = 1
+const TODAY = new Date()
+const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
 function Rota() {
   const { user } = useAuth()
   const navigate = useNavigate()
-  const [rota, setRota] = useState(mockRota)
 
-  const staffMap = Object.fromEntries(mockStaff.map(s => [s.id, s]))
-  const canEdit = ['manager','deputy','superadmin'].includes(user?.activeRole)
-  const canSeeGaps = ['manager','deputy','senior','operationallead','superadmin'].includes(user?.activeRole)
+  const [viewMode, setViewMode] = useState('week')
+  const [currentMonday, setMonday] = useState(getMondayOfWeek(TODAY))
+  const [rota, setRota] = useState(mockRota)
+  const [showGenerate, setShowGenerate] = useState(false)
+
+  const [jumpValue, setJumpValue] = useState('')
+  const [showJump, setShowJump] = useState(false)
+
+  const weekDates = getWeekDates(currentMonday)
+  const monthDates = useMemo(() => {
+    return getMonthDates(currentMonday.getFullYear(), currentMonday.getMonth())
+  }, [currentMonday])
+
+  const staffMap = Object.fromEntries(mockStaff.map((s) => [s.id, s]))
+  const canEdit = ['manager', 'deputy', 'superadmin'].includes(user?.activeRole)
+  const canSeeGaps = [
+    'manager',
+    'deputy',
+    'senior',
+    'operationallead',
+    'superadmin',
+  ].includes(user?.activeRole)
+
+  const startLabel = formatDate(weekDates[0])
+  const endLabel = formatDate(weekDates[6])
+
+  const monthLabel = currentMonday.toLocaleDateString('en-GB', {
+    month: 'long',
+    year: 'numeric',
+  })
+
+  const prevWeek = () => setMonday((prev) => addWeeks(prev, -1))
+  const nextWeek = () => setMonday((prev) => addWeeks(prev, 1))
+  const prevMonth = () =>
+    setMonday((prev) => {
+      const d = new Date(prev)
+      d.setMonth(d.getMonth() - 1)
+      return getMondayOfWeek(new Date(d.getFullYear(), d.getMonth(), 1))
+    })
+  const nextMonth = () =>
+    setMonday((prev) => {
+      const d = new Date(prev)
+      d.setMonth(d.getMonth() + 1)
+      return getMondayOfWeek(new Date(d.getFullYear(), d.getMonth(), 1))
+    })
+
+  const handleJump = () => {
+    if (!jumpValue) return
+    const picked = new Date(jumpValue)
+    if (isNaN(picked)) return
+    setMonday(getMondayOfWeek(picked))
+    setShowJump(false)
+    setJumpValue('')
+  }
+
+  const toggleDay = (i) => {
+    setHiddenDays((prev) =>
+      prev.includes(i) ? prev.filter((d) => d !== i) : [...prev, i]
+    )
+  }
 
   const getViolations = (dayIdx) => {
     const v = []
     const early = rota.early[dayIdx] || []
     const late = rota.late[dayIdx] || []
-    const sleepIns = late.filter(e => e.sleepIn)
-    if (early.length < 3) v.push(`Early understaffed (${early.length}/3)`)
-    if (late.length < 3)  v.push(`Late understaffed (${late.length}/3)`)
+    const sleepIns = late.filter((e) => e.sleepIn)
+    if (early.length < 3) v.push(`Early: ${early.length}/3`)
+    if (late.length < 3) v.push(`Late: ${late.length}/3`)
     if (sleepIns.length !== 2) v.push(`Sleep-ins: ${sleepIns.length}/2`)
-    const earlyHasF = early.some(e => staffMap[e.id]?.gender === 'F')
-    const lateHasF  = late.some(e => staffMap[e.id]?.gender === 'F')
-    if (!earlyHasF) v.push('Early: no female')
-    if (!lateHasF)  v.push('Late: no female')
     return v
   }
 
-  const totalViolations = DAYS.reduce((a,_,i) => a + getViolations(i).length, 0)
+  const totalViolations = DAYS.reduce(
+    (a, _, i) => a + getViolations(i).length,
+    0
+  )
+  const visibleDays = DAYS.map((_, i) => i).filter(
+    (i) => !hiddenDays.includes(i)
+  )
+  const colCount = visibleDays.length
 
   return (
     <div style={s.page}>
       <Navbar />
 
       <div style={s.body}>
-
         {/* Header */}
         <div style={s.header}>
           <div>
@@ -47,185 +117,556 @@ function Rota() {
               ← Dashboard
             </div>
             <h1 style={s.title}>Weekly Rota</h1>
-            <p style={s.subtitle}>Meadowview House · w/c 31 Mar 2025</p>
+            <p style={s.subtitle}>
+              Meadowview House ·{' '}
+              {viewMode === 'week' ? `${startLabel} – ${endLabel}` : monthLabel}
+            </p>
           </div>
-          {canEdit && (
-            <div style={s.headerActions}>
-              <button style={s.secondaryBtn}>Publish</button>
-              <button style={s.primaryBtn}>⚡ Generate</button>
+          <div style={s.headerRight}>
+            {/* View toggle */}
+            <div style={s.viewToggle}>
+              {['week', 'month'].map((v) => (
+                <button
+                  key={v}
+                  style={{
+                    ...s.toggleBtn,
+                    background: viewMode === v ? '#6c8fff' : 'transparent',
+                    color: viewMode === v ? '#fff' : '#9499b0',
+                  }}
+                  onClick={() => setViewMode(v)}
+                >
+                  {v.charAt(0).toUpperCase() + v.slice(1)}
+                </button>
+              ))}
             </div>
-          )}
+            {canEdit && (
+              <div style={s.headerActions}>
+                <button style={s.secondaryBtn}>Publish</button>
+                <button
+                  style={s.primaryBtn}
+                  onClick={() => setShowGenerate(true)}
+                >
+                  Generate <FontAwesomeIcon icon='bolt' />
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Compliance strip */}
         {canSeeGaps && (
           <div style={s.compStrip}>
-            {totalViolations === 0
-              ? <span style={{...s.chip, ...s.chipOk}}>✓ All shifts compliant</span>
-              : <span style={{...s.chip, ...s.chipWarn}}>⚠ {totalViolations} violation{totalViolations > 1 ? 's' : ''} this week</span>
-            }
-            <span style={{...s.chip, ...s.chipInfo}}>2 sleep-ins checked nightly</span>
-            <span style={{...s.chip, ...s.chipInfo}}>On-call: 7/7 days</span>
+            {totalViolations === 0 ? (
+              <span style={{ ...s.chip, ...s.chipOk }}>
+                ✓ All shifts compliant
+              </span>
+            ) : (
+              <span style={{ ...s.chip, ...s.chipWarn }}>
+                ⚠ {totalViolations} violation{totalViolations > 1 ? 's' : ''}{' '}
+                this week
+              </span>
+            )}
+            <span style={{ ...s.chip, ...s.chipInfo }}>
+              2 sleep-ins checked nightly
+            </span>
+            <span style={{ ...s.chip, ...s.chipInfo }}>On-call: 7/7 days</span>
           </div>
         )}
 
-        {/* Legend */}
-        <div style={s.legend}>
-          <span style={{...s.legendItem, color:'#2a7f62'}}>■ Early 07:00–14:30</span>
-          <span style={{...s.legendItem, color:'#7a4fa8'}}>■ Late 14:00–23:00</span>
-          <span style={{...s.legendItem, color:'#c4883a'}}>■ Sleep-in tag</span>
-        </div>
+        {/* Week navigation */}
+        <div style={s.weekNav}>
+          <button
+            style={s.navArrow}
+            onClick={viewMode === 'week' ? prevWeek : prevMonth}
+          >
+            <FontAwesomeIcon icon='chevron-left' />
+          </button>
+          <span style={s.weekLabel}>
+            {viewMode === 'week' ? `${startLabel} – ${endLabel}` : monthLabel}
+          </span>
+          <button
+            style={s.navArrow}
+            onClick={viewMode === 'week' ? nextWeek : nextMonth}
+          >
+            <FontAwesomeIcon icon='chevron-right' />
+          </button>
 
-        {/* Grid */}
-        <div style={s.gridWrap}>
-          <div style={s.grid}>
-
-            {/* Header row */}
-            <div style={s.colLabel} />
-            {DAYS.map((day, i) => (
-              <div key={day} style={{
-                ...s.dayHeader,
-                background: i === TODAY ? 'rgba(108,143,255,0.06)' : 'transparent'
-              }}>
-                <div style={{
-                  ...s.dayName,
-                  color: i === TODAY ? '#6c8fff' : '#9499b0'
-                }}>{day}</div>
-                <div style={{
-                  ...s.dayDate,
-                  color: i === TODAY ? '#6c8fff' : '#e8eaf0'
-                }}>{DATES[i]}</div>
-                {canSeeGaps && getViolations(i).length > 0 && (
-                  <div style={s.violationDot} title={getViolations(i).join(', ')} />
-                )}
-              </div>
-            ))}
-
-            {/* Early row */}
-            <div style={s.shiftLabel}>
-              <div style={s.shiftName}>Early</div>
-              <div style={s.shiftTime}>07:00–14:30</div>
+          <button style={s.jumpBtn} onClick={() => setShowJump(!showJump)}>
+            Jump to date
+          </button>
+          {showJump && (
+            <div style={s.jumpWrap}>
+              <input
+                type='date'
+                value={jumpValue}
+                onChange={(e) => setJumpValue(e.target.value)}
+                style={s.jumpInput}
+              />
+              <button style={s.primaryBtn} onClick={handleJump}>
+                Go
+              </button>
             </div>
-            {rota.early.map((staffList, dayIdx) => {
-              const isUnderstaffed = canSeeGaps && staffList.length < 3
-              return (
-                <div key={dayIdx} style={{
-                  ...s.cell,
-                  background: isUnderstaffed ? 'rgba(232,92,61,0.06)' : 'transparent'
-                }}>
-                  {staffList.map(entry => {
-                    const staff = staffMap[entry.id]
-                    if (!staff) return null
-                    return (
-                      <div key={entry.id} style={s.chipEarly}>
-                        <span style={s.chipName}>{staff.name.split(' ')[0]}</span>
-                        <span style={s.chipRole}>{staff.roleCode}</span>
-                      </div>
-                    )
-                  })}
-                  {isUnderstaffed && (
-                    <div style={s.gapTag}>GAP</div>
-                  )}
-                  {canEdit && (
-                    <div style={s.addBtn}>+ Add</div>
-                  )}
-                </div>
-              )
-            })}
+          )}
 
-            {/* Late row */}
-            <div style={s.shiftLabel}>
-              <div style={s.shiftName}>Late</div>
-              <div style={s.shiftTime}>14:00–23:00</div>
-            </div>
-            {rota.late.map((staffList, dayIdx) => {
-              const isUnderstaffed = canSeeGaps && staffList.length < 3
-              const sleepCount = staffList.filter(e => e.sleepIn).length
-              const sleepWarn = canSeeGaps && sleepCount < 2
-              return (
-                <div key={dayIdx} style={{
-                  ...s.cell,
-                  background: isUnderstaffed ? 'rgba(232,92,61,0.06)' : 'transparent'
-                }}>
-                  {staffList.map(entry => {
-                    const staff = staffMap[entry.id]
-                    if (!staff) return null
-                    return (
-                      <div key={entry.id} style={s.chipLate}>
-                        <span style={s.chipName}>{staff.name.split(' ')[0]}</span>
-                        <span style={s.chipRole}>{staff.roleCode}</span>
-                        {entry.sleepIn && <span style={s.sleepTag}>💤</span>}
-                      </div>
-                    )
-                  })}
-                  {sleepWarn && (
-                    <div style={s.sleepWarn}>⚠ {sleepCount}/2 sleep-ins</div>
-                  )}
-                  {isUnderstaffed && (
-                    <div style={s.gapTag}>GAP</div>
-                  )}
-                  {canEdit && (
-                    <div style={s.addBtn}>+ Add</div>
-                  )}
-                </div>
-              )
-            })}
-
-            {/* On-call row */}
-            <div style={{...s.shiftLabel, background:'rgba(58,138,196,0.06)'}}>
-              <div style={{...s.shiftName, color:'#3a8ac4'}}>On-call</div>
-              <div style={s.shiftTime}>parallel</div>
-            </div>
-            {rota.onCall.map((list, dayIdx) => (
-              <div key={dayIdx} style={{...s.cell, background:'rgba(58,138,196,0.04)'}}>
-                {list.map(id => {
-                  const staff = staffMap[id]
-                  if (!staff) return null
-                  return (
-                    <div key={id} style={s.chipOncall}>
-                      {staff.name.split(' ')[0]}
-                    </div>
-                  )
-                })}
-              </div>
-            ))}
-
+          <div style={s.legend}>
+            <span style={{ ...s.legendItem, color: '#2a7f62' }}>■ Early</span>
+            <span style={{ ...s.legendItem, color: '#7a4fa8' }}>■ Late</span>
+            <span style={{ ...s.legendItem, color: '#c4883a' }}>
+              ■ Sleep-in
+            </span>
           </div>
         </div>
 
+        {/* ── WEEK VIEW ── */}
+        {viewMode === 'week' && (
+          <>
+            {/* Rota grid */}
+            {colCount === 0 ? (
+              <div style={s.allHidden}>
+                All days hidden — click a day above to show it
+              </div>
+            ) : (
+              <div style={s.gridWrap}>
+                <div
+                  style={{
+                    ...s.grid,
+                    gridTemplateColumns: `120px repeat(${colCount}, 1fr)`,
+                  }}
+                >
+                  {/* Header */}
+                  <div style={s.colLabel} />
+                  {visibleDays.map((i) => (
+                    <div
+                      key={i}
+                      style={{
+                        ...s.dayHeader,
+                        background: isSameDay(weekDates[i], TODAY)
+                          ? 'rgba(108,143,255,0.06)'
+                          : 'transparent',
+                      }}
+                    >
+                      <div
+                        style={{
+                          ...s.dayName,
+                          color: isSameDay(weekDates[i], TODAY)
+                            ? '#6c8fff'
+                            : '#9499b0',
+                        }}
+                      >
+                        {DAYS[i]}
+                      </div>
+                      <div
+                        style={{
+                          ...s.dayDate,
+                          color: isSameDay(weekDates[i], TODAY)
+                            ? '#6c8fff'
+                            : '#e8eaf0',
+                        }}
+                      >
+                        {formatShort(weekDates[i])}
+                      </div>
+                      {canSeeGaps && getViolations(i).length > 0 && (
+                        <div
+                          style={s.violationDot}
+                          title={getViolations(i).join(', ')}
+                        />
+                      )}
+                    </div>
+                  ))}
+
+                  {/* Early row */}
+                  <div style={s.shiftLabel}>
+                    <div style={s.shiftName}>Early</div>
+                    <div style={s.shiftTime}>07:00–14:30</div>
+                  </div>
+                  {visibleDays.map((dayIdx) => {
+                    const staffList = rota.early[dayIdx] || []
+                    const isGap = canSeeGaps && staffList.length < 3
+                    return (
+                      <div
+                        key={dayIdx}
+                        style={{
+                          ...s.cell,
+                          background: isGap
+                            ? 'rgba(232,92,61,0.06)'
+                            : 'transparent',
+                        }}
+                      >
+                        {staffList.map((entry) => {
+                          const st = staffMap[entry.id]
+                          if (!st) return null
+                          return (
+                            <div key={entry.id} style={s.chipEarly}>
+                              <span style={s.chipName}>
+                                {st.name.split(' ')[0]}
+                              </span>
+                              <span style={s.chipRole}>{st.roleCode}</span>
+                            </div>
+                          )
+                        })}
+                        {isGap && <div style={s.gapTag}>GAP</div>}
+                        {canEdit && <div style={s.addBtn}>+ Add</div>}
+                      </div>
+                    )
+                  })}
+
+                  {/* Late row */}
+                  <div style={s.shiftLabel}>
+                    <div style={s.shiftName}>Late</div>
+                    <div style={s.shiftTime}>14:00–23:00</div>
+                  </div>
+                  {visibleDays.map((dayIdx) => {
+                    const staffList = rota.late[dayIdx] || []
+                    const isGap = canSeeGaps && staffList.length < 3
+                    const sleepCount = staffList.filter((e) => e.sleepIn).length
+                    return (
+                      <div
+                        key={dayIdx}
+                        style={{
+                          ...s.cell,
+                          background: isGap
+                            ? 'rgba(232,92,61,0.06)'
+                            : 'transparent',
+                        }}
+                      >
+                        {staffList.map((entry) => {
+                          const st = staffMap[entry.id]
+                          if (!st) return null
+                          return (
+                            <div key={entry.id} style={s.chipLate}>
+                              <span style={s.chipName}>
+                                {st.name.split(' ')[0]}
+                              </span>
+                              <span style={s.chipRole}>{st.roleCode}</span>
+                              {entry.sleepIn && <span>💤</span>}
+                            </div>
+                          )
+                        })}
+                        {canSeeGaps && sleepCount < 2 && (
+                          <div style={s.sleepWarn}>
+                            ⚠ {sleepCount}/2 sleep-ins
+                          </div>
+                        )}
+                        {isGap && <div style={s.gapTag}>GAP</div>}
+                        {canEdit && <div style={s.addBtn}>+ Add</div>}
+                      </div>
+                    )
+                  })}
+
+                  {/* On-call row */}
+                  <div
+                    style={{
+                      ...s.shiftLabel,
+                      background: 'rgba(58,138,196,0.06)',
+                    }}
+                  >
+                    <div style={{ ...s.shiftName, color: '#3a8ac4' }}>
+                      On-call
+                    </div>
+                    <div style={s.shiftTime}>parallel</div>
+                  </div>
+                  {visibleDays.map((dayIdx) => (
+                    <div
+                      key={dayIdx}
+                      style={{ ...s.cell, background: 'rgba(58,138,196,0.04)' }}
+                    >
+                      {(rota.onCall[dayIdx] || []).map((id) => {
+                        const st = staffMap[id]
+                        if (!st) return null
+                        return (
+                          <div key={id} style={s.chipOncall}>
+                            {st.name.split(' ')[0]}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        )}
+
+        {/* ── MONTH VIEW ── */}
+        {viewMode === 'month' && (
+          <div style={s.monthWrap}>
+            {/* Day headers */}
+            <div style={s.monthHeader}>
+              {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d) => (
+                <div key={d} style={s.monthDayHead}>
+                  {d}
+                </div>
+              ))}
+            </div>
+
+            {/* Day cells */}
+            <div style={s.monthGrid}>
+              {monthDates.map((date, i) => {
+                const isCurrentMonth =
+                  date.getMonth() === currentMonday.getMonth()
+                const isToday = isSameDay(date, TODAY)
+
+                // Find which rota day index this is (0-6 for Mon-Sun)
+                const dayOfWeek = (date.getDay() + 6) % 7
+                const early = rota.early[dayOfWeek] || []
+                const late = rota.late[dayOfWeek] || []
+                const sleepIns = late.filter((e) => e.sleepIn).length
+                const gaps =
+                  (early.length < 3 ? 1 : 0) + (late.length < 3 ? 1 : 0)
+
+                return (
+                  <div
+                    key={i}
+                    style={{
+                      ...s.monthCell,
+                      opacity: isCurrentMonth ? 1 : 0.35,
+                      background: isToday
+                        ? 'rgba(108,143,255,0.08)'
+                        : '#161820',
+                      border: isToday
+                        ? '1px solid rgba(108,143,255,0.35)'
+                        : '1px solid rgba(255,255,255,0.07)',
+                    }}
+                    onClick={() => {
+                      setMonday(getMondayOfWeek(date))
+                      setViewMode('week')
+                    }}
+                  >
+                    <div
+                      style={{
+                        ...s.monthDateNum,
+                        color: isToday
+                          ? '#6c8fff'
+                          : isCurrentMonth
+                            ? '#e8eaf0'
+                            : '#5d6180',
+                      }}
+                    >
+                      {date.getDate()}
+                    </div>
+
+                    {isCurrentMonth && (
+                      <div style={s.monthDots}>
+                        {early.length > 0 && (
+                          <span
+                            style={{ ...s.dot, background: '#2a7f62' }}
+                            title='Early shift'
+                          />
+                        )}
+                        {late.length > 0 && (
+                          <span
+                            style={{ ...s.dot, background: '#7a4fa8' }}
+                            title='Late shift'
+                          />
+                        )}
+                        {sleepIns > 0 && (
+                          <span
+                            style={{ ...s.dot, background: '#c4883a' }}
+                            title='Sleep-in'
+                          />
+                        )}
+                        {canSeeGaps && gaps > 0 && (
+                          <span
+                            style={{ ...s.dot, background: '#e85c3d' }}
+                            title={`${gaps} gap(s)`}
+                          />
+                        )}
+                      </div>
+                    )}
+
+                    {canSeeGaps && isCurrentMonth && gaps > 0 && (
+                      <div style={s.monthGap}>
+                        {gaps} gap{gaps > 1 ? 's' : ''}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+
+            <div style={s.monthLegend}>
+              <span style={{ ...s.legendItem, color: '#2a7f62' }}>■ Early</span>
+              <span style={{ ...s.legendItem, color: '#7a4fa8' }}>■ Late</span>
+              <span style={{ ...s.legendItem, color: '#c4883a' }}>
+                ■ Sleep-in
+              </span>
+              {canSeeGaps && (
+                <span style={{ ...s.legendItem, color: '#e85c3d' }}>■ Gap</span>
+              )}
+              <span
+                style={{
+                  fontSize: '11px',
+                  color: '#5d6180',
+                  marginLeft: '8px',
+                }}
+              >
+                Click any day to jump to that week
+              </span>
+            </div>
+          </div>
+        )}
       </div>
+
+      {showGenerate && (
+        <GenerateModal
+          onClose={() => setShowGenerate(false)}
+          onApply={(newRota) => setRota(newRota)}
+        />
+      )}
     </div>
   )
 }
 
 const s = {
-  page: { minHeight: '100vh', background: '#0f1117', color: '#e8eaf0', fontFamily: 'DM Sans, sans-serif' },
+  page: {
+    minHeight: '100vh',
+    background: '#0f1117',
+    color: '#e8eaf0',
+    fontFamily: 'DM Sans, sans-serif',
+  },
   body: { padding: '24px', maxWidth: '1100px', margin: '0 auto' },
-  header: { display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '20px' },
-  breadcrumb: { fontSize: '12px', color: '#6c8fff', cursor: 'pointer', marginBottom: '8px' },
-  title: { fontFamily: 'Syne, sans-serif', fontSize: '22px', fontWeight: 600, margin: 0 },
+  header: {
+    display: 'flex',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: '16px',
+  },
+  breadcrumb: {
+    fontSize: '12px',
+    color: '#6c8fff',
+    cursor: 'pointer',
+    marginBottom: '8px',
+  },
+  title: {
+    fontFamily: 'Syne, sans-serif',
+    fontSize: '22px',
+    fontWeight: 600,
+    margin: 0,
+  },
   subtitle: { fontSize: '13px', color: '#9499b0', marginTop: '4px' },
+  headerRight: { display: 'flex', alignItems: 'center', gap: '12px' },
   headerActions: { display: 'flex', gap: '8px' },
-  primaryBtn: { background: '#6c8fff', color: '#fff', border: 'none', borderRadius: '8px', padding: '9px 16px', fontSize: '13px', fontWeight: 500, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif' },
-  secondaryBtn: { background: 'transparent', color: '#9499b0', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', padding: '8px 14px', fontSize: '13px', cursor: 'pointer', fontFamily: 'DM Sans, sans-serif' },
-  compStrip: { display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '16px' },
-  chip: { fontSize: '12px', fontWeight: 500, padding: '5px 10px', borderRadius: '20px', display: 'inline-flex', alignItems: 'center', gap: '5px' },
-  chipOk:   { background: 'rgba(46,204,138,0.12)',  color: '#2ecc8a' },
-  chipWarn: { background: 'rgba(232,92,61,0.12)',   color: '#e85c3d' },
+  viewToggle: {
+    display: 'flex',
+    background: '#1d1f2b',
+    border: '1px solid rgba(255,255,255,0.08)',
+    borderRadius: '8px',
+    padding: '3px',
+    gap: '2px',
+  },
+  toggleBtn: {
+    border: 'none',
+    borderRadius: '6px',
+    padding: '6px 14px',
+    fontSize: '12px',
+    fontWeight: 500,
+    cursor: 'pointer',
+    fontFamily: 'DM Sans, sans-serif',
+    transition: 'all 0.15s',
+  },
+  primaryBtn: {
+    background: '#6c8fff',
+    color: '#fff',
+    border: 'none',
+    borderRadius: '8px',
+    padding: '9px 16px',
+    fontSize: '13px',
+    fontWeight: 500,
+    cursor: 'pointer',
+    fontFamily: 'DM Sans, sans-serif',
+  },
+  secondaryBtn: {
+    background: 'transparent',
+    color: '#9499b0',
+    border: '1px solid rgba(255,255,255,0.1)',
+    borderRadius: '8px',
+    padding: '8px 14px',
+    fontSize: '13px',
+    cursor: 'pointer',
+    fontFamily: 'DM Sans, sans-serif',
+  },
+  compStrip: {
+    display: 'flex',
+    gap: '8px',
+    flexWrap: 'wrap',
+    marginBottom: '16px',
+  },
+  chip: {
+    fontSize: '12px',
+    fontWeight: 500,
+    padding: '5px 10px',
+    borderRadius: '20px',
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '5px',
+  },
+  chipOk: { background: 'rgba(46,204,138,0.12)', color: '#2ecc8a' },
+  chipWarn: { background: 'rgba(232,92,61,0.12)', color: '#e85c3d' },
   chipInfo: { background: 'rgba(108,143,255,0.12)', color: '#6c8fff' },
-  legend: { display: 'flex', gap: '16px', marginBottom: '16px' },
+  weekNav: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    marginBottom: '16px',
+    flexWrap: 'wrap',
+  },
+  navArrow: {
+    width: '30px',
+    height: '30px',
+    borderRadius: '7px',
+    border: '1px solid rgba(255,255,255,0.1)',
+    background: 'transparent',
+    color: '#9499b0',
+    cursor: 'pointer',
+    fontSize: '16px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  weekLabel: {
+    fontSize: '13px',
+    color: '#e8eaf0',
+    fontFamily: 'DM Mono, monospace',
+    minWidth: '200px',
+  },
+  jumpBtn: {
+    background: 'transparent',
+    border: '1px solid rgba(255,255,255,0.1)',
+    borderRadius: '7px',
+    color: '#9499b0',
+    padding: '6px 12px',
+    fontSize: '12px',
+    cursor: 'pointer',
+    fontFamily: 'DM Sans, sans-serif',
+  },
+  jumpWrap: { display: 'flex', gap: '8px', alignItems: 'center' },
+  jumpInput: {
+    background: '#1d1f2b',
+    border: '1px solid rgba(255,255,255,0.1)',
+    borderRadius: '7px',
+    color: '#e8eaf0',
+    padding: '6px 10px',
+    fontSize: '13px',
+    fontFamily: 'DM Sans, sans-serif',
+    outline: 'none',
+  },
+  legend: { display: 'flex', gap: '12px', marginLeft: 'auto' },
   legendItem: { fontSize: '12px' },
+
   gridWrap: { overflowX: 'auto' },
   grid: {
     display: 'grid',
-    gridTemplateColumns: '120px repeat(7, 1fr)',
     border: '1px solid rgba(255,255,255,0.07)',
     borderRadius: '14px',
     overflow: 'hidden',
-    minWidth: '780px',
+    minWidth: '500px',
     background: '#161820',
   },
-  colLabel: { background: '#1d1f2b', borderBottom: '1px solid rgba(255,255,255,0.07)', borderRight: '1px solid rgba(255,255,255,0.07)' },
+  colLabel: {
+    background: '#1d1f2b',
+    borderBottom: '1px solid rgba(255,255,255,0.07)',
+    borderRight: '1px solid rgba(255,255,255,0.07)',
+  },
   dayHeader: {
     padding: '10px 10px 8px',
     borderBottom: '1px solid rgba(255,255,255,0.07)',
@@ -233,34 +674,164 @@ const s = {
     textAlign: 'center',
     position: 'relative',
   },
-  dayName: { fontSize: '11px', fontWeight: 500, letterSpacing: '0.4px', textTransform: 'uppercase' },
-  dayDate: { fontSize: '16px', fontWeight: 600, fontFamily: 'Syne, sans-serif', marginTop: '2px' },
-  violationDot: { width: '6px', height: '6px', borderRadius: '50%', background: '#e85c3d', position: 'absolute', top: '8px', right: '8px' },
+  dayName: {
+    fontSize: '11px',
+    fontWeight: 500,
+    letterSpacing: '0.4px',
+    textTransform: 'uppercase',
+  },
+  dayDate: {
+    fontSize: '16px',
+    fontWeight: 600,
+    fontFamily: 'Syne, sans-serif',
+    marginTop: '2px',
+  },
+  violationDot: {
+    width: '6px',
+    height: '6px',
+    borderRadius: '50%',
+    background: '#e85c3d',
+    position: 'absolute',
+    top: '8px',
+    right: '8px',
+  },
   shiftLabel: {
     padding: '12px 10px',
     background: '#1d1f2b',
     borderBottom: '1px solid rgba(255,255,255,0.07)',
     borderRight: '1px solid rgba(255,255,255,0.07)',
-    display: 'flex', flexDirection: 'column', justifyContent: 'center',
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'center',
   },
-  shiftName: { fontSize: '12px', fontWeight: 600, color: '#e8eaf0', fontFamily: 'Syne, sans-serif' },
-  shiftTime: { fontSize: '10px', color: '#5d6180', fontFamily: 'DM Mono, monospace', marginTop: '3px' },
+  shiftName: {
+    fontSize: '12px',
+    fontWeight: 600,
+    color: '#e8eaf0',
+    fontFamily: 'Syne, sans-serif',
+  },
+  shiftTime: {
+    fontSize: '10px',
+    color: '#5d6180',
+    fontFamily: 'DM Mono, monospace',
+    marginTop: '3px',
+  },
   cell: {
     padding: '8px',
     borderBottom: '1px solid rgba(255,255,255,0.07)',
     borderRight: '1px solid rgba(255,255,255,0.07)',
     minHeight: '90px',
-    display: 'flex', flexDirection: 'column', gap: '4px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '4px',
   },
-  chipEarly: { background: 'rgba(42,127,98,0.18)', border: '1px solid rgba(42,127,98,0.35)', color: '#2a7f62', borderRadius: '6px', padding: '4px 7px', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px' },
-  chipLate:  { background: 'rgba(122,79,168,0.18)', border: '1px solid rgba(122,79,168,0.35)', color: '#7a4fa8', borderRadius: '6px', padding: '4px 7px', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px' },
-  chipOncall: { background: 'rgba(58,138,196,0.12)', color: '#3a8ac4', borderRadius: '5px', padding: '3px 7px', fontSize: '11px' },
+  chipEarly: {
+    background: 'rgba(42,127,98,0.18)',
+    border: '1px solid rgba(42,127,98,0.35)',
+    color: '#2a7f62',
+    borderRadius: '6px',
+    padding: '4px 7px',
+    fontSize: '11px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
+  },
+  chipLate: {
+    background: 'rgba(122,79,168,0.18)',
+    border: '1px solid rgba(122,79,168,0.35)',
+    color: '#7a4fa8',
+    borderRadius: '6px',
+    padding: '4px 7px',
+    fontSize: '11px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
+  },
+  chipOncall: {
+    background: 'rgba(58,138,196,0.12)',
+    color: '#3a8ac4',
+    borderRadius: '5px',
+    padding: '3px 7px',
+    fontSize: '11px',
+  },
   chipName: { flex: 1 },
   chipRole: { fontSize: '9px', opacity: 0.7, fontFamily: 'DM Mono, monospace' },
-  sleepTag: { fontSize: '10px' },
-  sleepWarn: { fontSize: '10px', color: '#c4883a', marginTop: '2px' },
-  gapTag: { fontSize: '10px', fontWeight: 600, color: '#e85c3d', background: 'rgba(232,92,61,0.12)', padding: '2px 6px', borderRadius: '4px', width: 'fit-content' },
-  addBtn: { fontSize: '11px', color: '#5d6180', border: '1px dashed rgba(255,255,255,0.1)', borderRadius: '6px', padding: '4px 8px', cursor: 'pointer', textAlign: 'center', marginTop: 'auto' },
+  sleepWarn: { fontSize: '10px', color: '#c4883a' },
+  gapTag: {
+    fontSize: '10px',
+    fontWeight: 600,
+    color: '#e85c3d',
+    background: 'rgba(232,92,61,0.12)',
+    padding: '2px 6px',
+    borderRadius: '4px',
+    width: 'fit-content',
+  },
+  addBtn: {
+    fontSize: '11px',
+    color: '#5d6180',
+    border: '1px dashed rgba(255,255,255,0.1)',
+    borderRadius: '6px',
+    padding: '4px 8px',
+    cursor: 'pointer',
+    textAlign: 'center',
+    marginTop: 'auto',
+  },
+  monthWrap: { marginTop: '8px' },
+  monthHeader: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(7, 1fr)',
+    gap: '4px',
+    marginBottom: '4px',
+  },
+  monthDayHead: {
+    textAlign: 'center',
+    fontSize: '11px',
+    fontWeight: 500,
+    color: '#5d6180',
+    padding: '6px 0',
+    textTransform: 'uppercase',
+    letterSpacing: '0.5px',
+  },
+  monthGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(7, 1fr)',
+    gap: '4px',
+  },
+  monthCell: {
+    borderRadius: '8px',
+    padding: '8px',
+    minHeight: '72px',
+    cursor: 'pointer',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '4px',
+    transition: 'border-color 0.15s',
+  },
+  monthDateNum: {
+    fontSize: '13px',
+    fontWeight: 600,
+    fontFamily: 'Syne, sans-serif',
+  },
+  monthDots: { display: 'flex', gap: '3px', flexWrap: 'wrap' },
+  dot: {
+    width: '7px',
+    height: '7px',
+    borderRadius: '50%',
+    display: 'inline-block',
+  },
+  monthGap: {
+    fontSize: '10px',
+    color: '#e85c3d',
+    fontWeight: 500,
+    marginTop: 'auto',
+  },
+  monthLegend: {
+    display: 'flex',
+    gap: '12px',
+    alignItems: 'center',
+    marginTop: '12px',
+    flexWrap: 'wrap',
+  },
 }
 
 export default Rota

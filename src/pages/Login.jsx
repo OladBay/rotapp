@@ -20,7 +20,7 @@ function Login() {
 
     setTimeout(() => {
       const user = mockUsers.find(
-        u => u.email === email && u.password === password
+        (u) => u.email === email && u.password === password
       )
 
       if (!user) {
@@ -43,7 +43,9 @@ function Login() {
   return (
     <div className={styles.page}>
       <div className={styles.card}>
-        <div className={styles.logo}>Rot<span>app</span></div>
+        <div className={styles.logo}>
+          Rot<span>app</span>
+        </div>
         <h1 className={styles.title}>Welcome back</h1>
         <p className={styles.subtitle}>Sign in to your account</p>
 
@@ -52,10 +54,10 @@ function Login() {
             <label className={styles.label}>Email</label>
             <input
               className={styles.input}
-              type="email"
-              placeholder="you@example.com"
+              type='email'
+              placeholder='you@example.com'
               value={email}
-              onChange={e => setEmail(e.target.value)}
+              onChange={(e) => setEmail(e.target.value)}
               required
             />
           </div>
@@ -64,27 +66,23 @@ function Login() {
             <label className={styles.label}>Password</label>
             <input
               className={styles.input}
-              type="password"
-              placeholder="••••••••"
+              type='password'
+              placeholder='••••••••'
               value={password}
-              onChange={e => setPassword(e.target.value)}
+              onChange={(e) => setPassword(e.target.value)}
               required
             />
           </div>
 
           {error && <div className={styles.error}>{error}</div>}
 
-          <button
-            className={styles.btn}
-            type="submit"
-            disabled={loading}
-          >
+          <button className={styles.btn} type='submit' disabled={loading}>
             {loading ? 'Signing in…' : 'Sign in'}
           </button>
         </form>
 
         <p className={styles.footer}>
-          Don't have an account? <Link to="/signup">Sign up</Link>
+          Don't have an account? <Link to='/signup'>Sign up</Link>
         </p>
 
         <div className={styles.testAccounts}>

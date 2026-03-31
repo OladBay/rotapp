@@ -11,9 +11,8 @@ function Dashboard() {
   const isAdmin = user?.activeRole === 'superadmin'
 
   // Managers/Deputies/Seniors see only their home
-  const homes = (isOL || isAdmin)
-    ? mockHomes
-    : mockHomes.filter(h => h.id === user?.home)
+  const homes =
+    isOL || isAdmin ? mockHomes : mockHomes.filter((h) => h.id === user?.home)
 
   const totalGaps = homes.reduce((a, h) => a + h.gaps, 0)
   const avgCompliance = Math.round(
@@ -25,7 +24,6 @@ function Dashboard() {
       <Navbar />
 
       <div style={styles.body}>
-
         {/* Header */}
         <div style={styles.header}>
           <div>
@@ -54,18 +52,30 @@ function Dashboard() {
             </div>
             <div style={styles.statCard}>
               <div style={styles.statVal}>{totalGaps}</div>
-              <div style={{...styles.statLabel, color: totalGaps > 0 ? '#e85c3d' : '#2ecc8a'}}>
+              <div
+                style={{
+                  ...styles.statLabel,
+                  color: totalGaps > 0 ? '#e85c3d' : '#2ecc8a',
+                }}
+              >
                 Open gaps
               </div>
             </div>
             <div style={styles.statCard}>
-              <div style={{...styles.statVal, color: avgCompliance < 80 ? '#e85c3d' : '#2ecc8a'}}>
+              <div
+                style={{
+                  ...styles.statVal,
+                  color: avgCompliance < 80 ? '#e85c3d' : '#2ecc8a',
+                }}
+              >
                 {avgCompliance}%
               </div>
               <div style={styles.statLabel}>Avg compliance</div>
             </div>
             <div style={styles.statCard}>
-              <div style={styles.statVal}>{homes.reduce((a,h) => a + h.totalStaff, 0)}</div>
+              <div style={styles.statVal}>
+                {homes.reduce((a, h) => a + h.totalStaff, 0)}
+              </div>
               <div style={styles.statLabel}>Total staff</div>
             </div>
           </div>
@@ -77,7 +87,7 @@ function Dashboard() {
         </div>
 
         <div style={styles.homesList}>
-          {homes.map(home => (
+          {homes.map((home) => (
             <div key={home.id} style={styles.homeCard}>
               <div style={styles.homeTop}>
                 <div>
@@ -86,17 +96,23 @@ function Dashboard() {
                     {home.manager} · {home.deputy}
                   </div>
                 </div>
-                <div style={{
-                  ...styles.compBadge,
-                  background: home.compliance >= 90
-                    ? 'rgba(46,204,138,0.12)'
-                    : home.compliance >= 75
-                    ? 'rgba(196,136,58,0.12)'
-                    : 'rgba(232,92,61,0.12)',
-                  color: home.compliance >= 90 ? '#2ecc8a'
-                    : home.compliance >= 75 ? '#c4883a'
-                    : '#e85c3d'
-                }}>
+                <div
+                  style={{
+                    ...styles.compBadge,
+                    background:
+                      home.compliance >= 90
+                        ? 'rgba(46,204,138,0.12)'
+                        : home.compliance >= 75
+                          ? 'rgba(196,136,58,0.12)'
+                          : 'rgba(232,92,61,0.12)',
+                    color:
+                      home.compliance >= 90
+                        ? '#2ecc8a'
+                        : home.compliance >= 75
+                          ? '#c4883a'
+                          : '#e85c3d',
+                  }}
+                >
                   {home.compliance}% compliant
                 </div>
               </div>
@@ -111,10 +127,12 @@ function Dashboard() {
                   <span style={styles.homeStatLabel}>Shifts this week</span>
                 </div>
                 <div style={styles.homeStat}>
-                  <span style={{
-                    ...styles.homeStatVal,
-                    color: home.gaps > 0 ? '#e85c3d' : '#2ecc8a'
-                  }}>
+                  <span
+                    style={{
+                      ...styles.homeStatVal,
+                      color: home.gaps > 0 ? '#e85c3d' : '#2ecc8a',
+                    }}
+                  >
                     {home.gaps}
                   </span>
                   <span style={styles.homeStatLabel}>Open gaps</span>
@@ -140,37 +158,127 @@ function Dashboard() {
             </div>
           ))}
         </div>
-
       </div>
     </div>
   )
 }
 
 const styles = {
-  page: { minHeight: '100vh', background: '#0f1117', color: '#e8eaf0', fontFamily: 'DM Sans, sans-serif' },
+  page: {
+    minHeight: '100vh',
+    background: '#0f1117',
+    color: '#e8eaf0',
+    fontFamily: 'DM Sans, sans-serif',
+  },
   body: { padding: '28px 24px', maxWidth: '960px', margin: '0 auto' },
-  header: { display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '28px' },
-  title: { fontFamily: 'Syne, sans-serif', fontSize: '22px', fontWeight: 600, letterSpacing: '-0.3px', margin: 0 },
+  header: {
+    display: 'flex',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: '28px',
+  },
+  title: {
+    fontFamily: 'Syne, sans-serif',
+    fontSize: '22px',
+    fontWeight: 600,
+    letterSpacing: '-0.3px',
+    margin: 0,
+  },
   subtitle: { fontSize: '13px', color: '#9499b0', marginTop: '4px' },
-  statsRow: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '28px' },
-  statCard: { background: '#161820', border: '1px solid rgba(255,255,255,0.07)', borderRadius: '12px', padding: '16px' },
-  statVal: { fontSize: '26px', fontWeight: 600, fontFamily: 'Syne, sans-serif', color: '#e8eaf0' },
+  statsRow: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(4, 1fr)',
+    gap: '12px',
+    marginBottom: '28px',
+  },
+  statCard: {
+    background: '#161820',
+    border: '1px solid rgba(255,255,255,0.07)',
+    borderRadius: '12px',
+    padding: '16px',
+  },
+  statVal: {
+    fontSize: '26px',
+    fontWeight: 600,
+    fontFamily: 'Syne, sans-serif',
+    color: '#e8eaf0',
+  },
   statLabel: { fontSize: '12px', color: '#9499b0', marginTop: '4px' },
-  sectionLabel: { fontSize: '11px', textTransform: 'uppercase', letterSpacing: '1px', color: '#5d6180', marginBottom: '12px', fontWeight: 500 },
+  sectionLabel: {
+    fontSize: '11px',
+    textTransform: 'uppercase',
+    letterSpacing: '1px',
+    color: '#5d6180',
+    marginBottom: '12px',
+    fontWeight: 500,
+  },
   homesList: { display: 'flex', flexDirection: 'column', gap: '12px' },
-  homeCard: { background: '#161820', border: '1px solid rgba(255,255,255,0.07)', borderRadius: '14px', padding: '20px' },
-  homeTop: { display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '16px' },
+  homeCard: {
+    background: '#161820',
+    border: '1px solid rgba(255,255,255,0.07)',
+    borderRadius: '14px',
+    padding: '20px',
+  },
+  homeTop: {
+    display: 'flex',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: '16px',
+  },
   homeName: { fontSize: '15px', fontWeight: 500, color: '#e8eaf0' },
   homeMeta: { fontSize: '12px', color: '#9499b0', marginTop: '3px' },
-  compBadge: { fontSize: '12px', fontWeight: 500, padding: '4px 10px', borderRadius: '6px' },
-  homeStats: { display: 'flex', gap: '24px', marginBottom: '16px', paddingBottom: '16px', borderBottom: '1px solid rgba(255,255,255,0.06)' },
+  compBadge: {
+    fontSize: '12px',
+    fontWeight: 500,
+    padding: '4px 10px',
+    borderRadius: '6px',
+  },
+  homeStats: {
+    display: 'flex',
+    gap: '24px',
+    marginBottom: '16px',
+    paddingBottom: '16px',
+    borderBottom: '1px solid rgba(255,255,255,0.06)',
+  },
   homeStat: { display: 'flex', flexDirection: 'column', gap: '2px' },
-  homeStatVal: { fontSize: '18px', fontWeight: 600, fontFamily: 'Syne, sans-serif', color: '#e8eaf0' },
+  homeStatVal: {
+    fontSize: '18px',
+    fontWeight: 600,
+    fontFamily: 'Syne, sans-serif',
+    color: '#e8eaf0',
+  },
   homeStatLabel: { fontSize: '11px', color: '#9499b0' },
   homeActions: { display: 'flex', gap: '8px' },
-  primaryBtn: { background: '#6c8fff', color: '#fff', border: 'none', borderRadius: '8px', padding: '9px 16px', fontSize: '13px', fontWeight: 500, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif' },
-  secondaryBtn: { background: 'transparent', color: '#9499b0', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '8px', padding: '7px 14px', fontSize: '13px', cursor: 'pointer', fontFamily: 'DM Sans, sans-serif' },
-  ghostBtn: { background: 'transparent', color: '#6c8fff', border: 'none', padding: '7px 0', fontSize: '13px', cursor: 'pointer', fontFamily: 'DM Sans, sans-serif' },
+  primaryBtn: {
+    background: '#6c8fff',
+    color: '#fff',
+    border: 'none',
+    borderRadius: '8px',
+    padding: '9px 16px',
+    fontSize: '13px',
+    fontWeight: 500,
+    cursor: 'pointer',
+    fontFamily: 'DM Sans, sans-serif',
+  },
+  secondaryBtn: {
+    background: 'transparent',
+    color: '#9499b0',
+    border: '1px solid rgba(255,255,255,0.1)',
+    borderRadius: '8px',
+    padding: '7px 14px',
+    fontSize: '13px',
+    cursor: 'pointer',
+    fontFamily: 'DM Sans, sans-serif',
+  },
+  ghostBtn: {
+    background: 'transparent',
+    color: '#6c8fff',
+    border: 'none',
+    padding: '7px 0',
+    fontSize: '13px',
+    cursor: 'pointer',
+    fontFamily: 'DM Sans, sans-serif',
+  },
 }
 
 export default Dashboard
