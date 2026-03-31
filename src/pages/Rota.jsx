@@ -9,12 +9,10 @@ import {
   getWeekDates,
   formatDate,
   formatShort,
-  getDayLabel,
   getMondayOfWeek,
   addWeeks,
   getMonthDates,
   isSameDay,
-  dateKey,
 } from '../utils/dateUtils'
 
 const TODAY = new Date()
@@ -28,7 +26,6 @@ function Rota() {
   const [currentMonday, setMonday] = useState(getMondayOfWeek(TODAY))
   const [rota, setRota] = useState(mockRota)
   const [showGenerate, setShowGenerate] = useState(false)
-
   const [jumpValue, setJumpValue] = useState('')
   const [showJump, setShowJump] = useState(false)
 
@@ -49,7 +46,6 @@ function Rota() {
 
   const startLabel = formatDate(weekDates[0])
   const endLabel = formatDate(weekDates[6])
-
   const monthLabel = currentMonday.toLocaleDateString('en-GB', {
     month: 'long',
     year: 'numeric',
@@ -79,12 +75,6 @@ function Rota() {
     setJumpValue('')
   }
 
-  const toggleDay = (i) => {
-    setHiddenDays((prev) =>
-      prev.includes(i) ? prev.filter((d) => d !== i) : [...prev, i]
-    )
-  }
-
   const getViolations = (dayIdx) => {
     const v = []
     const early = rota.early[dayIdx] || []
@@ -100,10 +90,6 @@ function Rota() {
     (a, _, i) => a + getViolations(i).length,
     0
   )
-  const visibleDays = DAYS.map((_, i) => i).filter(
-    (i) => !hiddenDays.includes(i)
-  )
-  const colCount = visibleDays.length
 
   return (
     <div style={s.page}>
@@ -114,7 +100,7 @@ function Rota() {
         <div style={s.header}>
           <div>
             <div style={s.breadcrumb} onClick={() => navigate('/dashboard')}>
-              ← Dashboard
+              <FontAwesomeIcon icon='chevron-left' /> Dashboard
             </div>
             <h1 style={s.title}>Weekly Rota</h1>
             <p style={s.subtitle}>
@@ -123,7 +109,6 @@ function Rota() {
             </p>
           </div>
           <div style={s.headerRight}>
-            {/* View toggle */}
             <div style={s.viewToggle}>
               {['week', 'month'].map((v) => (
                 <button
@@ -146,7 +131,7 @@ function Rota() {
                   style={s.primaryBtn}
                   onClick={() => setShowGenerate(true)}
                 >
-                  Generate <FontAwesomeIcon icon='bolt' />
+                  <FontAwesomeIcon icon='bolt' /> Generate
                 </button>
               </div>
             )}
@@ -219,194 +204,174 @@ function Rota() {
 
         {/* ── WEEK VIEW ── */}
         {viewMode === 'week' && (
-          <>
-            {/* Rota grid */}
-            {colCount === 0 ? (
-              <div style={s.allHidden}>
-                All days hidden — click a day above to show it
-              </div>
-            ) : (
-              <div style={s.gridWrap}>
+          <div style={s.gridWrap}>
+            <div
+              style={{
+                ...s.grid,
+                gridTemplateColumns: '120px repeat(7, 1fr)',
+              }}
+            >
+              {/* Header row */}
+              <div style={s.colLabel} />
+              {DAYS.map((day, i) => (
                 <div
+                  key={i}
                   style={{
-                    ...s.grid,
-                    gridTemplateColumns: `120px repeat(${colCount}, 1fr)`,
+                    ...s.dayHeader,
+                    background: isSameDay(weekDates[i], TODAY)
+                      ? 'rgba(108,143,255,0.06)'
+                      : 'transparent',
                   }}
                 >
-                  {/* Header */}
-                  <div style={s.colLabel} />
-                  {visibleDays.map((i) => (
-                    <div
-                      key={i}
-                      style={{
-                        ...s.dayHeader,
-                        background: isSameDay(weekDates[i], TODAY)
-                          ? 'rgba(108,143,255,0.06)'
-                          : 'transparent',
-                      }}
-                    >
-                      <div
-                        style={{
-                          ...s.dayName,
-                          color: isSameDay(weekDates[i], TODAY)
-                            ? '#6c8fff'
-                            : '#9499b0',
-                        }}
-                      >
-                        {DAYS[i]}
-                      </div>
-                      <div
-                        style={{
-                          ...s.dayDate,
-                          color: isSameDay(weekDates[i], TODAY)
-                            ? '#6c8fff'
-                            : '#e8eaf0',
-                        }}
-                      >
-                        {formatShort(weekDates[i])}
-                      </div>
-                      {canSeeGaps && getViolations(i).length > 0 && (
-                        <div
-                          style={s.violationDot}
-                          title={getViolations(i).join(', ')}
-                        />
-                      )}
-                    </div>
-                  ))}
-
-                  {/* Early row */}
-                  <div style={s.shiftLabel}>
-                    <div style={s.shiftName}>Early</div>
-                    <div style={s.shiftTime}>07:00–14:30</div>
-                  </div>
-                  {visibleDays.map((dayIdx) => {
-                    const staffList = rota.early[dayIdx] || []
-                    const isGap = canSeeGaps && staffList.length < 3
-                    return (
-                      <div
-                        key={dayIdx}
-                        style={{
-                          ...s.cell,
-                          background: isGap
-                            ? 'rgba(232,92,61,0.06)'
-                            : 'transparent',
-                        }}
-                      >
-                        {staffList.map((entry) => {
-                          const st = staffMap[entry.id]
-                          if (!st) return null
-                          return (
-                            <div key={entry.id} style={s.chipEarly}>
-                              <span style={s.chipName}>
-                                {st.name.split(' ')[0]}
-                              </span>
-                              <span style={s.chipRole}>{st.roleCode}</span>
-                            </div>
-                          )
-                        })}
-                        {isGap && <div style={s.gapTag}>GAP</div>}
-                        {canEdit && <div style={s.addBtn}>+ Add</div>}
-                      </div>
-                    )
-                  })}
-
-                  {/* Late row */}
-                  <div style={s.shiftLabel}>
-                    <div style={s.shiftName}>Late</div>
-                    <div style={s.shiftTime}>14:00–23:00</div>
-                  </div>
-                  {visibleDays.map((dayIdx) => {
-                    const staffList = rota.late[dayIdx] || []
-                    const isGap = canSeeGaps && staffList.length < 3
-                    const sleepCount = staffList.filter((e) => e.sleepIn).length
-                    return (
-                      <div
-                        key={dayIdx}
-                        style={{
-                          ...s.cell,
-                          background: isGap
-                            ? 'rgba(232,92,61,0.06)'
-                            : 'transparent',
-                        }}
-                      >
-                        {staffList.map((entry) => {
-                          const st = staffMap[entry.id]
-                          if (!st) return null
-                          return (
-                            <div key={entry.id} style={s.chipLate}>
-                              <span style={s.chipName}>
-                                {st.name.split(' ')[0]}
-                              </span>
-                              <span style={s.chipRole}>{st.roleCode}</span>
-                              {entry.sleepIn && <span>💤</span>}
-                            </div>
-                          )
-                        })}
-                        {canSeeGaps && sleepCount < 2 && (
-                          <div style={s.sleepWarn}>
-                            ⚠ {sleepCount}/2 sleep-ins
-                          </div>
-                        )}
-                        {isGap && <div style={s.gapTag}>GAP</div>}
-                        {canEdit && <div style={s.addBtn}>+ Add</div>}
-                      </div>
-                    )
-                  })}
-
-                  {/* On-call row */}
                   <div
                     style={{
-                      ...s.shiftLabel,
-                      background: 'rgba(58,138,196,0.06)',
+                      ...s.dayName,
+                      color: isSameDay(weekDates[i], TODAY)
+                        ? '#6c8fff'
+                        : '#9499b0',
                     }}
                   >
-                    <div style={{ ...s.shiftName, color: '#3a8ac4' }}>
-                      On-call
-                    </div>
-                    <div style={s.shiftTime}>parallel</div>
+                    {day}
                   </div>
-                  {visibleDays.map((dayIdx) => (
+                  <div
+                    style={{
+                      ...s.dayDate,
+                      color: isSameDay(weekDates[i], TODAY)
+                        ? '#6c8fff'
+                        : '#e8eaf0',
+                    }}
+                  >
+                    {formatShort(weekDates[i])}
+                  </div>
+                  {canSeeGaps && getViolations(i).length > 0 && (
                     <div
-                      key={dayIdx}
-                      style={{ ...s.cell, background: 'rgba(58,138,196,0.04)' }}
-                    >
-                      {(rota.onCall[dayIdx] || []).map((id) => {
-                        const st = staffMap[id]
-                        if (!st) return null
-                        return (
-                          <div key={id} style={s.chipOncall}>
-                            {st.name.split(' ')[0]}
-                          </div>
-                        )
-                      })}
-                    </div>
-                  ))}
+                      style={s.violationDot}
+                      title={getViolations(i).join(', ')}
+                    />
+                  )}
                 </div>
+              ))}
+
+              {/* Early row */}
+              <div style={s.shiftLabel}>
+                <div style={s.shiftName}>Early</div>
+                <div style={s.shiftTime}>07:00–14:30</div>
               </div>
-            )}
-          </>
+              {DAYS.map((_, dayIdx) => {
+                const staffList = rota.early[dayIdx] || []
+                const isGap = canSeeGaps && staffList.length < 3
+                return (
+                  <div
+                    key={dayIdx}
+                    style={{
+                      ...s.cell,
+                      background: isGap
+                        ? 'rgba(232,92,61,0.06)'
+                        : 'transparent',
+                    }}
+                  >
+                    {staffList.map((entry) => {
+                      const st = staffMap[entry.id]
+                      if (!st) return null
+                      return (
+                        <div key={entry.id} style={s.chipEarly}>
+                          <span style={s.chipName}>
+                            {st.name.split(' ')[0]}
+                          </span>
+                          <span style={s.chipRole}>{st.roleCode}</span>
+                        </div>
+                      )
+                    })}
+                    {isGap && <div style={s.gapTag}>GAP</div>}
+                    {canEdit && <div style={s.addBtn}>+ Add</div>}
+                  </div>
+                )
+              })}
+
+              {/* Late row */}
+              <div style={s.shiftLabel}>
+                <div style={s.shiftName}>Late</div>
+                <div style={s.shiftTime}>14:00–23:00</div>
+              </div>
+              {DAYS.map((_, dayIdx) => {
+                const staffList = rota.late[dayIdx] || []
+                const isGap = canSeeGaps && staffList.length < 3
+                const sleepCount = staffList.filter((e) => e.sleepIn).length
+                return (
+                  <div
+                    key={dayIdx}
+                    style={{
+                      ...s.cell,
+                      background: isGap
+                        ? 'rgba(232,92,61,0.06)'
+                        : 'transparent',
+                    }}
+                  >
+                    {staffList.map((entry) => {
+                      const st = staffMap[entry.id]
+                      if (!st) return null
+                      return (
+                        <div key={entry.id} style={s.chipLate}>
+                          <span style={s.chipName}>
+                            {st.name.split(' ')[0]}
+                          </span>
+                          <span style={s.chipRole}>{st.roleCode}</span>
+                          {entry.sleepIn && <span>💤</span>}
+                        </div>
+                      )
+                    })}
+                    {canSeeGaps && sleepCount < 2 && (
+                      <div style={s.sleepWarn}>⚠ {sleepCount}/2 sleep-ins</div>
+                    )}
+                    {isGap && <div style={s.gapTag}>GAP</div>}
+                    {canEdit && <div style={s.addBtn}>+ Add</div>}
+                  </div>
+                )
+              })}
+
+              {/* On-call row */}
+              <div
+                style={{ ...s.shiftLabel, background: 'rgba(58,138,196,0.06)' }}
+              >
+                <div style={{ ...s.shiftName, color: '#3a8ac4' }}>On-call</div>
+                <div style={s.shiftTime}>parallel</div>
+              </div>
+              {DAYS.map((_, dayIdx) => (
+                <div
+                  key={dayIdx}
+                  style={{ ...s.cell, background: 'rgba(58,138,196,0.04)' }}
+                >
+                  {(rota.onCall[dayIdx] || []).map((id) => {
+                    const st = staffMap[id]
+                    if (!st) return null
+                    return (
+                      <div key={id} style={s.chipOncall}>
+                        {st.name.split(' ')[0]}
+                      </div>
+                    )
+                  })}
+                </div>
+              ))}
+            </div>
+          </div>
         )}
 
         {/* ── MONTH VIEW ── */}
         {viewMode === 'month' && (
           <div style={s.monthWrap}>
-            {/* Day headers */}
             <div style={s.monthHeader}>
-              {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((d) => (
+              {DAYS.map((d) => (
                 <div key={d} style={s.monthDayHead}>
                   {d}
                 </div>
               ))}
             </div>
 
-            {/* Day cells */}
             <div style={s.monthGrid}>
               {monthDates.map((date, i) => {
                 const isCurrentMonth =
                   date.getMonth() === currentMonday.getMonth()
                 const isToday = isSameDay(date, TODAY)
-
-                // Find which rota day index this is (0-6 for Mon-Sun)
                 const dayOfWeek = (date.getDay() + 6) % 7
                 const early = rota.early[dayOfWeek] || []
                 const late = rota.late[dayOfWeek] || []
@@ -536,6 +501,9 @@ const s = {
     color: '#6c8fff',
     cursor: 'pointer',
     marginBottom: '8px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
   },
   title: {
     fontFamily: 'Syne, sans-serif',
@@ -574,6 +542,9 @@ const s = {
     fontWeight: 500,
     cursor: 'pointer',
     fontFamily: 'DM Sans, sans-serif',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
   },
   secondaryBtn: {
     background: 'transparent',
@@ -618,7 +589,7 @@ const s = {
     background: 'transparent',
     color: '#9499b0',
     cursor: 'pointer',
-    fontSize: '16px',
+    fontSize: '14px',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -652,7 +623,6 @@ const s = {
   },
   legend: { display: 'flex', gap: '12px', marginLeft: 'auto' },
   legendItem: { fontSize: '12px' },
-
   gridWrap: { overflowX: 'auto' },
   grid: {
     display: 'grid',

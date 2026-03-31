@@ -249,7 +249,9 @@ function Staff() {
             </div>
 
             {mockStaff
-              .filter((st) => st.role !== 'relief')
+              .filter(
+                (st) => !['relief', 'manager', 'deputy'].includes(st.role)
+              )
               .map((staff) => {
                 const dates = leaveData[staff.id] || []
                 return (
