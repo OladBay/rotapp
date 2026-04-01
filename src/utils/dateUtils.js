@@ -73,3 +73,39 @@ export function isSameDay(a, b) {
 export function dateKey(date) {
   return date.toISOString().split('T')[0]
 }
+
+// Returns array of 12 month descriptors for a given year
+export function getYearMonths(year) {
+  return Array.from({ length: 12 }, (_, i) => ({
+    year,
+    month: i,
+    label: new Date(year, i, 1).toLocaleDateString('en-GB', { month: 'long' }),
+    shortLabel: new Date(year, i, 1).toLocaleDateString('en-GB', {
+      month: 'short',
+    }),
+  }))
+}
+
+// Returns array of Monday dates for all weeks that touch a given month.
+// A week "belongs" to the month if its Monday falls in that month,
+// or if any day of that week falls in that month (we use: Monday of each
+// calendar row in getMonthDates that has at least one day in the month).
+export function getMonthWeeks(year, month) {
+  const mondays = []
+  const seen = new Set()
+
+  const allDates = getMonthDates(year, month)
+  allDates.forEach((date) => {
+    // Only include weeks anchored by days that actually belong to the month
+    // so we don't generate rota for overflow padding days
+    if (date.getMonth() !== month) return
+    const mon = getMondayOfWeek(date)
+    const key = dateKey(mon)
+    if (!seen.has(key)) {
+      seen.add(key)
+      mondays.push(mon)
+    }
+  })
+
+  return mondays
+}

@@ -1,10 +1,14 @@
 import { useState } from 'react'
 import { mockStaff } from '../../data/mockRota'
-import { generateRota, checkViolations } from '../../utils/rotaGenerator'
+import {
+  generateRota,
+  generateMonthRota,
+  checkViolations,
+} from '../../utils/rotaGenerator'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { dateKey } from '../../utils/dateUtils'
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-const DATES = ['31 Mar', '1 Apr', '2 Apr', '3 Apr', '4 Apr', '5 Apr', '6 Apr']
 
 const AVAIL_OPTIONS = [
   { value: 'B', label: 'Both' },
@@ -36,8 +40,25 @@ const AVAIL_COLORS = {
   },
 }
 
-function GenerateModal({ onClose, onApply }) {
+// Props:
+//   onClose        — close the modal
+//   onApply        — called with (weekRota) for week scope
+//   onApplyMonth   — called with ({ weekRotas, weekViolations, weeks }) for month scope
+//   currentMonday  — Date, the Monday of the currently viewed week
+//   scopeYear      — number, year of the currently viewed month
+//   scopeMonth     — number (0-based), month of the currently viewed month
+//   monthLabel     — string e.g. "April 2026"
+function GenerateModal({
+  onClose,
+  onApply,
+  onApplyMonth,
+  currentMonday,
+  scopeYear,
+  scopeMonth,
+  monthLabel,
+}) {
   const [step, setStep] = useState(1)
+  const [scope, setScope] = useState('week') // 'week' | 'month'
   const [availability, setAvailability] = useState(() => {
     const init = {}
     mockStaff.forEach((s) => {
@@ -48,13 +69,22 @@ function GenerateModal({ onClose, onApply }) {
     })
     return init
   })
+
+  // Week generation state
   const [generatedRota, setGeneratedRota] = useState(null)
   const [violations, setViolations] = useState([])
+
+  // Month generation state
+  const [monthResult, setMonthResult] = useState(null) // { weekRotas, weekViolations, weeks }
+
   const [overrideChecked, setOverride] = useState(false)
   const [generating, setGenerating] = useState(false)
   const [logLines, setLogLines] = useState([])
   const [showInstructions, setShowInstructions] = useState(false)
   const [hiddenDays, setHiddenDays] = useState([])
+
+  // Which week is expanded in the month review
+  const [expandedWeek, setExpandedWeek] = useState(null)
 
   const staffMap = Object.fromEntries(mockStaff.map((s) => [s.id, s]))
 
@@ -79,6 +109,13 @@ function GenerateModal({ onClose, onApply }) {
     setAvailability(updated)
   }
 
+  // Build dates for header row — use currentMonday for week scope
+  const headerDates = DAYS.map((_, i) => {
+    const d = new Date(currentMonday)
+    d.setDate(d.getDate() + i)
+    return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+  })
+
   const runGeneration = async () => {
     setGenerating(true)
     setLogLines([])
@@ -87,50 +124,97 @@ function GenerateModal({ onClose, onApply }) {
     const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
     addLog('Parsing availability matrix…', 'info')
-    await sleep(500)
-
-    addLog(`${mockStaff.length} staff · 7 days · 2 shifts`, '')
     await sleep(400)
-
+    addLog(`${mockStaff.length} staff · 7-day template · 2 shifts`, '')
+    await sleep(300)
     addLog('Applying hard constraints…', 'info')
     addLog('  Min 3 staff/shift (excl. managers)', '')
     addLog('  2 sleep-ins per night required', '')
-    await sleep(500)
-
+    await sleep(400)
     addLog('Applying soft rules…', 'info')
     addLog('  1 female per shift', '')
     addLog('  1 driver per shift', '')
     addLog('  1 permanent staff per shift + sleep-in', '')
-    await sleep(500)
+    await sleep(400)
 
-    addLog('Generating rota…', 'info')
-    await sleep(600)
+    if (scope === 'week') {
+      addLog('Generating week rota…', 'info')
+      await sleep(500)
 
-    const rota = generateRota(availability)
-    const vs = checkViolations(rota, staffMap)
+      const rota = generateRota(availability)
+      const vs = checkViolations(rota, staffMap)
+      setGeneratedRota(rota)
+      setViolations(vs)
 
-    setGeneratedRota(rota)
-    setViolations(vs)
+      const hard = vs.filter((v) => v.type === 'hard')
+      const soft = vs.filter((v) => v.type === 'soft')
+      if (hard.length === 0) addLog('✓ All hard constraints satisfied', 'ok')
+      else hard.forEach((v) => addLog(`✗ ${v.message}`, 'warn'))
+      if (soft.length === 0) addLog('✓ All soft rules met', 'ok')
+      else soft.forEach((v) => addLog(`⚠ ${v.message}`, 'soft'))
+      addLog('Week rota ready for review', 'ok')
+    } else {
+      addLog(`Generating rota for ${monthLabel}…`, 'info')
+      await sleep(300)
 
-    const hard = vs.filter((v) => v.type === 'hard')
-    const soft = vs.filter((v) => v.type === 'soft')
+      const result = generateMonthRota(
+        scopeYear,
+        scopeMonth,
+        availability,
+        staffMap
+      )
+      setMonthResult(result)
 
-    if (hard.length === 0) addLog('✓ All hard constraints satisfied', 'ok')
-    else hard.forEach((v) => addLog(`✗ ${v.message}`, 'warn'))
+      const allViolations = Object.values(result.weekViolations).flat()
+      const hard = allViolations.filter((v) => v.type === 'hard')
+      const soft = allViolations.filter((v) => v.type === 'soft')
 
-    if (soft.length === 0) addLog('✓ All soft rules met', 'ok')
-    else soft.forEach((v) => addLog(`⚠ ${v.message}`, 'soft'))
+      addLog(`Generated ${result.weeks.length} weeks`, 'info')
+      await sleep(300)
 
-    addLog('Rota ready for review', 'ok')
+      if (hard.length === 0) addLog('✓ All hard constraints satisfied', 'ok')
+      else addLog(`✗ ${hard.length} hard violation(s) across the month`, 'warn')
+      if (soft.length === 0) addLog('✓ All soft rules met', 'ok')
+      else addLog(`⚠ ${soft.length} soft flag(s) across the month`, 'soft')
+      addLog(`${monthLabel} rota ready for review`, 'ok')
+    }
+
     setGenerating(false)
-
-    await sleep(600)
+    await sleep(500)
     setStep(3)
   }
 
-  const hardViolations = violations.filter((v) => v.type === 'hard')
-  const softViolations = violations.filter((v) => v.type === 'soft')
+  // Derived violation totals
+  const allMonthViolations = monthResult
+    ? Object.values(monthResult.weekViolations).flat()
+    : []
+  const hardViolations =
+    scope === 'week'
+      ? violations.filter((v) => v.type === 'hard')
+      : allMonthViolations.filter((v) => v.type === 'hard')
+  const softViolations =
+    scope === 'week'
+      ? violations.filter((v) => v.type === 'soft')
+      : allMonthViolations.filter((v) => v.type === 'soft')
   const canApply = hardViolations.length === 0 || overrideChecked
+
+  const resetToStep1 = () => {
+    setStep(1)
+    setGeneratedRota(null)
+    setViolations([])
+    setMonthResult(null)
+    setOverride(false)
+    setExpandedWeek(null)
+  }
+
+  const handleApply = () => {
+    if (scope === 'week') {
+      onApply(generatedRota)
+    } else {
+      onApplyMonth(monthResult)
+    }
+    onClose()
+  }
 
   return (
     <div style={s.overlay} onClick={onClose}>
@@ -158,10 +242,16 @@ function GenerateModal({ onClose, onApply }) {
             </div>
             <div style={s.subtitle}>
               {step === 1
-                ? 'Set availability for each staff member this week'
+                ? scope === 'week'
+                  ? `Setting availability for the week of ${headerDates[0]}`
+                  : `Setting availability template for ${monthLabel}`
                 : step === 2
-                  ? 'Building a compliant rota from availability data'
-                  : 'Check violations before applying to the rota'}
+                  ? scope === 'week'
+                    ? 'Building a compliant week rota from availability data'
+                    : `Building all weeks for ${monthLabel}`
+                  : scope === 'week'
+                    ? 'Check violations before applying to the rota'
+                    : `Review violations across all weeks of ${monthLabel}`}
             </div>
           </div>
           <button style={s.closeBtn} onClick={onClose}>
@@ -210,6 +300,46 @@ function GenerateModal({ onClose, onApply }) {
         {step === 1 && (
           <>
             <div style={s.body}>
+              {/* Scope toggle */}
+              <div style={s.scopeRow}>
+                <span style={s.scopeLabel}>Generate for:</span>
+                <div style={s.scopeToggle}>
+                  {[
+                    { value: 'week', label: 'This week' },
+                    { value: 'month', label: `${monthLabel}` },
+                  ].map((opt) => (
+                    <button
+                      key={opt.value}
+                      style={{
+                        ...s.scopeBtn,
+                        background:
+                          scope === opt.value
+                            ? '#6c8fff'
+                            : 'rgba(255,255,255,0.04)',
+                        color: scope === opt.value ? '#fff' : '#9499b0',
+                        border:
+                          scope === opt.value
+                            ? '1px solid #6c8fff'
+                            : '1px solid rgba(255,255,255,0.08)',
+                      }}
+                      onClick={() => setScope(opt.value)}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+                {scope === 'month' && (
+                  <span style={s.scopeNote}>
+                    Availability template applies to all{' '}
+                    {(() => {
+                      const d = new Date(scopeYear, scopeMonth + 1, 0)
+                      return Math.ceil(d.getDate() / 7)
+                    })()}{' '}
+                    weeks
+                  </span>
+                )}
+              </div>
+
               <div style={s.availHeader}>
                 <div style={s.availNote}>
                   E = Early only · L = Late only · B = Both · X = Off
@@ -240,89 +370,83 @@ function GenerateModal({ onClose, onApply }) {
                 <div style={s.instructionsBox}>
                   <div style={s.instrTitle}>How the rota generator works</div>
                   <div style={s.instrGrid}>
-                    <div style={s.instrItem}>
-                      <span
-                        style={{
-                          ...s.instrBadge,
-                          background: 'rgba(108,143,255,0.15)',
-                          color: '#6c8fff',
-                        }}
-                      >
-                        Both
-                      </span>
-                      <span style={s.instrText}>
-                        Staff can work either shift — generator decides based on
-                        coverage needs
-                      </span>
-                    </div>
-                    <div style={s.instrItem}>
-                      <span
-                        style={{
-                          ...s.instrBadge,
-                          background: 'rgba(42,127,98,0.15)',
-                          color: '#2a7f62',
-                        }}
-                      >
-                        Early
-                      </span>
-                      <span style={s.instrText}>
-                        Staff is only available for the early shift
-                        (07:00–14:30)
-                      </span>
-                    </div>
-                    <div style={s.instrItem}>
-                      <span
-                        style={{
-                          ...s.instrBadge,
-                          background: 'rgba(122,79,168,0.15)',
-                          color: '#7a4fa8',
-                        }}
-                      >
-                        Late
-                      </span>
-                      <span style={s.instrText}>
-                        Staff is only available for the late shift (14:00–23:00)
-                      </span>
-                    </div>
-                    <div style={s.instrItem}>
-                      <span
-                        style={{
-                          ...s.instrBadge,
-                          background: 'rgba(255,255,255,0.06)',
-                          color: '#5d6180',
-                        }}
-                      >
-                        Off
-                      </span>
-                      <span style={s.instrText}>
-                        Staff is unavailable — on leave, sick, or rest day
-                      </span>
-                    </div>
+                    {[
+                      {
+                        val: 'B',
+                        bg: 'rgba(108,143,255,0.15)',
+                        color: '#6c8fff',
+                        label: 'Both',
+                        text: 'Staff can work either shift — generator decides based on coverage needs',
+                      },
+                      {
+                        val: 'E',
+                        bg: 'rgba(42,127,98,0.15)',
+                        color: '#2a7f62',
+                        label: 'Early',
+                        text: 'Staff is only available for the early shift (07:00–14:30)',
+                      },
+                      {
+                        val: 'L',
+                        bg: 'rgba(122,79,168,0.15)',
+                        color: '#7a4fa8',
+                        label: 'Late',
+                        text: 'Staff is only available for the late shift (14:00–23:00)',
+                      },
+                      {
+                        val: 'X',
+                        bg: 'rgba(255,255,255,0.06)',
+                        color: '#5d6180',
+                        label: 'Off',
+                        text: 'Staff is unavailable — on leave, sick, or rest day',
+                      },
+                    ].map((item) => (
+                      <div key={item.val} style={s.instrItem}>
+                        <span
+                          style={{
+                            ...s.instrBadge,
+                            background: item.bg,
+                            color: item.color,
+                          }}
+                        >
+                          {item.label}
+                        </span>
+                        <span style={s.instrText}>{item.text}</span>
+                      </div>
+                    ))}
                   </div>
                   <div style={s.instrRules}>
                     <div style={s.instrRuleTitle}>
                       What the generator checks
                     </div>
-                    <div style={s.instrRule}>
-                      <span style={s.hardDot} /> Min 3 staff per shift (managers
-                      and deputies don't count)
-                    </div>
-                    <div style={s.instrRule}>
-                      <span style={s.hardDot} /> Exactly 2 sleep-in tags per
-                      night
-                    </div>
-                    <div style={s.instrRule}>
-                      <span style={s.softDot} /> At least 1 female staff per
-                      shift where possible
-                    </div>
-                    <div style={s.instrRule}>
-                      <span style={s.softDot} /> At least 1 driver per shift
-                      where possible
-                    </div>
-                    <div style={s.instrRule}>
-                      <span style={s.softDot} /> At least 1 permanent staff per
-                      shift and on sleep-in
-                    </div>
+                    {[
+                      {
+                        dot: 'hard',
+                        text: "Min 3 staff per shift (managers and deputies don't count)",
+                      },
+                      {
+                        dot: 'hard',
+                        text: 'Exactly 2 sleep-in tags per night',
+                      },
+                      {
+                        dot: 'soft',
+                        text: 'At least 1 female staff per shift where possible',
+                      },
+                      {
+                        dot: 'soft',
+                        text: 'At least 1 driver per shift where possible',
+                      },
+                      {
+                        dot: 'soft',
+                        text: 'At least 1 permanent staff per shift and on sleep-in',
+                      },
+                    ].map((r, i) => (
+                      <div key={i} style={s.instrRule}>
+                        <span
+                          style={r.dot === 'hard' ? s.hardDot : s.softDot}
+                        />
+                        {r.text}
+                      </div>
+                    ))}
                     <div style={s.instrNote}>
                       Staff marked off on the Leave tab will automatically
                       appear as Off here.
@@ -381,7 +505,7 @@ function GenerateModal({ onClose, onApply }) {
                                   : 'none',
                               }}
                             >
-                              {DATES[i]}
+                              {headerDates[i]}
                             </span>
                           </div>
                         </th>
@@ -440,7 +564,10 @@ function GenerateModal({ onClose, onApply }) {
                   Cancel
                 </button>
                 <button style={s.primaryBtn} onClick={runGeneration}>
-                  Generate ⚡
+                  <FontAwesomeIcon icon='bolt' />{' '}
+                  {scope === 'week'
+                    ? 'Generate week'
+                    : `Generate ${monthLabel}`}
                 </button>
               </div>
             </div>
@@ -453,7 +580,11 @@ function GenerateModal({ onClose, onApply }) {
             <div style={s.generatingWrap}>
               {generating && <div style={s.spinner} />}
               <div style={s.genStatus}>
-                {generating ? 'Building your rota…' : 'Rota generated'}
+                {generating
+                  ? scope === 'week'
+                    ? 'Building your week rota…'
+                    : `Building all weeks for ${monthLabel}…`
+                  : 'Rota generated'}
               </div>
               <div style={s.logBox}>
                 {logLines.map((line, i) => (
@@ -482,192 +613,285 @@ function GenerateModal({ onClose, onApply }) {
         )}
 
         {/* ── STEP 3: REVIEW ── */}
-        {step === 3 && generatedRota && (
+        {step === 3 && (
           <>
             <div style={s.body}>
               {/* Stats */}
-              <div style={s.reviewStats}>
-                <div style={s.reviewStat}>
-                  <div style={s.reviewStatVal}>
-                    {generatedRota.early.reduce((a, d) => a + d.length, 0)}
-                  </div>
-                  <div style={s.reviewStatLabel}>Early slots</div>
-                </div>
-                <div style={s.reviewStat}>
-                  <div style={s.reviewStatVal}>
-                    {generatedRota.late.reduce((a, d) => a + d.length, 0)}
-                  </div>
-                  <div style={s.reviewStatLabel}>Late slots</div>
-                </div>
-                <div style={s.reviewStat}>
-                  <div style={s.reviewStatVal}>
-                    {generatedRota.late.reduce(
-                      (a, d) => a + d.filter((e) => e.sleepIn).length,
-                      0
-                    )}
-                  </div>
-                  <div style={s.reviewStatLabel}>Sleep-ins</div>
-                </div>
-                <div style={s.reviewStat}>
-                  <div
-                    style={{
-                      ...s.reviewStatVal,
-                      color: hardViolations.length > 0 ? '#e85c3d' : '#2ecc8a',
-                    }}
-                  >
-                    {hardViolations.length}
-                  </div>
-                  <div style={s.reviewStatLabel}>Hard violations</div>
-                </div>
-                <div style={s.reviewStat}>
-                  <div
-                    style={{
-                      ...s.reviewStatVal,
-                      color: softViolations.length > 0 ? '#c4883a' : '#2ecc8a',
-                    }}
-                  >
-                    {softViolations.length}
-                  </div>
-                  <div style={s.reviewStatLabel}>Soft rule flags</div>
-                </div>
-              </div>
-
-              {/* Violations */}
-              {violations.length === 0 ? (
-                <div style={s.allGood}>
-                  ✓ Fully compliant — all hard and soft rules satisfied
-                </div>
-              ) : (
-                <div style={s.violationsList}>
-                  {hardViolations.length > 0 && (
-                    <>
-                      <div style={s.violationGroupLabel}>Hard violations</div>
-                      {hardViolations.map((v, i) => (
-                        <div key={i} style={s.violationCard}>
-                          <span style={s.violationIcon}>✗</span>
-                          <span>{v.message}</span>
-                        </div>
-                      ))}
-                    </>
-                  )}
-                  {softViolations.length > 0 && (
-                    <>
+              {scope === 'week' && generatedRota ? (
+                <>
+                  <div style={s.reviewStats}>
+                    <div style={s.reviewStat}>
+                      <div style={s.reviewStatVal}>
+                        {generatedRota.early.reduce((a, d) => a + d.length, 0)}
+                      </div>
+                      <div style={s.reviewStatLabel}>Early slots</div>
+                    </div>
+                    <div style={s.reviewStat}>
+                      <div style={s.reviewStatVal}>
+                        {generatedRota.late.reduce((a, d) => a + d.length, 0)}
+                      </div>
+                      <div style={s.reviewStatLabel}>Late slots</div>
+                    </div>
+                    <div style={s.reviewStat}>
+                      <div style={s.reviewStatVal}>
+                        {generatedRota.late.reduce(
+                          (a, d) => a + d.filter((e) => e.sleepIn).length,
+                          0
+                        )}
+                      </div>
+                      <div style={s.reviewStatLabel}>Sleep-ins</div>
+                    </div>
+                    <div style={s.reviewStat}>
                       <div
                         style={{
-                          ...s.violationGroupLabel,
-                          color: '#c4883a',
-                          marginTop: '12px',
+                          ...s.reviewStatVal,
+                          color:
+                            hardViolations.length > 0 ? '#e85c3d' : '#2ecc8a',
                         }}
                       >
-                        Soft rule flags
+                        {hardViolations.length}
                       </div>
-                      {softViolations.map((v, i) => (
-                        <div
-                          key={i}
-                          style={{ ...s.violationCard, ...s.softCard }}
-                        >
-                          <span
-                            style={{ ...s.violationIcon, color: '#c4883a' }}
-                          >
-                            ⚠
-                          </span>
-                          <span style={{ color: '#c4883a' }}>{v.message}</span>
-                        </div>
-                      ))}
-                    </>
+                      <div style={s.reviewStatLabel}>Hard violations</div>
+                    </div>
+                    <div style={s.reviewStat}>
+                      <div
+                        style={{
+                          ...s.reviewStatVal,
+                          color:
+                            softViolations.length > 0 ? '#c4883a' : '#2ecc8a',
+                        }}
+                      >
+                        {softViolations.length}
+                      </div>
+                      <div style={s.reviewStatLabel}>Soft flags</div>
+                    </div>
+                  </div>
+
+                  {/* Week violations */}
+                  {violations.length === 0 ? (
+                    <div style={s.allGood}>
+                      ✓ Fully compliant — all hard and soft rules satisfied
+                    </div>
+                  ) : (
+                    <WeekViolationBlock violations={violations} s={s} />
                   )}
-                </div>
-              )}
 
-              {/* Override checkbox */}
-              {hardViolations.length > 0 && (
-                <div style={s.overrideRow}>
-                  <input
-                    type='checkbox'
-                    id='override'
-                    checked={overrideChecked}
-                    onChange={(e) => setOverride(e.target.checked)}
-                    style={{ cursor: 'pointer' }}
-                  />
-                  <label htmlFor='override' style={s.overrideLabel}>
-                    I understand the violations and want to apply this rota
-                    anyway. This override will be logged.
-                  </label>
-                </div>
-              )}
+                  {hardViolations.length > 0 && (
+                    <OverrideRow
+                      overrideChecked={overrideChecked}
+                      setOverride={setOverride}
+                      s={s}
+                    />
+                  )}
 
-              {/* Mini preview */}
-              <div style={s.previewLabel}>Rota Preview</div>
-              <div style={{ overflowX: 'auto' }}>
-                <table style={s.previewTable}>
-                  <thead>
-                    <tr>
-                      <th style={s.pth}>Shift</th>
-                      {DAYS.map((d) => (
-                        <th key={d} style={s.pth}>
-                          {d}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {['early', 'late'].map((shift) => (
-                      <tr key={shift}>
-                        <td
-                          style={{
-                            ...s.ptd,
-                            textTransform: 'capitalize',
-                            fontWeight: 500,
-                          }}
-                        >
-                          {shift}
-                        </td>
-                        {(generatedRota[shift] || []).map((dayList, i) => (
-                          <td
-                            key={i}
-                            style={{
-                              ...s.ptd,
-                              background:
-                                dayList.length < 3
-                                  ? 'rgba(232,92,61,0.08)'
-                                  : 'transparent',
-                            }}
-                          >
-                            {dayList.map((e) => {
-                              const st = staffMap[e.id]
-                              return (
-                                <div key={e.id} style={s.previewName}>
-                                  {st?.name.split(' ')[0]}
-                                  {e.sleepIn && ' 💤'}
-                                </div>
-                              )
-                            })}
-                          </td>
+                  {/* Mini preview */}
+                  <div style={s.previewLabel}>Rota Preview</div>
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={s.previewTable}>
+                      <thead>
+                        <tr>
+                          <th style={s.pth}>Shift</th>
+                          {DAYS.map((d) => (
+                            <th key={d} style={s.pth}>
+                              {d}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {['early', 'late'].map((shift) => (
+                          <tr key={shift}>
+                            <td
+                              style={{
+                                ...s.ptd,
+                                textTransform: 'capitalize',
+                                fontWeight: 500,
+                              }}
+                            >
+                              {shift}
+                            </td>
+                            {(generatedRota[shift] || []).map((dayList, i) => (
+                              <td
+                                key={i}
+                                style={{
+                                  ...s.ptd,
+                                  background:
+                                    dayList.length < 3
+                                      ? 'rgba(232,92,61,0.08)'
+                                      : 'transparent',
+                                }}
+                              >
+                                {dayList.map((e) => {
+                                  const st = staffMap[e.id]
+                                  return (
+                                    <div key={e.id} style={s.previewName}>
+                                      {st?.name.split(' ')[0]}
+                                      {e.sleepIn && ' 💤'}
+                                    </div>
+                                  )
+                                })}
+                              </td>
+                            ))}
+                          </tr>
                         ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              ) : scope === 'month' && monthResult ? (
+                <>
+                  {/* Month stats */}
+                  <div style={s.reviewStats}>
+                    <div style={s.reviewStat}>
+                      <div style={s.reviewStatVal}>
+                        {monthResult.weeks.length}
+                      </div>
+                      <div style={s.reviewStatLabel}>Weeks generated</div>
+                    </div>
+                    <div style={s.reviewStat}>
+                      <div style={s.reviewStatVal}>
+                        {Object.values(monthResult.weekRotas).reduce(
+                          (a, r) =>
+                            a + r.early.reduce((b, d) => b + d.length, 0),
+                          0
+                        )}
+                      </div>
+                      <div style={s.reviewStatLabel}>Early slots</div>
+                    </div>
+                    <div style={s.reviewStat}>
+                      <div style={s.reviewStatVal}>
+                        {Object.values(monthResult.weekRotas).reduce(
+                          (a, r) =>
+                            a + r.late.reduce((b, d) => b + d.length, 0),
+                          0
+                        )}
+                      </div>
+                      <div style={s.reviewStatLabel}>Late slots</div>
+                    </div>
+                    <div style={s.reviewStat}>
+                      <div
+                        style={{
+                          ...s.reviewStatVal,
+                          color:
+                            hardViolations.length > 0 ? '#e85c3d' : '#2ecc8a',
+                        }}
+                      >
+                        {hardViolations.length}
+                      </div>
+                      <div style={s.reviewStatLabel}>Hard violations</div>
+                    </div>
+                    <div style={s.reviewStat}>
+                      <div
+                        style={{
+                          ...s.reviewStatVal,
+                          color:
+                            softViolations.length > 0 ? '#c4883a' : '#2ecc8a',
+                        }}
+                      >
+                        {softViolations.length}
+                      </div>
+                      <div style={s.reviewStatLabel}>Soft flags</div>
+                    </div>
+                  </div>
+
+                  {/* Per-week violation accordion */}
+                  {allMonthViolations.length === 0 ? (
+                    <div style={s.allGood}>
+                      ✓ Fully compliant across all {monthResult.weeks.length}{' '}
+                      weeks — no violations
+                    </div>
+                  ) : (
+                    <div style={s.violationsList}>
+                      {monthResult.weeks.map((monday, wi) => {
+                        const key = dateKey(monday)
+                        const wv = monthResult.weekViolations[key] || []
+                        const wHard = wv.filter((v) => v.type === 'hard')
+                        const wSoft = wv.filter((v) => v.type === 'soft')
+                        const isExpanded = expandedWeek === key
+                        const weekLabel = `Week ${wi + 1} — ${monday.toLocaleDateString(
+                          'en-GB',
+                          { day: 'numeric', month: 'short' }
+                        )}`
+
+                        return (
+                          <div key={key} style={s.weekAccordion}>
+                            <div
+                              style={{
+                                ...s.weekAccordionHeader,
+                                borderColor:
+                                  wHard.length > 0
+                                    ? 'rgba(232,92,61,0.25)'
+                                    : wSoft.length > 0
+                                      ? 'rgba(196,136,58,0.25)'
+                                      : 'rgba(46,204,138,0.2)',
+                                background:
+                                  wHard.length > 0
+                                    ? 'rgba(232,92,61,0.06)'
+                                    : wSoft.length > 0
+                                      ? 'rgba(196,136,58,0.06)'
+                                      : 'rgba(46,204,138,0.05)',
+                              }}
+                              onClick={() =>
+                                setExpandedWeek(isExpanded ? null : key)
+                              }
+                            >
+                              <span style={s.weekAccordionTitle}>
+                                {weekLabel}
+                              </span>
+                              <div style={s.weekAccordionBadges}>
+                                {wHard.length > 0 && (
+                                  <span style={s.badgeHard}>
+                                    {wHard.length} hard
+                                  </span>
+                                )}
+                                {wSoft.length > 0 && (
+                                  <span style={s.badgeSoft}>
+                                    {wSoft.length} soft
+                                  </span>
+                                )}
+                                {wv.length === 0 && (
+                                  <span style={s.badgeOk}>✓ compliant</span>
+                                )}
+                              </div>
+                              <FontAwesomeIcon
+                                icon={
+                                  isExpanded ? 'chevron-up' : 'chevron-down'
+                                }
+                                style={{ color: '#5d6180', fontSize: '11px' }}
+                              />
+                            </div>
+                            {isExpanded && wv.length > 0 && (
+                              <div style={s.weekAccordionBody}>
+                                <WeekViolationBlock violations={wv} s={s} />
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+
+                  {hardViolations.length > 0 && (
+                    <OverrideRow
+                      overrideChecked={overrideChecked}
+                      setOverride={setOverride}
+                      s={s}
+                    />
+                  )}
+                </>
+              ) : null}
             </div>
 
             <div style={s.footer}>
-              <button
-                style={s.secondaryBtn}
-                onClick={() => {
-                  setStep(1)
-                  setGeneratedRota(null)
-                  setViolations([])
-                }}
-              >
+              <button style={s.secondaryBtn} onClick={resetToStep1}>
                 ← Start over
               </button>
               <div style={s.footerActions}>
                 <button
                   style={s.secondaryBtn}
                   onClick={() => {
-                    setStep(2)
-                    runGeneration()
+                    resetToStep1()
+                    setTimeout(() => runGeneration(), 50)
                   }}
                 >
                   Regenerate
@@ -683,20 +907,77 @@ function GenerateModal({ onClose, onApply }) {
                         : '#6c8fff',
                   }}
                   disabled={!canApply}
-                  onClick={() => {
-                    onApply(generatedRota)
-                    onClose()
-                  }}
+                  onClick={handleApply}
                 >
                   {hardViolations.length > 0 && overrideChecked
                     ? 'Apply with override'
-                    : 'Apply to rota'}
+                    : scope === 'week'
+                      ? 'Apply to rota'
+                      : `Apply ${monthLabel}`}
                 </button>
               </div>
             </div>
           </>
         )}
       </div>
+    </div>
+  )
+}
+
+// Shared sub-components
+function WeekViolationBlock({ violations, s }) {
+  const hard = violations.filter((v) => v.type === 'hard')
+  const soft = violations.filter((v) => v.type === 'soft')
+  return (
+    <div style={s.violationsList}>
+      {hard.length > 0 && (
+        <>
+          <div style={s.violationGroupLabel}>Hard violations</div>
+          {hard.map((v, i) => (
+            <div key={i} style={s.violationCard}>
+              <span style={s.violationIcon}>✗</span>
+              <span>{v.message}</span>
+            </div>
+          ))}
+        </>
+      )}
+      {soft.length > 0 && (
+        <>
+          <div
+            style={{
+              ...s.violationGroupLabel,
+              color: '#c4883a',
+              marginTop: hard.length > 0 ? '12px' : '0',
+            }}
+          >
+            Soft rule flags
+          </div>
+          {soft.map((v, i) => (
+            <div key={i} style={{ ...s.violationCard, ...s.softCard }}>
+              <span style={{ ...s.violationIcon, color: '#c4883a' }}>⚠</span>
+              <span style={{ color: '#c4883a' }}>{v.message}</span>
+            </div>
+          ))}
+        </>
+      )}
+    </div>
+  )
+}
+
+function OverrideRow({ overrideChecked, setOverride, s }) {
+  return (
+    <div style={s.overrideRow}>
+      <input
+        type='checkbox'
+        id='override'
+        checked={overrideChecked}
+        onChange={(e) => setOverride(e.target.checked)}
+        style={{ cursor: 'pointer' }}
+      />
+      <label htmlFor='override' style={s.overrideLabel}>
+        I understand the violations and want to apply this rota anyway. This
+        override will be logged.
+      </label>
     </div>
   )
 }
@@ -792,6 +1073,9 @@ const s = {
     fontWeight: 500,
     cursor: 'pointer',
     fontFamily: 'DM Sans, sans-serif',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
   },
   secondaryBtn: {
     background: 'transparent',
@@ -802,6 +1086,35 @@ const s = {
     fontSize: '13px',
     cursor: 'pointer',
     fontFamily: 'DM Sans, sans-serif',
+  },
+  scopeRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '12px',
+    marginBottom: '20px',
+    padding: '12px 14px',
+    background: '#1d1f2b',
+    borderRadius: '10px',
+    border: '1px solid rgba(255,255,255,0.07)',
+    flexWrap: 'wrap',
+  },
+  scopeLabel: { fontSize: '12px', color: '#9499b0', whiteSpace: 'nowrap' },
+  scopeToggle: { display: 'flex', gap: '6px' },
+  scopeBtn: {
+    borderRadius: '7px',
+    padding: '6px 14px',
+    fontSize: '12.5px',
+    fontWeight: 500,
+    cursor: 'pointer',
+    fontFamily: 'DM Sans, sans-serif',
+    transition: 'all 0.15s',
+  },
+  scopeNote: {
+    fontSize: '11px',
+    color: '#6c8fff',
+    background: 'rgba(108,143,255,0.08)',
+    padding: '4px 8px',
+    borderRadius: '5px',
   },
   availHeader: {
     display: 'flex',
@@ -980,6 +1293,62 @@ const s = {
     verticalAlign: 'top',
   },
   previewName: { color: '#e8eaf0', marginBottom: '2px' },
+  // Week accordion (month review)
+  weekAccordion: {
+    marginBottom: '6px',
+    borderRadius: '8px',
+    overflow: 'hidden',
+  },
+  weekAccordionHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    padding: '10px 14px',
+    cursor: 'pointer',
+    border: '1px solid',
+    borderRadius: '8px',
+    userSelect: 'none',
+  },
+  weekAccordionTitle: {
+    fontSize: '12.5px',
+    fontWeight: 500,
+    color: '#e8eaf0',
+    flex: 1,
+  },
+  weekAccordionBadges: { display: 'flex', gap: '6px' },
+  weekAccordionBody: {
+    padding: '10px 14px',
+    background: 'rgba(255,255,255,0.02)',
+    borderLeft: '1px solid rgba(255,255,255,0.07)',
+    borderRight: '1px solid rgba(255,255,255,0.07)',
+    borderBottom: '1px solid rgba(255,255,255,0.07)',
+    borderRadius: '0 0 8px 8px',
+    marginTop: '-4px',
+  },
+  badgeHard: {
+    fontSize: '10px',
+    fontWeight: 500,
+    color: '#e85c3d',
+    background: 'rgba(232,92,61,0.12)',
+    padding: '2px 7px',
+    borderRadius: '4px',
+  },
+  badgeSoft: {
+    fontSize: '10px',
+    fontWeight: 500,
+    color: '#c4883a',
+    background: 'rgba(196,136,58,0.12)',
+    padding: '2px 7px',
+    borderRadius: '4px',
+  },
+  badgeOk: {
+    fontSize: '10px',
+    fontWeight: 500,
+    color: '#2ecc8a',
+    background: 'rgba(46,204,138,0.1)',
+    padding: '2px 7px',
+    borderRadius: '4px',
+  },
   infoBtn: {
     background: 'transparent',
     border: 'none',

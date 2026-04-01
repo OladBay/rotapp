@@ -1,11 +1,8 @@
 import { mockStaff } from '../data/mockRota'
+import { getMonthWeeks, dateKey } from './dateUtils'
 
 export function generateRota(availability) {
   const rota = { early: [], late: [], onCall: [] }
-
-  const mgmtIds = mockStaff
-    .filter((s) => ['manager', 'deputy'].includes(s.role))
-    .map((s) => s.id)
 
   const onCallPool = mockStaff
     .filter((s) => ['manager', 'deputy', 'senior'].includes(s.role))
@@ -47,6 +44,25 @@ export function generateRota(availability) {
   }
 
   return rota
+}
+
+// Generate rota for every week in a given month.
+// availability is the 7-day template (same shape as weekly generate).
+// Returns { weekRotas: { [mondayKey]: rota }, weekViolations: { [mondayKey]: violations }, weeks: Date[] }
+export function generateMonthRota(year, month, availability, staffMap) {
+  const weeks = getMonthWeeks(year, month)
+  const weekRotas = {}
+  const weekViolations = {}
+
+  weeks.forEach((monday) => {
+    const rota = generateRota(availability)
+    const violations = checkViolations(rota, staffMap)
+    const key = dateKey(monday)
+    weekRotas[key] = rota
+    weekViolations[key] = violations
+  })
+
+  return { weekRotas, weekViolations, weeks }
 }
 
 function pickStaff(pool, target) {

@@ -12,27 +12,77 @@ import {
   getMondayOfWeek,
   addWeeks,
   getMonthDates,
+  getYearMonths,
   isSameDay,
+  dateKey,
 } from '../utils/dateUtils'
 
 const TODAY = new Date()
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
+// ─── Day health classification ────────────────────────────────────────────────
+// Returns 'gap' | 'breach' | 'ok' | 'unplanned'
+// rota       — the week rota object { early, late, onCall }
+// dayOfWeek  — 0 (Mon) … 6 (Sun)
+function getDayHealth(rota, dayOfWeek) {
+  if (!rota) return 'unplanned'
+  const early = rota.early?.[dayOfWeek] || []
+  const late = rota.late?.[dayOfWeek] || []
+
+  // No data at all → unplanned
+  if (early.length === 0 && late.length === 0) return 'unplanned'
+
+  // Hard rule breach OR gap → red
+  const sleepIns = late.filter((e) => e.sleepIn).length
+  if (early.length < 3 || late.length < 3 || sleepIns !== 2) return 'gap'
+
+  // Soft rule breaches → yellow (we check female and driver)
+  const staffMap = Object.fromEntries(mockStaff.map((s) => [s.id, s]))
+  const earlyHasF = early.some((e) => staffMap[e.id]?.gender === 'F')
+  const lateHasF = late.some((e) => staffMap[e.id]?.gender === 'F')
+  const earlyHasD = early.some((e) => staffMap[e.id]?.driver)
+  const lateHasD = late.some((e) => staffMap[e.id]?.driver)
+  if (!earlyHasF || !lateHasF || !earlyHasD || !lateHasD) return 'breach'
+
+  return 'ok'
+}
+
+// Colour values for day health
+const HEALTH_COLOURS = {
+  gap: '#e85c3d',
+  breach: '#c4883a',
+  ok: '#2ecc8a',
+  unplanned: '#2e3045', // muted, "not yet planned"
+}
+
+const HEALTH_TEXT = {
+  gap: '#e85c3d',
+  breach: '#c4883a',
+  ok: '#2ecc8a',
+  unplanned: '#3d405a',
+}
+
 function Rota() {
   const { user } = useAuth()
   const navigate = useNavigate()
 
+  // viewMode: 'week' | 'year'
   const [viewMode, setViewMode] = useState('week')
   const [currentMonday, setMonday] = useState(getMondayOfWeek(TODAY))
-  const [rota, setRota] = useState(mockRota)
+  const [currentYear, setCurrentYear] = useState(TODAY.getFullYear())
+
+  // Rota data:
+  //   weekRota  — single-week rota (the original shape, for the current week)
+  //   monthRota — map of { [mondayKey]: rota } when a full month has been generated
+  const [weekRota, setWeekRota] = useState(mockRota)
+  const [monthRota, setMonthRota] = useState({}) // { [mondayKey]: rota }
+
   const [showGenerate, setShowGenerate] = useState(false)
   const [jumpValue, setJumpValue] = useState('')
   const [showJump, setShowJump] = useState(false)
 
   const weekDates = getWeekDates(currentMonday)
-  const monthDates = useMemo(() => {
-    return getMonthDates(currentMonday.getFullYear(), currentMonday.getMonth())
-  }, [currentMonday])
+  const yearMonths = useMemo(() => getYearMonths(currentYear), [currentYear])
 
   const staffMap = Object.fromEntries(mockStaff.map((s) => [s.id, s]))
   const canEdit = ['manager', 'deputy', 'superadmin'].includes(user?.activeRole)
@@ -44,41 +94,39 @@ function Rota() {
     'superadmin',
   ].includes(user?.activeRole)
 
+  // The rota to display for the current week —
+  // if we have a month-generated rota for this Monday, use it; otherwise fall back to weekRota
+  const currentRotaForWeek = monthRota[dateKey(currentMonday)] || weekRota
+
   const startLabel = formatDate(weekDates[0])
   const endLabel = formatDate(weekDates[6])
+
+  // Month label derived from currentMonday (used in week view header + generate modal)
   const monthLabel = currentMonday.toLocaleDateString('en-GB', {
     month: 'long',
     year: 'numeric',
   })
 
+  // ── Navigation ──────────────────────────────────────────────────────────────
   const prevWeek = () => setMonday((prev) => addWeeks(prev, -1))
   const nextWeek = () => setMonday((prev) => addWeeks(prev, 1))
-  const prevMonth = () =>
-    setMonday((prev) => {
-      const d = new Date(prev)
-      d.setMonth(d.getMonth() - 1)
-      return getMondayOfWeek(new Date(d.getFullYear(), d.getMonth(), 1))
-    })
-  const nextMonth = () =>
-    setMonday((prev) => {
-      const d = new Date(prev)
-      d.setMonth(d.getMonth() + 1)
-      return getMondayOfWeek(new Date(d.getFullYear(), d.getMonth(), 1))
-    })
 
   const handleJump = () => {
     if (!jumpValue) return
     const picked = new Date(jumpValue)
     if (isNaN(picked)) return
     setMonday(getMondayOfWeek(picked))
+    setCurrentYear(picked.getFullYear())
     setShowJump(false)
     setJumpValue('')
+    setViewMode('week')
   }
 
+  // ── Violations for the current week (used in compliance strip) ──────────────
   const getViolations = (dayIdx) => {
     const v = []
-    const early = rota.early[dayIdx] || []
-    const late = rota.late[dayIdx] || []
+    const early = currentRotaForWeek.early[dayIdx] || []
+    const late = currentRotaForWeek.late[dayIdx] || []
     const sleepIns = late.filter((e) => e.sleepIn)
     if (early.length < 3) v.push(`Early: ${early.length}/3`)
     if (late.length < 3) v.push(`Late: ${late.length}/3`)
@@ -91,36 +139,62 @@ function Rota() {
     0
   )
 
+  // ── Generate modal callbacks ────────────────────────────────────────────────
+  const handleApplyWeek = (newRota) => {
+    setWeekRota(newRota)
+  }
+
+  const handleApplyMonth = ({ weekRotas }) => {
+    setMonthRota((prev) => ({ ...prev, ...weekRotas }))
+  }
+
+  // ── Get rota for any given date (for year view colouring) ───────────────────
+  const getRotaForDate = (date) => {
+    const monday = getMondayOfWeek(date)
+    const key = dateKey(monday)
+    return (
+      monthRota[key] || (isSameDay(monday, currentMonday) ? weekRota : null)
+    )
+  }
+
   return (
     <div style={s.page}>
       <Navbar />
 
       <div style={s.body}>
-        {/* Header */}
+        {/* ── Header ── */}
         <div style={s.header}>
           <div>
             <div style={s.breadcrumb} onClick={() => navigate('/dashboard')}>
               <FontAwesomeIcon icon='chevron-left' /> Dashboard
             </div>
-            <h1 style={s.title}>Weekly Rota</h1>
+            <h1 style={s.title}>
+              {viewMode === 'week' ? 'Weekly Rota' : 'Rota Calendar'}
+            </h1>
             <p style={s.subtitle}>
               Meadowview House ·{' '}
-              {viewMode === 'week' ? `${startLabel} – ${endLabel}` : monthLabel}
+              {viewMode === 'week'
+                ? `${startLabel} – ${endLabel}`
+                : `${currentYear}`}
             </p>
           </div>
           <div style={s.headerRight}>
             <div style={s.viewToggle}>
-              {['week', 'month'].map((v) => (
+              {[
+                { value: 'week', label: 'Week' },
+                { value: 'year', label: 'Month' },
+              ].map((v) => (
                 <button
-                  key={v}
+                  key={v.value}
                   style={{
                     ...s.toggleBtn,
-                    background: viewMode === v ? '#6c8fff' : 'transparent',
-                    color: viewMode === v ? '#fff' : '#9499b0',
+                    background:
+                      viewMode === v.value ? '#6c8fff' : 'transparent',
+                    color: viewMode === v.value ? '#fff' : '#9499b0',
                   }}
-                  onClick={() => setViewMode(v)}
+                  onClick={() => setViewMode(v.value)}
                 >
-                  {v.charAt(0).toUpperCase() + v.slice(1)}
+                  {v.label}
                 </button>
               ))}
             </div>
@@ -138,8 +212,8 @@ function Rota() {
           </div>
         </div>
 
-        {/* Compliance strip */}
-        {canSeeGaps && (
+        {/* ── Compliance strip (week view only) ── */}
+        {viewMode === 'week' && canSeeGaps && (
           <div style={s.compStrip}>
             {totalViolations === 0 ? (
               <span style={{ ...s.chip, ...s.chipOk }}>
@@ -158,48 +232,86 @@ function Rota() {
           </div>
         )}
 
-        {/* Week navigation */}
+        {/* ── Navigation bar ── */}
         <div style={s.weekNav}>
-          <button
-            style={s.navArrow}
-            onClick={viewMode === 'week' ? prevWeek : prevMonth}
-          >
-            <FontAwesomeIcon icon='chevron-left' />
-          </button>
-          <span style={s.weekLabel}>
-            {viewMode === 'week' ? `${startLabel} – ${endLabel}` : monthLabel}
-          </span>
-          <button
-            style={s.navArrow}
-            onClick={viewMode === 'week' ? nextWeek : nextMonth}
-          >
-            <FontAwesomeIcon icon='chevron-right' />
-          </button>
-
-          <button style={s.jumpBtn} onClick={() => setShowJump(!showJump)}>
-            Jump to date
-          </button>
-          {showJump && (
-            <div style={s.jumpWrap}>
-              <input
-                type='date'
-                value={jumpValue}
-                onChange={(e) => setJumpValue(e.target.value)}
-                style={s.jumpInput}
-              />
-              <button style={s.primaryBtn} onClick={handleJump}>
-                Go
+          {viewMode === 'week' ? (
+            <>
+              <button style={s.navArrow} onClick={prevWeek}>
+                <FontAwesomeIcon icon='chevron-left' />
               </button>
-            </div>
+              <span style={s.weekLabel}>{`${startLabel} – ${endLabel}`}</span>
+              <button style={s.navArrow} onClick={nextWeek}>
+                <FontAwesomeIcon icon='chevron-right' />
+              </button>
+              <button style={s.jumpBtn} onClick={() => setShowJump(!showJump)}>
+                Jump to date
+              </button>
+              {showJump && (
+                <div style={s.jumpWrap}>
+                  <input
+                    type='date'
+                    value={jumpValue}
+                    onChange={(e) => setJumpValue(e.target.value)}
+                    style={s.jumpInput}
+                  />
+                  <button style={s.primaryBtn} onClick={handleJump}>
+                    Go
+                  </button>
+                </div>
+              )}
+              <div style={s.legend}>
+                <span style={{ ...s.legendItem, color: '#2a7f62' }}>
+                  ■ Early
+                </span>
+                <span style={{ ...s.legendItem, color: '#7a4fa8' }}>
+                  ■ Late
+                </span>
+                <span style={{ ...s.legendItem, color: '#c4883a' }}>
+                  ■ Sleep-in
+                </span>
+              </div>
+            </>
+          ) : (
+            <>
+              <button
+                style={s.navArrow}
+                onClick={() => setCurrentYear((y) => y - 1)}
+              >
+                <FontAwesomeIcon icon='chevron-left' />
+              </button>
+              <span style={s.weekLabel}>{currentYear}</span>
+              <button
+                style={s.navArrow}
+                onClick={() => setCurrentYear((y) => y + 1)}
+              >
+                <FontAwesomeIcon icon='chevron-right' />
+              </button>
+              <button
+                style={s.jumpBtn}
+                onClick={() => {
+                  setCurrentYear(TODAY.getFullYear())
+                  setMonday(getMondayOfWeek(TODAY))
+                }}
+              >
+                Today
+              </button>
+              {/* Year view legend */}
+              <div style={s.legend}>
+                <span style={{ ...s.legendItem, color: HEALTH_COLOURS.ok }}>
+                  ■ Compliant
+                </span>
+                <span style={{ ...s.legendItem, color: HEALTH_COLOURS.breach }}>
+                  ■ Breach
+                </span>
+                <span style={{ ...s.legendItem, color: HEALTH_COLOURS.gap }}>
+                  ■ Gap
+                </span>
+                <span style={{ ...s.legendItem, color: '#5d6180' }}>
+                  ■ Not planned
+                </span>
+              </div>
+            </>
           )}
-
-          <div style={s.legend}>
-            <span style={{ ...s.legendItem, color: '#2a7f62' }}>■ Early</span>
-            <span style={{ ...s.legendItem, color: '#7a4fa8' }}>■ Late</span>
-            <span style={{ ...s.legendItem, color: '#c4883a' }}>
-              ■ Sleep-in
-            </span>
-          </div>
         </div>
 
         {/* ── WEEK VIEW ── */}
@@ -258,7 +370,7 @@ function Rota() {
                 <div style={s.shiftTime}>07:00–14:30</div>
               </div>
               {DAYS.map((_, dayIdx) => {
-                const staffList = rota.early[dayIdx] || []
+                const staffList = currentRotaForWeek.early[dayIdx] || []
                 const isGap = canSeeGaps && staffList.length < 3
                 return (
                   <div
@@ -294,7 +406,7 @@ function Rota() {
                 <div style={s.shiftTime}>14:00–23:00</div>
               </div>
               {DAYS.map((_, dayIdx) => {
-                const staffList = rota.late[dayIdx] || []
+                const staffList = currentRotaForWeek.late[dayIdx] || []
                 const isGap = canSeeGaps && staffList.length < 3
                 const sleepCount = staffList.filter((e) => e.sleepIn).length
                 return (
@@ -341,7 +453,7 @@ function Rota() {
                   key={dayIdx}
                   style={{ ...s.cell, background: 'rgba(58,138,196,0.04)' }}
                 >
-                  {(rota.onCall[dayIdx] || []).map((id) => {
+                  {(currentRotaForWeek.onCall[dayIdx] || []).map((id) => {
                     const st = staffMap[id]
                     if (!st) return null
                     return (
@@ -356,118 +468,163 @@ function Rota() {
           </div>
         )}
 
-        {/* ── MONTH VIEW ── */}
-        {viewMode === 'month' && (
-          <div style={s.monthWrap}>
-            <div style={s.monthHeader}>
-              {DAYS.map((d) => (
-                <div key={d} style={s.monthDayHead}>
-                  {d}
-                </div>
-              ))}
-            </div>
+        {/* ── YEAR VIEW ── */}
+        {viewMode === 'year' && (
+          <div style={s.yearWrap}>
+            {yearMonths.map(({ year, month, label }) => {
+              const monthDates = getMonthDates(year, month)
 
-            <div style={s.monthGrid}>
-              {monthDates.map((date, i) => {
-                const isCurrentMonth =
-                  date.getMonth() === currentMonday.getMonth()
-                const isToday = isSameDay(date, TODAY)
-                const dayOfWeek = (date.getDay() + 6) % 7
-                const early = rota.early[dayOfWeek] || []
-                const late = rota.late[dayOfWeek] || []
-                const sleepIns = late.filter((e) => e.sleepIn).length
-                const gaps =
-                  (early.length < 3 ? 1 : 0) + (late.length < 3 ? 1 : 0)
+              return (
+                <div
+                  key={`${year}-${month}`}
+                  style={s.miniMonth}
+                  onClick={() => {
+                    // Navigate to first Monday of this month and switch to week view
+                    const firstOfMonth = new Date(year, month, 1)
+                    setMonday(getMondayOfWeek(firstOfMonth))
+                    setCurrentYear(year)
+                    setViewMode('week')
+                  }}
+                >
+                  {/* Month name header */}
+                  <div style={s.miniMonthTitle}>{label}</div>
 
-                return (
-                  <div
-                    key={i}
-                    style={{
-                      ...s.monthCell,
-                      opacity: isCurrentMonth ? 1 : 0.35,
-                      background: isToday
-                        ? 'rgba(108,143,255,0.08)'
-                        : '#161820',
-                      border: isToday
-                        ? '1px solid rgba(108,143,255,0.35)'
-                        : '1px solid rgba(255,255,255,0.07)',
-                    }}
-                    onClick={() => {
-                      setMonday(getMondayOfWeek(date))
-                      setViewMode('week')
-                    }}
-                  >
-                    <div
-                      style={{
-                        ...s.monthDateNum,
-                        color: isToday
-                          ? '#6c8fff'
-                          : isCurrentMonth
-                            ? '#e8eaf0'
-                            : '#5d6180',
-                      }}
-                    >
-                      {date.getDate()}
-                    </div>
-
-                    {isCurrentMonth && (
-                      <div style={s.monthDots}>
-                        {early.length > 0 && (
-                          <span
-                            style={{ ...s.dot, background: '#2a7f62' }}
-                            title='Early shift'
-                          />
-                        )}
-                        {late.length > 0 && (
-                          <span
-                            style={{ ...s.dot, background: '#7a4fa8' }}
-                            title='Late shift'
-                          />
-                        )}
-                        {sleepIns > 0 && (
-                          <span
-                            style={{ ...s.dot, background: '#c4883a' }}
-                            title='Sleep-in'
-                          />
-                        )}
-                        {canSeeGaps && gaps > 0 && (
-                          <span
-                            style={{ ...s.dot, background: '#e85c3d' }}
-                            title={`${gaps} gap(s)`}
-                          />
-                        )}
+                  {/* Day-of-week headers */}
+                  <div style={s.miniDayHeaders}>
+                    {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d, i) => (
+                      <div key={i} style={s.miniDayHead}>
+                        {d}
                       </div>
-                    )}
-
-                    {canSeeGaps && isCurrentMonth && gaps > 0 && (
-                      <div style={s.monthGap}>
-                        {gaps} gap{gaps > 1 ? 's' : ''}
-                      </div>
-                    )}
+                    ))}
                   </div>
-                )
-              })}
-            </div>
 
-            <div style={s.monthLegend}>
-              <span style={{ ...s.legendItem, color: '#2a7f62' }}>■ Early</span>
-              <span style={{ ...s.legendItem, color: '#7a4fa8' }}>■ Late</span>
-              <span style={{ ...s.legendItem, color: '#c4883a' }}>
-                ■ Sleep-in
-              </span>
-              {canSeeGaps && (
-                <span style={{ ...s.legendItem, color: '#e85c3d' }}>■ Gap</span>
-              )}
-              <span
-                style={{
-                  fontSize: '11px',
-                  color: '#5d6180',
-                  marginLeft: '8px',
-                }}
-              >
-                Click any day to jump to that week
-              </span>
-            </div>
+                  {/* Day cells */}
+                  <div style={s.miniGrid}>
+                    {monthDates.map((date, i) => {
+                      const inMonth = date.getMonth() === month
+                      const isToday = isSameDay(date, TODAY)
+                      const dayOfWeek = (date.getDay() + 6) % 7
+                      const rota = inMonth ? getRotaForDate(date) : null
+                      const health = inMonth
+                        ? getDayHealth(rota, dayOfWeek)
+                        : null
+
+                      return (
+                        <div
+                          key={i}
+                          style={{
+                            ...s.miniCell,
+                            opacity: inMonth ? 1 : 0,
+                            background: inMonth
+                              ? health === 'unplanned'
+                                ? HEALTH_COLOURS.unplanned
+                                : `${HEALTH_COLOURS[health]}22` // transparent fill
+                              : 'transparent',
+                            border: isToday
+                              ? '1.5px solid #6c8fff'
+                              : inMonth && health !== 'unplanned'
+                                ? `1px solid ${HEALTH_COLOURS[health]}55`
+                                : '1px solid rgba(255,255,255,0.04)',
+                          }}
+                          onClick={(e) => {
+                            // Stop month-click from also firing
+                            e.stopPropagation()
+                            if (!inMonth) return
+                            setMonday(getMondayOfWeek(date))
+                            setCurrentYear(year)
+                            setViewMode('week')
+                          }}
+                        >
+                          <span
+                            style={{
+                              ...s.miniDateNum,
+                              color: isToday
+                                ? '#6c8fff'
+                                : inMonth
+                                  ? health === 'unplanned'
+                                    ? HEALTH_TEXT.unplanned
+                                    : HEALTH_TEXT[health]
+                                  : 'transparent',
+                              fontWeight: isToday ? 700 : 400,
+                            }}
+                          >
+                            {date.getDate()}
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </div>
+
+                  {/* Month summary chips */}
+                  <div style={s.miniFooter}>
+                    {(() => {
+                      // Count health states for days in this month
+                      const counts = { ok: 0, breach: 0, gap: 0, unplanned: 0 }
+                      monthDates.forEach((date) => {
+                        if (date.getMonth() !== month) return
+                        const dayOfWeek = (date.getDay() + 6) % 7
+                        const rota = getRotaForDate(date)
+                        const h = getDayHealth(rota, dayOfWeek)
+                        counts[h]++
+                      })
+                      return (
+                        <>
+                          {counts.gap > 0 && (
+                            <span
+                              style={{
+                                ...s.miniChip,
+                                color: '#e85c3d',
+                                background: 'rgba(232,92,61,0.12)',
+                              }}
+                            >
+                              {counts.gap} gap{counts.gap > 1 ? 's' : ''}
+                            </span>
+                          )}
+                          {counts.breach > 0 && (
+                            <span
+                              style={{
+                                ...s.miniChip,
+                                color: '#c4883a',
+                                background: 'rgba(196,136,58,0.12)',
+                              }}
+                            >
+                              {counts.breach} breach
+                              {counts.breach > 1 ? 'es' : ''}
+                            </span>
+                          )}
+                          {counts.gap === 0 &&
+                            counts.breach === 0 &&
+                            counts.unplanned === 0 && (
+                              <span
+                                style={{
+                                  ...s.miniChip,
+                                  color: '#2ecc8a',
+                                  background: 'rgba(46,204,138,0.1)',
+                                }}
+                              >
+                                ✓ All clear
+                              </span>
+                            )}
+                          {counts.unplanned > 0 &&
+                            counts.gap === 0 &&
+                            counts.breach === 0 && (
+                              <span
+                                style={{
+                                  ...s.miniChip,
+                                  color: '#5d6180',
+                                  background: 'rgba(255,255,255,0.05)',
+                                }}
+                              >
+                                Not planned
+                              </span>
+                            )}
+                        </>
+                      )
+                    })()}
+                  </div>
+                </div>
+              )
+            })}
           </div>
         )}
       </div>
@@ -475,7 +632,12 @@ function Rota() {
       {showGenerate && (
         <GenerateModal
           onClose={() => setShowGenerate(false)}
-          onApply={(newRota) => setRota(newRota)}
+          onApply={handleApplyWeek}
+          onApplyMonth={handleApplyMonth}
+          currentMonday={currentMonday}
+          scopeYear={currentMonday.getFullYear()}
+          scopeMonth={currentMonday.getMonth()}
+          monthLabel={monthLabel}
         />
       )}
     </div>
@@ -489,7 +651,7 @@ const s = {
     color: '#e8eaf0',
     fontFamily: 'DM Sans, sans-serif',
   },
-  body: { padding: '24px', maxWidth: '1100px', margin: '0 auto' },
+  body: { padding: '24px', maxWidth: '1200px', margin: '0 auto' },
   header: {
     display: 'flex',
     alignItems: 'flex-start',
@@ -598,7 +760,7 @@ const s = {
     fontSize: '13px',
     color: '#e8eaf0',
     fontFamily: 'DM Mono, monospace',
-    minWidth: '200px',
+    minWidth: '140px',
   },
   jumpBtn: {
     background: 'transparent',
@@ -621,8 +783,14 @@ const s = {
     fontFamily: 'DM Sans, sans-serif',
     outline: 'none',
   },
-  legend: { display: 'flex', gap: '12px', marginLeft: 'auto' },
+  legend: {
+    display: 'flex',
+    gap: '12px',
+    marginLeft: 'auto',
+    flexWrap: 'wrap',
+  },
   legendItem: { fontSize: '12px' },
+  // ── Week grid ──
   gridWrap: { overflowX: 'auto' },
   grid: {
     display: 'grid',
@@ -746,61 +914,72 @@ const s = {
     textAlign: 'center',
     marginTop: 'auto',
   },
-  monthWrap: { marginTop: '8px' },
-  monthHeader: {
+  // ── Year view ──
+  yearWrap: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(7, 1fr)',
-    gap: '4px',
-    marginBottom: '4px',
+    gridTemplateColumns: 'repeat(4, 1fr)',
+    gap: '16px',
   },
-  monthDayHead: {
-    textAlign: 'center',
-    fontSize: '11px',
-    fontWeight: 500,
-    color: '#5d6180',
-    padding: '6px 0',
-    textTransform: 'uppercase',
-    letterSpacing: '0.5px',
-  },
-  monthGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(7, 1fr)',
-    gap: '4px',
-  },
-  monthCell: {
-    borderRadius: '8px',
-    padding: '8px',
-    minHeight: '72px',
+  miniMonth: {
+    background: '#161820',
+    border: '1px solid rgba(255,255,255,0.07)',
+    borderRadius: '12px',
+    padding: '14px',
     cursor: 'pointer',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '4px',
-    transition: 'border-color 0.15s',
+    transition: 'border-color 0.15s, background 0.15s',
+    ':hover': { borderColor: 'rgba(108,143,255,0.3)' },
   },
-  monthDateNum: {
+  miniMonthTitle: {
+    fontFamily: 'Syne, sans-serif',
     fontSize: '13px',
     fontWeight: 600,
-    fontFamily: 'Syne, sans-serif',
+    color: '#e8eaf0',
+    marginBottom: '8px',
+    letterSpacing: '0.2px',
   },
-  monthDots: { display: 'flex', gap: '3px', flexWrap: 'wrap' },
-  dot: {
-    width: '7px',
-    height: '7px',
-    borderRadius: '50%',
-    display: 'inline-block',
+  miniDayHeaders: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(7, 1fr)',
+    marginBottom: '4px',
   },
-  monthGap: {
-    fontSize: '10px',
-    color: '#e85c3d',
+  miniDayHead: {
+    textAlign: 'center',
+    fontSize: '9px',
+    color: '#3d405a',
     fontWeight: 500,
-    marginTop: 'auto',
+    padding: '2px 0',
   },
-  monthLegend: {
+  miniGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(7, 1fr)',
+    gap: '2px',
+  },
+  miniCell: {
+    borderRadius: '3px',
+    aspectRatio: '1',
     display: 'flex',
-    gap: '12px',
     alignItems: 'center',
-    marginTop: '12px',
+    justifyContent: 'center',
+    cursor: 'pointer',
+    minWidth: 0,
+    transition: 'opacity 0.1s',
+  },
+  miniDateNum: {
+    fontSize: '9px',
+    lineHeight: 1,
+    userSelect: 'none',
+  },
+  miniFooter: {
+    display: 'flex',
+    gap: '4px',
     flexWrap: 'wrap',
+    marginTop: '8px',
+  },
+  miniChip: {
+    fontSize: '9.5px',
+    fontWeight: 500,
+    padding: '2px 6px',
+    borderRadius: '4px',
   },
 }
 
