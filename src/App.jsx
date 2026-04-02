@@ -1,5 +1,4 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { useAuth } from './context/AuthContext'
 import ProtectedRoute from './components/layout/ProtectedRoute'
 import Login from './pages/Login'
 import Signup from './pages/Signup'
@@ -19,8 +18,6 @@ const MANAGER_ROLES = [
 const CARER_ROLES = ['rcw', 'relief']
 
 function App() {
-  const { user } = useAuth()
-
   return (
     <BrowserRouter>
       <Routes>

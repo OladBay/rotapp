@@ -5,6 +5,7 @@ import { mockUsers } from '../data/mockUsers'
 import { mockLeave } from '../data/mockLeave'
 import { mockStaff } from '../data/mockRota'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { useLocalStorage } from '../hooks/useLocalStorage'
 
 const ROLE_LABELS = {
   manager: 'Manager',
@@ -23,12 +24,12 @@ const STATUS_COLORS = {
 function Staff() {
   const { user } = useAuth()
   const [tab, setTab] = useState('all')
-  const [leaveData, setLeaveData] = useState(mockLeave)
+  const [leaveData, setLeaveData] = useLocalStorage('rotapp_leave', mockLeave)
   const [leaveStaff, setLeaveStaff] = useState(null)
   const [leaveInput, setLeaveInput] = useState('')
   const [selectedStaff, setSelectedStaff] = useState(null)
-  const [approvedIds, setApprovedIds] = useState([])
-  const [declinedIds, setDeclinedIds] = useState([])
+  const [approvedIds, setApprovedIds] = useLocalStorage('rotapp_approved', [])
+  const [declinedIds, setDeclinedIds] = useLocalStorage('rotapp_declined', [])
 
   const homeStaff = mockUsers
     .filter(

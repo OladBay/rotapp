@@ -3,7 +3,14 @@ import { createContext, useContext, useState } from 'react'
 const AuthContext = createContext(null)
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null)
+  const [user, setUser] = useState(() => {
+    try {
+      const stored = localStorage.getItem('rotapp_user')
+      return stored ? JSON.parse(stored) : null
+    } catch {
+      return null
+    }
+  })
 
   const login = (userData) => {
     setUser(userData)
@@ -16,21 +23,25 @@ export function AuthProvider({ children }) {
   }
 
   const switchRole = (role, home) => {
-    setUser((prev) => ({
-      ...prev,
+    const updated = {
+      ...user,
       activeRole: role,
       activeHome: home,
-      originalRole: prev.role,
-    }))
+      originalRole: user.role,
+    }
+    setUser(updated)
+    localStorage.setItem('rotapp_user', JSON.stringify(updated))
   }
 
   const revertRole = () => {
-    setUser((prev) => ({
-      ...prev,
-      activeRole: prev.originalRole,
+    const updated = {
+      ...user,
+      activeRole: user.originalRole,
       activeHome: null,
       originalRole: null,
-    }))
+    }
+    setUser(updated)
+    localStorage.setItem('rotapp_user', JSON.stringify(updated))
   }
 
   return (

@@ -3,8 +3,10 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import Navbar from '../components/layout/Navbar'
 import GenerateModal from '../components/layout/GenerateModal'
-import { mockRota, mockStaff } from '../data/mockRota'
+import CellEditModal from '../components/layout/CellEditModal'
+import { mockStaff, mockRota } from '../data/mockRota'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { useLocalStorage } from '../hooks/useLocalStorage'
 import {
   getWeekDates,
   formatDate,
@@ -20,39 +22,27 @@ import {
 const TODAY = new Date()
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
-// ─── Day health classification ────────────────────────────────────────────────
-// Returns 'gap' | 'breach' | 'ok' | 'unplanned'
-// rota       — the week rota object { early, late, onCall }
-// dayOfWeek  — 0 (Mon) … 6 (Sun)
 function getDayHealth(rota, dayOfWeek) {
   if (!rota) return 'unplanned'
   const early = rota.early?.[dayOfWeek] || []
   const late = rota.late?.[dayOfWeek] || []
-
-  // No data at all → unplanned
   if (early.length === 0 && late.length === 0) return 'unplanned'
-
-  // Hard rule breach OR gap → red
   const sleepIns = late.filter((e) => e.sleepIn).length
   if (early.length < 3 || late.length < 3 || sleepIns !== 2) return 'gap'
-
-  // Soft rule breaches → yellow (we check female and driver)
   const staffMap = Object.fromEntries(mockStaff.map((s) => [s.id, s]))
   const earlyHasF = early.some((e) => staffMap[e.id]?.gender === 'F')
   const lateHasF = late.some((e) => staffMap[e.id]?.gender === 'F')
   const earlyHasD = early.some((e) => staffMap[e.id]?.driver)
   const lateHasD = late.some((e) => staffMap[e.id]?.driver)
   if (!earlyHasF || !lateHasF || !earlyHasD || !lateHasD) return 'breach'
-
   return 'ok'
 }
 
-// Colour values for day health
 const HEALTH_COLOURS = {
   gap: '#e85c3d',
   breach: '#c4883a',
   ok: '#2ecc8a',
-  unplanned: '#2e3045', // muted, "not yet planned"
+  unplanned: '#2e3045',
 }
 
 const HEALTH_TEXT = {
@@ -66,18 +56,15 @@ function Rota() {
   const { user } = useAuth()
   const navigate = useNavigate()
 
-  // viewMode: 'week' | 'year'
   const [viewMode, setViewMode] = useState('week')
   const [currentMonday, setMonday] = useState(getMondayOfWeek(TODAY))
   const [currentYear, setCurrentYear] = useState(TODAY.getFullYear())
 
-  // Rota data:
-  //   weekRota  — single-week rota (the original shape, for the current week)
-  //   monthRota — map of { [mondayKey]: rota } when a full month has been generated
-  const [weekRota, setWeekRota] = useState(mockRota)
-  const [monthRota, setMonthRota] = useState({}) // { [mondayKey]: rota }
+  const [weekRota, setWeekRota] = useLocalStorage('rotapp_week_rota', mockRota)
+  const [monthRota, setMonthRota] = useLocalStorage('rotapp_month_rota', {})
 
   const [showGenerate, setShowGenerate] = useState(false)
+  const [editCell, setEditCell] = useState(null)
   const [jumpValue, setJumpValue] = useState('')
   const [showJump, setShowJump] = useState(false)
 
@@ -94,20 +81,16 @@ function Rota() {
     'superadmin',
   ].includes(user?.activeRole)
 
-  // The rota to display for the current week —
-  // if we have a month-generated rota for this Monday, use it; otherwise fall back to weekRota
   const currentRotaForWeek = monthRota[dateKey(currentMonday)] || weekRota
 
   const startLabel = formatDate(weekDates[0])
   const endLabel = formatDate(weekDates[6])
 
-  // Month label derived from currentMonday (used in week view header + generate modal)
   const monthLabel = currentMonday.toLocaleDateString('en-GB', {
     month: 'long',
     year: 'numeric',
   })
 
-  // ── Navigation ──────────────────────────────────────────────────────────────
   const prevWeek = () => setMonday((prev) => addWeeks(prev, -1))
   const nextWeek = () => setMonday((prev) => addWeeks(prev, 1))
 
@@ -122,7 +105,6 @@ function Rota() {
     setViewMode('week')
   }
 
-  // ── Violations for the current week (used in compliance strip) ──────────────
   const getViolations = (dayIdx) => {
     const v = []
     const early = currentRotaForWeek.early[dayIdx] || []
@@ -139,7 +121,6 @@ function Rota() {
     0
   )
 
-  // ── Generate modal callbacks ────────────────────────────────────────────────
   const handleApplyWeek = (newRota) => {
     setWeekRota(newRota)
   }
@@ -148,7 +129,6 @@ function Rota() {
     setMonthRota((prev) => ({ ...prev, ...weekRotas }))
   }
 
-  // ── Get rota for any given date (for year view colouring) ───────────────────
   const getRotaForDate = (date) => {
     const monday = getMondayOfWeek(date)
     const key = dateKey(monday)
@@ -157,12 +137,37 @@ function Rota() {
     )
   }
 
+  const handleCellSave = (day, shift, updatedList) => {
+    const key = dateKey(currentMonday)
+    if (shift === 'early') {
+      const newEarly = currentRotaForWeek.early.map((d, i) =>
+        i === day ? updatedList : d
+      )
+      const updatedRota = { ...currentRotaForWeek, early: newEarly }
+      if (monthRota[key]) {
+        setMonthRota((prev) => ({ ...prev, [key]: updatedRota }))
+      } else {
+        setWeekRota(updatedRota)
+      }
+    } else {
+      const newLate = currentRotaForWeek.late.map((d, i) =>
+        i === day ? updatedList : d
+      )
+      const updatedRota = { ...currentRotaForWeek, late: newLate }
+      if (monthRota[key]) {
+        setMonthRota((prev) => ({ ...prev, [key]: updatedRota }))
+      } else {
+        setWeekRota(updatedRota)
+      }
+    }
+  }
+
   return (
     <div style={s.page}>
       <Navbar />
 
       <div style={s.body}>
-        {/* ── Header ── */}
+        {/* Header */}
         <div style={s.header}>
           <div>
             <div style={s.breadcrumb} onClick={() => navigate('/dashboard')}>
@@ -212,7 +217,7 @@ function Rota() {
           </div>
         </div>
 
-        {/* ── Compliance strip (week view only) ── */}
+        {/* Compliance strip */}
         {viewMode === 'week' && canSeeGaps && (
           <div style={s.compStrip}>
             {totalViolations === 0 ? (
@@ -232,7 +237,7 @@ function Rota() {
           </div>
         )}
 
-        {/* ── Navigation bar ── */}
+        {/* Navigation bar */}
         <div style={s.weekNav}>
           {viewMode === 'week' ? (
             <>
@@ -295,7 +300,6 @@ function Rota() {
               >
                 Today
               </button>
-              {/* Year view legend */}
               <div style={s.legend}>
                 <span style={{ ...s.legendItem, color: HEALTH_COLOURS.ok }}>
                   ■ Compliant
@@ -314,7 +318,7 @@ function Rota() {
           )}
         </div>
 
-        {/* ── WEEK VIEW ── */}
+        {/* WEEK VIEW */}
         {viewMode === 'week' && (
           <div style={s.gridWrap}>
             <div
@@ -380,7 +384,11 @@ function Rota() {
                       background: isGap
                         ? 'rgba(232,92,61,0.06)'
                         : 'transparent',
+                      cursor: canEdit ? 'pointer' : 'default',
                     }}
+                    onClick={() =>
+                      canEdit && setEditCell({ day: dayIdx, shift: 'early' })
+                    }
                   >
                     {staffList.map((entry) => {
                       const st = staffMap[entry.id]
@@ -417,7 +425,11 @@ function Rota() {
                       background: isGap
                         ? 'rgba(232,92,61,0.06)'
                         : 'transparent',
+                      cursor: canEdit ? 'pointer' : 'default',
                     }}
+                    onClick={() =>
+                      canEdit && setEditCell({ day: dayIdx, shift: 'late' })
+                    }
                   >
                     {staffList.map((entry) => {
                       const st = staffMap[entry.id]
@@ -443,7 +455,10 @@ function Rota() {
 
               {/* On-call row */}
               <div
-                style={{ ...s.shiftLabel, background: 'rgba(58,138,196,0.06)' }}
+                style={{
+                  ...s.shiftLabel,
+                  background: 'rgba(58,138,196,0.06)',
+                }}
               >
                 <div style={{ ...s.shiftName, color: '#3a8ac4' }}>On-call</div>
                 <div style={s.shiftTime}>parallel</div>
@@ -468,28 +483,23 @@ function Rota() {
           </div>
         )}
 
-        {/* ── YEAR VIEW ── */}
+        {/* YEAR VIEW */}
         {viewMode === 'year' && (
           <div style={s.yearWrap}>
             {yearMonths.map(({ year, month, label }) => {
               const monthDates = getMonthDates(year, month)
-
               return (
                 <div
                   key={`${year}-${month}`}
                   style={s.miniMonth}
                   onClick={() => {
-                    // Navigate to first Monday of this month and switch to week view
                     const firstOfMonth = new Date(year, month, 1)
                     setMonday(getMondayOfWeek(firstOfMonth))
                     setCurrentYear(year)
                     setViewMode('week')
                   }}
                 >
-                  {/* Month name header */}
                   <div style={s.miniMonthTitle}>{label}</div>
-
-                  {/* Day-of-week headers */}
                   <div style={s.miniDayHeaders}>
                     {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d, i) => (
                       <div key={i} style={s.miniDayHead}>
@@ -497,8 +507,6 @@ function Rota() {
                       </div>
                     ))}
                   </div>
-
-                  {/* Day cells */}
                   <div style={s.miniGrid}>
                     {monthDates.map((date, i) => {
                       const inMonth = date.getMonth() === month
@@ -508,7 +516,6 @@ function Rota() {
                       const health = inMonth
                         ? getDayHealth(rota, dayOfWeek)
                         : null
-
                       return (
                         <div
                           key={i}
@@ -518,7 +525,7 @@ function Rota() {
                             background: inMonth
                               ? health === 'unplanned'
                                 ? HEALTH_COLOURS.unplanned
-                                : `${HEALTH_COLOURS[health]}22` // transparent fill
+                                : `${HEALTH_COLOURS[health]}22`
                               : 'transparent',
                             border: isToday
                               ? '1.5px solid #6c8fff'
@@ -527,7 +534,6 @@ function Rota() {
                                 : '1px solid rgba(255,255,255,0.04)',
                           }}
                           onClick={(e) => {
-                            // Stop month-click from also firing
                             e.stopPropagation()
                             if (!inMonth) return
                             setMonday(getMondayOfWeek(date))
@@ -554,12 +560,14 @@ function Rota() {
                       )
                     })}
                   </div>
-
-                  {/* Month summary chips */}
                   <div style={s.miniFooter}>
                     {(() => {
-                      // Count health states for days in this month
-                      const counts = { ok: 0, breach: 0, gap: 0, unplanned: 0 }
+                      const counts = {
+                        ok: 0,
+                        breach: 0,
+                        gap: 0,
+                        unplanned: 0,
+                      }
                       monthDates.forEach((date) => {
                         if (date.getMonth() !== month) return
                         const dayOfWeek = (date.getDay() + 6) % 7
@@ -638,6 +646,23 @@ function Rota() {
           scopeYear={currentMonday.getFullYear()}
           scopeMonth={currentMonday.getMonth()}
           monthLabel={monthLabel}
+        />
+      )}
+
+      {editCell && (
+        <CellEditModal
+          day={editCell.day}
+          shift={editCell.shift}
+          staffList={
+            editCell.shift === 'early'
+              ? currentRotaForWeek.early[editCell.day] || []
+              : currentRotaForWeek.late[editCell.day] || []
+          }
+          staffMap={staffMap}
+          onClose={() => setEditCell(null)}
+          onSave={(updatedList) =>
+            handleCellSave(editCell.day, editCell.shift, updatedList)
+          }
         />
       )}
     </div>
@@ -790,7 +815,6 @@ const s = {
     flexWrap: 'wrap',
   },
   legendItem: { fontSize: '12px' },
-  // ── Week grid ──
   gridWrap: { overflowX: 'auto' },
   grid: {
     display: 'grid',
@@ -893,7 +917,11 @@ const s = {
     fontSize: '11px',
   },
   chipName: { flex: 1 },
-  chipRole: { fontSize: '9px', opacity: 0.7, fontFamily: 'DM Mono, monospace' },
+  chipRole: {
+    fontSize: '9px',
+    opacity: 0.7,
+    fontFamily: 'DM Mono, monospace',
+  },
   sleepWarn: { fontSize: '10px', color: '#c4883a' },
   gapTag: {
     fontSize: '10px',
@@ -914,7 +942,6 @@ const s = {
     textAlign: 'center',
     marginTop: 'auto',
   },
-  // ── Year view ──
   yearWrap: {
     display: 'grid',
     gridTemplateColumns: 'repeat(4, 1fr)',
@@ -927,7 +954,6 @@ const s = {
     padding: '14px',
     cursor: 'pointer',
     transition: 'border-color 0.15s, background 0.15s',
-    ':hover': { borderColor: 'rgba(108,143,255,0.3)' },
   },
   miniMonthTitle: {
     fontFamily: 'Syne, sans-serif',
