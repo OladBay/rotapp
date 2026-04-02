@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { mockStaff } from '../../data/mockRota'
 import { generateMonthRota, checkViolations } from '../../utils/rotaGenerator'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
@@ -12,6 +12,7 @@ function GenerateModal({
   scopeYear,
   scopeMonth,
   monthLabel,
+  leaveData,
 }) {
   const [step, setStep] = useState(1) // 1 = generating, 2 = review
   const [monthResult, setMonthResult] = useState(null)
@@ -19,27 +20,13 @@ function GenerateModal({
   const [generating, setGenerating] = useState(false)
   const [logLines, setLogLines] = useState([])
   const [expandedWeek, setExpandedWeek] = useState(null)
-  const [hasStarted, setHasStarted] = useState(false)
 
   const staffMap = Object.fromEntries(mockStaff.map((s) => [s.id, s]))
 
   const addLog = (msg, type = '') =>
     setLogLines((prev) => [...prev, { msg, type }])
 
-  // Default availability — all permanent staff available for both shifts
-  const defaultAvailability = () => {
-    const init = {}
-    mockStaff.forEach((s) => {
-      init[s.id] = {}
-      for (let i = 0; i < 7; i++) {
-        init[s.id][i] = 'B'
-      }
-    })
-    return init
-  }
-
   const runGeneration = async () => {
-    setHasStarted(true)
     setGenerating(true)
     setLogLines([])
 
@@ -59,13 +46,7 @@ function GenerateModal({
     addLog('  1 permanent staff per shift and on sleep-in', '')
     await sleep(350)
 
-    const availability = defaultAvailability()
-    const result = generateMonthRota(
-      scopeYear,
-      scopeMonth,
-      availability,
-      staffMap
-    )
+    const result = generateMonthRota(scopeYear, scopeMonth, staffMap, leaveData)
     setMonthResult(result)
 
     const allViolations = Object.values(result.weekViolations).flat()
@@ -95,11 +76,6 @@ function GenerateModal({
     setStep(2)
   }
 
-  // Auto-start generation when modal opens
-  if (!hasStarted) {
-    runGeneration()
-  }
-
   // Derived violation totals
   const allMonthViolations = monthResult
     ? Object.values(monthResult.weekViolations).flat()
@@ -118,9 +94,10 @@ function GenerateModal({
     setMonthResult(null)
     setOverride(false)
     setExpandedWeek(null)
-    setHasStarted(false)
   }
-
+  useEffect(() => {
+    runGeneration()
+  }, [])
   return (
     <div style={s.overlay} onClick={onClose}>
       <div style={s.modal} onClick={(e) => e.stopPropagation()}>

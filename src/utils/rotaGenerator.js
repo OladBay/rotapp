@@ -1,61 +1,91 @@
 import { mockStaff } from '../data/mockRota'
 import { getMonthWeeks, dateKey } from './dateUtils'
 
-export function generateRota(availability) {
-  const rota = { early: [], late: [], onCall: [] }
+// Build a Set of 'staffId_YYYY-MM-DD' absence keys from leave data
+function buildAbsenceSet(leaveData) {
+  const absent = new Set()
+  if (!leaveData) return absent
 
-  const onCallPool = mockStaff
-    .filter((s) => ['manager', 'deputy', 'senior'].includes(s.role))
-    .map((s) => s.id)
+  Object.entries(leaveData).forEach(([staffId, dates]) => {
+    if (!Array.isArray(dates)) return
+    dates.forEach((dateStr) => {
+      absent.add(`${staffId}_${dateStr}`)
+    })
+  })
 
-  const shiftEligible = mockStaff.filter(
-    (s) => !['manager', 'deputy'].includes(s.role)
+  return absent
+}
+
+function isAbsent(staffId, date, absenceSet) {
+  const dateStr = date.toISOString().split('T')[0]
+  return absenceSet.has(`${staffId}_${dateStr}`)
+}
+
+// Generate rota for a single week, date-aware
+// monday: Date object for the Monday of that week
+// absenceSet: Set built from leave data
+// Returns { early, late, onCall } — same shape as before
+function generateWeekRota(monday, absenceSet) {
+  const rota = {
+    early: [],
+    late: [],
+    onCall: [],
+  }
+
+  const onCallPool = mockStaff.filter((s) =>
+    ['manager', 'deputy', 'senior'].includes(s.role)
   )
 
-  for (let day = 0; day < 7; day++) {
-    // Get available staff for each shift
+  const shiftEligible = mockStaff.filter(
+    (s) => !['manager', 'deputy', 'relief'].includes(s.role)
+  )
+
+  for (let dayOffset = 0; dayOffset < 7; dayOffset++) {
+    const date = new Date(monday)
+    date.setDate(monday.getDate() + dayOffset)
+
+    // Staff available for early on this specific date
     const earlyAvail = shiftEligible.filter((s) => {
-      const av = availability[s.id]?.[day]
-      return av === 'E' || av === 'B'
+      if (isAbsent(s.id, date, absenceSet)) return false
+      return true
     })
 
-    const lateAvail = shiftEligible.filter((s) => {
-      const av = availability[s.id]?.[day]
-      return av === 'L' || av === 'B'
-    })
-
-    // Pick early staff — aim for 3, prefer female + driver mix
+    // Pick early staff — aim for 3
     const earlyPick = pickStaff(earlyAvail, 3)
+    // Staff available for late — not already on early today
+    const earlyIds = new Set(earlyPick.map((s) => s.id))
+    const lateAvail = shiftEligible.filter((s) => {
+      if (earlyIds.has(s.id)) return false
+      if (isAbsent(s.id, date, absenceSet)) return false
+      return true
+    })
 
-    // Pick late staff from remaining — aim for 3
-    const usedInEarly = earlyPick.map((s) => s.id)
-    const latePool = lateAvail.filter((s) => !usedInEarly.includes(s.id))
-    const latePick = pickStaff(latePool.length >= 3 ? latePool : lateAvail, 3)
+    const latePick = pickStaff(lateAvail, 3)
 
-    // Assign sleep-ins — pick 2 from late shift, prefer permanent staff
+    // Assign sleep-ins from late pick
     const lateWithSleep = assignSleepIns(latePick)
 
     rota.early.push(earlyPick.map((s) => ({ id: s.id, sleepIn: false })))
     rota.late.push(lateWithSleep)
 
-    // On-call — pick 2 from manager/deputy/senior
-    const onCallPick = shuffle([...onCallPool]).slice(0, 2)
+    // On-call — pick 2 from manager/deputy/senior pool
+    const onCallPick = shuffle([...onCallPool.map((s) => s.id)]).slice(0, 2)
     rota.onCall.push(onCallPick)
   }
 
   return rota
 }
 
-// Generate rota for every week in a given month.
-// availability is the 7-day template (same shape as weekly generate).
-// Returns { weekRotas: { [mondayKey]: rota }, weekViolations: { [mondayKey]: violations }, weeks: Date[] }
-export function generateMonthRota(year, month, availability, staffMap) {
+// Generate rota for every week in a given month
+// Returns { weekRotas, weekViolations, weeks }
+export function generateMonthRota(year, month, staffMap, leaveData) {
   const weeks = getMonthWeeks(year, month)
   const weekRotas = {}
   const weekViolations = {}
+  const absenceSet = buildAbsenceSet(leaveData)
 
   weeks.forEach((monday) => {
-    const rota = generateRota(availability)
+    const rota = generateWeekRota(monday, absenceSet)
     const violations = checkViolations(rota, staffMap)
     const key = dateKey(monday)
     weekRotas[key] = rota
@@ -68,9 +98,9 @@ export function generateMonthRota(year, month, availability, staffMap) {
 function pickStaff(pool, target) {
   if (pool.length === 0) return []
   const shuffled = shuffle([...pool])
-  const picked = shuffled.slice(0, target)
+  const picked = shuffled.slice(0, Math.min(target, shuffled.length))
 
-  // Soft rule checks — try to ensure female and driver
+  // Soft rule — try to ensure female and driver in the pick
   const hasF = picked.some((s) => s.gender === 'F')
   const hasD = picked.some((s) => s.driver)
 
@@ -83,19 +113,18 @@ function pickStaff(pool, target) {
 
   if (!hasD) {
     const driverInPool = shuffled.find((s) => s.driver && !picked.includes(s))
-    if (driverInPool && picked.length >= 2)
+    if (driverInPool && picked.length >= 2) {
       picked[picked.length - 1] = driverInPool
+    }
   }
 
   return picked.slice(0, target)
 }
 
 function assignSleepIns(staffList) {
+  if (staffList.length === 0) return []
   if (staffList.length < 2) {
-    return staffList.map((s, i) => ({
-      id: s.id,
-      sleepIn: i < staffList.length,
-    }))
+    return staffList.map((s, i) => ({ id: s.id, sleepIn: i === 0 }))
   }
 
   // Prefer permanent staff (rcw/senior) for sleep-in
@@ -114,7 +143,12 @@ function assignSleepIns(staffList) {
 }
 
 function shuffle(arr) {
-  return arr.sort(() => Math.random() - 0.5)
+  const a = [...arr]
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[a[i], a[j]] = [a[j], a[i]]
+  }
+  return a
 }
 
 export function checkViolations(rota, staffMap) {
