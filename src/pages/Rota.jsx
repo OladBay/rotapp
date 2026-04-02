@@ -38,6 +38,27 @@ function getDayHealth(rota, dayOfWeek) {
   return 'ok'
 }
 
+function getMonthHealth(monthDates, month, getRotaForDate) {
+  let hasGap = false
+  let hasBreach = false
+  let hasPlanned = false
+
+  monthDates.forEach((date) => {
+    if (date.getMonth() !== month) return
+    const dayOfWeek = (date.getDay() + 6) % 7
+    const rota = getRotaForDate(date)
+    const h = getDayHealth(rota, dayOfWeek)
+    if (h !== 'unplanned') hasPlanned = true
+    if (h === 'gap') hasGap = true
+    if (h === 'breach') hasBreach = true
+  })
+
+  if (!hasPlanned) return 'unplanned'
+  if (hasGap) return 'gap'
+  if (hasBreach) return 'breach'
+  return 'ok'
+}
+
 const HEALTH_COLOURS = {
   gap: '#e85c3d',
   breach: '#c4883a',
@@ -56,9 +77,15 @@ function Rota() {
   const { user } = useAuth()
   const navigate = useNavigate()
 
-  const [viewMode, setViewMode] = useState('week')
+  // Default view is now month
+  const [viewMode, setViewMode] = useState('month')
   const [currentMonday, setMonday] = useState(getMondayOfWeek(TODAY))
   const [currentYear, setCurrentYear] = useState(TODAY.getFullYear())
+  const [hoveredMonth, setHoveredMonth] = useState(null)
+
+  // Overwrite warning state
+  const [overwriteTarget, setOverwriteTarget] = useState(null)
+  // { year, month, label } — set when a month with existing rota is clicked
 
   const [weekRota, setWeekRota] = useLocalStorage('rotapp_week_rota', {
     early: Array(7).fill([]),
@@ -67,7 +94,8 @@ function Rota() {
   })
   const [monthRota, setMonthRota] = useLocalStorage('rotapp_month_rota', {})
 
-  const [showGenerate, setShowGenerate] = useState(false)
+  const [generateTarget, setGenerateTarget] = useState(null)
+  // { year, month, label } — passed to GenerateModal
   const [editCell, setEditCell] = useState(null)
   const [jumpValue, setJumpValue] = useState('')
   const [showJump, setShowJump] = useState(false)
@@ -89,11 +117,6 @@ function Rota() {
 
   const startLabel = formatDate(weekDates[0])
   const endLabel = formatDate(weekDates[6])
-
-  const monthLabel = currentMonday.toLocaleDateString('en-GB', {
-    month: 'long',
-    year: 'numeric',
-  })
 
   const prevWeek = () => setMonday((prev) => addWeeks(prev, -1))
   const nextWeek = () => setMonday((prev) => addWeeks(prev, 1))
@@ -125,10 +148,6 @@ function Rota() {
     0
   )
 
-  const handleApplyWeek = (newRota) => {
-    setWeekRota(newRota)
-  }
-
   const handleApplyMonth = ({ weekRotas }) => {
     setMonthRota((prev) => ({ ...prev, ...weekRotas }))
   }
@@ -139,6 +158,25 @@ function Rota() {
     return (
       monthRota[key] || (isSameDay(monday, currentMonday) ? weekRota : null)
     )
+  }
+
+  // Check if a month has any existing rota data
+  const monthHasRota = (year, month) => {
+    const monthDates = getMonthDates(year, month)
+    return monthDates.some((date) => {
+      if (date.getMonth() !== month) return false
+      const key = dateKey(getMondayOfWeek(date))
+      return !!monthRota[key]
+    })
+  }
+
+  const handleGenerateClick = (year, month, label, e) => {
+    e.stopPropagation()
+    if (monthHasRota(year, month)) {
+      setOverwriteTarget({ year, month, label })
+    } else {
+      setGenerateTarget({ year, month, label })
+    }
   }
 
   const handleCellSave = (day, shift, updatedList) => {
@@ -178,7 +216,7 @@ function Rota() {
               <FontAwesomeIcon icon='chevron-left' /> Dashboard
             </div>
             <h1 style={s.title}>
-              {viewMode === 'week' ? 'Weekly Rota' : 'Rota Calendar'}
+              {viewMode === 'week' ? 'Weekly Rota' : 'Rota Planner'}
             </h1>
             <p style={s.subtitle}>
               Meadowview House ·{' '}
@@ -190,8 +228,8 @@ function Rota() {
           <div style={s.headerRight}>
             <div style={s.viewToggle}>
               {[
+                { value: 'month', label: 'Month' },
                 { value: 'week', label: 'Week' },
-                { value: 'year', label: 'Month' },
               ].map((v) => (
                 <button
                   key={v.value}
@@ -207,31 +245,26 @@ function Rota() {
                 </button>
               ))}
             </div>
-            {canEdit && (
+            {canEdit && viewMode === 'week' && (
               <div style={s.headerActions}>
                 <button style={s.secondaryBtn}>Publish</button>
-                <button
-                  style={s.primaryBtn}
-                  onClick={() => setShowGenerate(true)}
-                >
-                  <FontAwesomeIcon icon='bolt' /> Generate
-                </button>
               </div>
             )}
           </div>
         </div>
 
-        {/* Compliance strip */}
+        {/* Compliance strip — week view only */}
         {viewMode === 'week' && canSeeGaps && (
           <div style={s.compStrip}>
             {totalViolations === 0 ? (
               <span style={{ ...s.chip, ...s.chipOk }}>
-                ✓ All shifts compliant
+                <FontAwesomeIcon icon='check' /> All shifts compliant
               </span>
             ) : (
               <span style={{ ...s.chip, ...s.chipWarn }}>
-                ⚠ {totalViolations} violation{totalViolations > 1 ? 's' : ''}{' '}
-                this week
+                <FontAwesomeIcon icon='triangle-exclamation' />{' '}
+                {totalViolations} violation{totalViolations > 1 ? 's' : ''} this
+                week
               </span>
             )}
             <span style={{ ...s.chip, ...s.chipInfo }}>
@@ -321,6 +354,236 @@ function Rota() {
             </>
           )}
         </div>
+
+        {/* MONTH VIEW */}
+        {viewMode === 'month' && (
+          <div style={s.yearWrap}>
+            {yearMonths.map(({ year, month, label }) => {
+              const monthDates = getMonthDates(year, month)
+              const hasRota = monthHasRota(year, month)
+              const monthHealth = getMonthHealth(
+                monthDates,
+                month,
+                getRotaForDate
+              )
+              const isHovered = hoveredMonth === `${year}-${month}`
+
+              return (
+                <div
+                  key={`${year}-${month}`}
+                  style={{
+                    ...s.miniMonth,
+                    border: hasRota
+                      ? `1px solid ${HEALTH_COLOURS[monthHealth]}44`
+                      : '1px solid rgba(255,255,255,0.06)',
+                    background: hasRota
+                      ? `${HEALTH_COLOURS[monthHealth]}08`
+                      : '#161820',
+                    transform: isHovered ? 'translateY(-3px)' : 'translateY(0)',
+                    boxShadow: isHovered
+                      ? '0 8px 24px rgba(0,0,0,0.35)'
+                      : '0 1px 4px rgba(0,0,0,0.15)',
+                  }}
+                  onMouseEnter={() => setHoveredMonth(`${year}-${month}`)}
+                  onMouseLeave={() => setHoveredMonth(null)}
+                  onClick={() => {
+                    const firstOfMonth = new Date(year, month, 1)
+                    setMonday(getMondayOfWeek(firstOfMonth))
+                    setCurrentYear(year)
+                    setViewMode('week')
+                  }}
+                >
+                  {/* Month title row */}
+                  <div style={s.miniMonthHeader}>
+                    <div style={s.miniMonthTitle}>{label}</div>
+                    {hasRota && (
+                      <span
+                        style={{
+                          ...s.rotaBadge,
+                          color: HEALTH_COLOURS[monthHealth],
+                          background: `${HEALTH_COLOURS[monthHealth]}15`,
+                          border: `1px solid ${HEALTH_COLOURS[monthHealth]}30`,
+                        }}
+                      >
+                        {monthHealth === 'ok' && (
+                          <FontAwesomeIcon icon='check' />
+                        )}
+                        {monthHealth === 'gap' && (
+                          <FontAwesomeIcon icon='triangle-exclamation' />
+                        )}
+                        {monthHealth === 'breach' && (
+                          <FontAwesomeIcon icon='triangle-exclamation' />
+                        )}
+                        {monthHealth === 'ok'
+                          ? ' Rota set'
+                          : monthHealth === 'gap'
+                            ? ' Has gaps'
+                            : ' Has breaches'}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Day headers */}
+                  <div style={s.miniDayHeaders}>
+                    {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d, i) => (
+                      <div key={i} style={s.miniDayHead}>
+                        {d}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Date grid */}
+                  <div style={s.miniGrid}>
+                    {monthDates.map((date, i) => {
+                      const inMonth = date.getMonth() === month
+                      const isToday = isSameDay(date, TODAY)
+                      const dayOfWeek = (date.getDay() + 6) % 7
+                      const rota = inMonth ? getRotaForDate(date) : null
+                      const health = inMonth
+                        ? getDayHealth(rota, dayOfWeek)
+                        : null
+                      return (
+                        <div
+                          key={i}
+                          style={{
+                            ...s.miniCell,
+                            opacity: inMonth ? 1 : 0,
+                            background: inMonth
+                              ? health === 'unplanned'
+                                ? HEALTH_COLOURS.unplanned
+                                : `${HEALTH_COLOURS[health]}22`
+                              : 'transparent',
+                            border: isToday
+                              ? '1.5px solid #6c8fff'
+                              : inMonth && health !== 'unplanned'
+                                ? `1px solid ${HEALTH_COLOURS[health]}55`
+                                : '1px solid rgba(255,255,255,0.04)',
+                          }}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            if (!inMonth) return
+                            setMonday(getMondayOfWeek(date))
+                            setCurrentYear(year)
+                            setViewMode('week')
+                          }}
+                        >
+                          <span
+                            style={{
+                              ...s.miniDateNum,
+                              color: isToday
+                                ? '#6c8fff'
+                                : inMonth
+                                  ? health === 'unplanned'
+                                    ? HEALTH_TEXT.unplanned
+                                    : HEALTH_TEXT[health]
+                                  : 'transparent',
+                              fontWeight: isToday ? 700 : 400,
+                            }}
+                          >
+                            {date.getDate()}
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </div>
+
+                  {/* Footer — stats or generate button */}
+                  <div style={s.miniFooter}>
+                    {isHovered && canEdit ? (
+                      <button
+                        style={{
+                          ...s.generateBtn,
+                          background: hasRota
+                            ? 'rgba(196,136,58,0.15)'
+                            : 'rgba(108,143,255,0.15)',
+                          color: hasRota ? '#c4883a' : '#6c8fff',
+                          border: hasRota
+                            ? '1px solid rgba(196,136,58,0.3)'
+                            : '1px solid rgba(108,143,255,0.3)',
+                        }}
+                        onClick={(e) =>
+                          handleGenerateClick(year, month, label, e)
+                        }
+                      >
+                        <FontAwesomeIcon icon='bolt' />
+                        {hasRota ? ' Regenerate' : ' Generate'}
+                      </button>
+                    ) : (
+                      (() => {
+                        const counts = {
+                          ok: 0,
+                          breach: 0,
+                          gap: 0,
+                          unplanned: 0,
+                        }
+                        monthDates.forEach((date) => {
+                          if (date.getMonth() !== month) return
+                          const dayOfWeek = (date.getDay() + 6) % 7
+                          const rota = getRotaForDate(date)
+                          const h = getDayHealth(rota, dayOfWeek)
+                          counts[h]++
+                        })
+                        return (
+                          <>
+                            {counts.gap > 0 && (
+                              <span
+                                style={{
+                                  ...s.miniChip,
+                                  color: '#e85c3d',
+                                  background: 'rgba(232,92,61,0.12)',
+                                }}
+                              >
+                                {counts.gap} gap{counts.gap > 1 ? 's' : ''}
+                              </span>
+                            )}
+                            {counts.breach > 0 && (
+                              <span
+                                style={{
+                                  ...s.miniChip,
+                                  color: '#c4883a',
+                                  background: 'rgba(196,136,58,0.12)',
+                                }}
+                              >
+                                {counts.breach} breach
+                                {counts.breach > 1 ? 'es' : ''}
+                              </span>
+                            )}
+                            {counts.gap === 0 &&
+                              counts.breach === 0 &&
+                              counts.unplanned === 0 && (
+                                <span
+                                  style={{
+                                    ...s.miniChip,
+                                    color: '#2ecc8a',
+                                    background: 'rgba(46,204,138,0.1)',
+                                  }}
+                                >
+                                  <FontAwesomeIcon icon='check' /> All clear
+                                </span>
+                              )}
+                            {counts.unplanned > 0 &&
+                              counts.gap === 0 &&
+                              counts.breach === 0 && (
+                                <span
+                                  style={{
+                                    ...s.miniChip,
+                                    color: '#5d6180',
+                                    background: 'rgba(255,255,255,0.05)',
+                                  }}
+                                >
+                                  Not planned
+                                </span>
+                              )}
+                          </>
+                        )
+                      })()
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
 
         {/* WEEK VIEW */}
         {viewMode === 'week' && (
@@ -444,12 +707,20 @@ function Rota() {
                             {st.name.split(' ')[0]}
                           </span>
                           <span style={s.chipRole}>{st.roleCode}</span>
-                          {entry.sleepIn && <span>💤</span>}
+                          {entry.sleepIn && (
+                            <FontAwesomeIcon
+                              icon='moon'
+                              style={{ fontSize: '9px', color: '#c4883a' }}
+                            />
+                          )}
                         </div>
                       )
                     })}
                     {canSeeGaps && sleepCount < 2 && (
-                      <div style={s.sleepWarn}>⚠ {sleepCount}/2 sleep-ins</div>
+                      <div style={s.sleepWarn}>
+                        <FontAwesomeIcon icon='triangle-exclamation' />{' '}
+                        {sleepCount}/2 sleep-ins
+                      </div>
                     )}
                     {isGap && <div style={s.gapTag}>GAP</div>}
                     {canEdit && <div style={s.addBtn}>+ Add</div>}
@@ -486,170 +757,52 @@ function Rota() {
             </div>
           </div>
         )}
-
-        {/* YEAR VIEW */}
-        {viewMode === 'year' && (
-          <div style={s.yearWrap}>
-            {yearMonths.map(({ year, month, label }) => {
-              const monthDates = getMonthDates(year, month)
-              return (
-                <div
-                  key={`${year}-${month}`}
-                  style={s.miniMonth}
-                  onClick={() => {
-                    const firstOfMonth = new Date(year, month, 1)
-                    setMonday(getMondayOfWeek(firstOfMonth))
-                    setCurrentYear(year)
-                    setViewMode('week')
-                  }}
-                >
-                  <div style={s.miniMonthTitle}>{label}</div>
-                  <div style={s.miniDayHeaders}>
-                    {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d, i) => (
-                      <div key={i} style={s.miniDayHead}>
-                        {d}
-                      </div>
-                    ))}
-                  </div>
-                  <div style={s.miniGrid}>
-                    {monthDates.map((date, i) => {
-                      const inMonth = date.getMonth() === month
-                      const isToday = isSameDay(date, TODAY)
-                      const dayOfWeek = (date.getDay() + 6) % 7
-                      const rota = inMonth ? getRotaForDate(date) : null
-                      const health = inMonth
-                        ? getDayHealth(rota, dayOfWeek)
-                        : null
-                      return (
-                        <div
-                          key={i}
-                          style={{
-                            ...s.miniCell,
-                            opacity: inMonth ? 1 : 0,
-                            background: inMonth
-                              ? health === 'unplanned'
-                                ? HEALTH_COLOURS.unplanned
-                                : `${HEALTH_COLOURS[health]}22`
-                              : 'transparent',
-                            border: isToday
-                              ? '1.5px solid #6c8fff'
-                              : inMonth && health !== 'unplanned'
-                                ? `1px solid ${HEALTH_COLOURS[health]}55`
-                                : '1px solid rgba(255,255,255,0.04)',
-                          }}
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            if (!inMonth) return
-                            setMonday(getMondayOfWeek(date))
-                            setCurrentYear(year)
-                            setViewMode('week')
-                          }}
-                        >
-                          <span
-                            style={{
-                              ...s.miniDateNum,
-                              color: isToday
-                                ? '#6c8fff'
-                                : inMonth
-                                  ? health === 'unplanned'
-                                    ? HEALTH_TEXT.unplanned
-                                    : HEALTH_TEXT[health]
-                                  : 'transparent',
-                              fontWeight: isToday ? 700 : 400,
-                            }}
-                          >
-                            {date.getDate()}
-                          </span>
-                        </div>
-                      )
-                    })}
-                  </div>
-                  <div style={s.miniFooter}>
-                    {(() => {
-                      const counts = {
-                        ok: 0,
-                        breach: 0,
-                        gap: 0,
-                        unplanned: 0,
-                      }
-                      monthDates.forEach((date) => {
-                        if (date.getMonth() !== month) return
-                        const dayOfWeek = (date.getDay() + 6) % 7
-                        const rota = getRotaForDate(date)
-                        const h = getDayHealth(rota, dayOfWeek)
-                        counts[h]++
-                      })
-                      return (
-                        <>
-                          {counts.gap > 0 && (
-                            <span
-                              style={{
-                                ...s.miniChip,
-                                color: '#e85c3d',
-                                background: 'rgba(232,92,61,0.12)',
-                              }}
-                            >
-                              {counts.gap} gap{counts.gap > 1 ? 's' : ''}
-                            </span>
-                          )}
-                          {counts.breach > 0 && (
-                            <span
-                              style={{
-                                ...s.miniChip,
-                                color: '#c4883a',
-                                background: 'rgba(196,136,58,0.12)',
-                              }}
-                            >
-                              {counts.breach} breach
-                              {counts.breach > 1 ? 'es' : ''}
-                            </span>
-                          )}
-                          {counts.gap === 0 &&
-                            counts.breach === 0 &&
-                            counts.unplanned === 0 && (
-                              <span
-                                style={{
-                                  ...s.miniChip,
-                                  color: '#2ecc8a',
-                                  background: 'rgba(46,204,138,0.1)',
-                                }}
-                              >
-                                ✓ All clear
-                              </span>
-                            )}
-                          {counts.unplanned > 0 &&
-                            counts.gap === 0 &&
-                            counts.breach === 0 && (
-                              <span
-                                style={{
-                                  ...s.miniChip,
-                                  color: '#5d6180',
-                                  background: 'rgba(255,255,255,0.05)',
-                                }}
-                              >
-                                Not planned
-                              </span>
-                            )}
-                        </>
-                      )
-                    })()}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        )}
       </div>
 
-      {showGenerate && (
+      {/* Overwrite warning modal */}
+      {overwriteTarget && (
+        <div style={s.overlayWarn} onClick={() => setOverwriteTarget(null)}>
+          <div style={s.warnModal} onClick={(e) => e.stopPropagation()}>
+            <div style={s.warnIcon}>
+              <FontAwesomeIcon icon='triangle-exclamation' />
+            </div>
+            <div style={s.warnTitle}>Rota already exists</div>
+            <div style={s.warnBody}>
+              <strong style={{ color: '#e8eaf0' }}>
+                {overwriteTarget.label}
+              </strong>{' '}
+              already has a generated rota. Regenerating will overwrite all
+              existing shifts for this month. Any manual edits will be lost.
+            </div>
+            <div style={s.warnActions}>
+              <button
+                style={s.warnCancelBtn}
+                onClick={() => setOverwriteTarget(null)}
+              >
+                Cancel
+              </button>
+              <button
+                style={s.warnConfirmBtn}
+                onClick={() => {
+                  setGenerateTarget(overwriteTarget)
+                  setOverwriteTarget(null)
+                }}
+              >
+                <FontAwesomeIcon icon='bolt' /> Yes, regenerate
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Generate modal */}
+      {generateTarget && (
         <GenerateModal
-          onClose={() => setShowGenerate(false)}
-          onApply={handleApplyWeek}
+          onClose={() => setGenerateTarget(null)}
           onApplyMonth={handleApplyMonth}
-          currentMonday={currentMonday}
-          scopeYear={currentMonday.getFullYear()}
-          scopeMonth={currentMonday.getMonth()}
-          monthLabel={monthLabel}
+          scopeYear={generateTarget.year}
+          scopeMonth={generateTarget.month}
+          monthLabel={generateTarget.label}
         />
       )}
 
@@ -750,46 +903,59 @@ const s = {
   compStrip: {
     display: 'flex',
     gap: '8px',
-    flexWrap: 'wrap',
     marginBottom: '16px',
+    flexWrap: 'wrap',
   },
   chip: {
     fontSize: '12px',
-    fontWeight: 500,
     padding: '5px 10px',
-    borderRadius: '20px',
-    display: 'inline-flex',
+    borderRadius: '6px',
+    display: 'flex',
     alignItems: 'center',
-    gap: '5px',
+    gap: '6px',
   },
-  chipOk: { background: 'rgba(46,204,138,0.12)', color: '#2ecc8a' },
-  chipWarn: { background: 'rgba(232,92,61,0.12)', color: '#e85c3d' },
-  chipInfo: { background: 'rgba(108,143,255,0.12)', color: '#6c8fff' },
+  chipOk: {
+    background: 'rgba(46,204,138,0.1)',
+    color: '#2ecc8a',
+    border: '1px solid rgba(46,204,138,0.2)',
+  },
+  chipWarn: {
+    background: 'rgba(232,92,61,0.1)',
+    color: '#e85c3d',
+    border: '1px solid rgba(232,92,61,0.2)',
+  },
+  chipInfo: {
+    background: 'rgba(255,255,255,0.04)',
+    color: '#9499b0',
+    border: '1px solid rgba(255,255,255,0.08)',
+  },
   weekNav: {
     display: 'flex',
     alignItems: 'center',
-    gap: '10px',
-    marginBottom: '16px',
+    gap: '8px',
+    marginBottom: '20px',
     flexWrap: 'wrap',
   },
   navArrow: {
-    width: '30px',
-    height: '30px',
-    borderRadius: '7px',
-    border: '1px solid rgba(255,255,255,0.1)',
     background: 'transparent',
+    border: '1px solid rgba(255,255,255,0.1)',
+    borderRadius: '7px',
     color: '#9499b0',
+    width: '32px',
+    height: '32px',
     cursor: 'pointer',
-    fontSize: '14px',
+    fontSize: '13px',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
   },
   weekLabel: {
-    fontSize: '13px',
+    fontSize: '14px',
+    fontWeight: 500,
     color: '#e8eaf0',
-    fontFamily: 'DM Mono, monospace',
-    minWidth: '140px',
+    minWidth: '180px',
+    textAlign: 'center',
+    fontFamily: 'Syne, sans-serif',
   },
   jumpBtn: {
     background: 'transparent',
@@ -808,25 +974,109 @@ const s = {
     borderRadius: '7px',
     color: '#e8eaf0',
     padding: '6px 10px',
-    fontSize: '13px',
-    fontFamily: 'DM Sans, sans-serif',
-    outline: 'none',
+    fontSize: '12px',
+    fontFamily: 'DM Mono, monospace',
   },
-  legend: {
+  legend: { display: 'flex', gap: '12px', marginLeft: 'auto' },
+  legendItem: { fontSize: '11px' },
+  yearWrap: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(3, 1fr)',
+    gap: '20px',
+  },
+  miniMonth: {
+    borderRadius: '14px',
+    padding: '20px',
+    cursor: 'pointer',
+    transition: 'transform 0.18s ease, box-shadow 0.18s ease',
+    position: 'relative',
+  },
+  miniMonthHeader: {
     display: 'flex',
-    gap: '12px',
-    marginLeft: 'auto',
-    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: '10px',
   },
-  legendItem: { fontSize: '12px' },
+  miniMonthTitle: {
+    fontFamily: 'Syne, sans-serif',
+    fontSize: '13px',
+    fontWeight: 600,
+    color: '#e8eaf0',
+  },
+  rotaBadge: {
+    fontSize: '10px',
+    fontWeight: 500,
+    padding: '2px 7px',
+    borderRadius: '5px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
+  },
+  miniDayHeaders: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(7, 1fr)',
+    marginBottom: '4px',
+  },
+  miniDayHead: {
+    fontSize: '9px',
+    color: '#5d6180',
+    textAlign: 'center',
+    fontWeight: 500,
+  },
+  miniGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(7, 1fr)',
+    gap: '2px',
+  },
+  miniCell: {
+    aspectRatio: '1',
+    borderRadius: '4px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    cursor: 'pointer',
+  },
+  miniDateNum: {
+    fontSize: '9px',
+    fontFamily: 'DM Mono, monospace',
+  },
+  miniFooter: {
+    marginTop: '10px',
+    display: 'flex',
+    gap: '5px',
+    flexWrap: 'wrap',
+    minHeight: '26px',
+    alignItems: 'center',
+  },
+  miniChip: {
+    fontSize: '10px',
+    fontWeight: 500,
+    padding: '2px 7px',
+    borderRadius: '4px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
+  },
+  generateBtn: {
+    borderRadius: '7px',
+    padding: '5px 12px',
+    fontSize: '11.5px',
+    fontWeight: 500,
+    cursor: 'pointer',
+    fontFamily: 'DM Sans, sans-serif',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '5px',
+    width: '100%',
+    justifyContent: 'center',
+  },
   gridWrap: { overflowX: 'auto' },
   grid: {
     display: 'grid',
+    minWidth: '700px',
     border: '1px solid rgba(255,255,255,0.07)',
     borderRadius: '14px',
     overflow: 'hidden',
-    minWidth: '500px',
-    background: '#161820',
   },
   colLabel: {
     background: '#1d1f2b',
@@ -834,18 +1084,12 @@ const s = {
     borderRight: '1px solid rgba(255,255,255,0.07)',
   },
   dayHeader: {
-    padding: '10px 10px 8px',
-    borderBottom: '1px solid rgba(255,255,255,0.07)',
-    borderRight: '1px solid rgba(255,255,255,0.07)',
+    padding: '10px 8px',
     textAlign: 'center',
-    position: 'relative',
+    borderBottom: '1px solid rgba(255,255,255,0.07)',
+    borderRight: '1px solid rgba(255,255,255,0.05)',
   },
-  dayName: {
-    fontSize: '11px',
-    fontWeight: 500,
-    letterSpacing: '0.4px',
-    textTransform: 'uppercase',
-  },
+  dayName: { fontSize: '11px', fontWeight: 500, textTransform: 'uppercase' },
   dayDate: {
     fontSize: '16px',
     fontWeight: 600,
@@ -857,159 +1101,168 @@ const s = {
     height: '6px',
     borderRadius: '50%',
     background: '#e85c3d',
-    position: 'absolute',
-    top: '8px',
-    right: '8px',
+    margin: '4px auto 0',
   },
   shiftLabel: {
-    padding: '12px 10px',
-    background: '#1d1f2b',
-    borderBottom: '1px solid rgba(255,255,255,0.07)',
+    padding: '12px 14px',
     borderRight: '1px solid rgba(255,255,255,0.07)',
+    borderBottom: '1px solid rgba(255,255,255,0.05)',
     display: 'flex',
     flexDirection: 'column',
     justifyContent: 'center',
+    background: '#1d1f2b',
   },
-  shiftName: {
-    fontSize: '12px',
-    fontWeight: 600,
-    color: '#e8eaf0',
-    fontFamily: 'Syne, sans-serif',
-  },
+  shiftName: { fontSize: '12px', fontWeight: 600, color: '#e8eaf0' },
   shiftTime: {
     fontSize: '10px',
     color: '#5d6180',
+    marginTop: '2px',
     fontFamily: 'DM Mono, monospace',
-    marginTop: '3px',
   },
   cell: {
     padding: '8px',
-    borderBottom: '1px solid rgba(255,255,255,0.07)',
-    borderRight: '1px solid rgba(255,255,255,0.07)',
-    minHeight: '90px',
+    borderRight: '1px solid rgba(255,255,255,0.05)',
+    borderBottom: '1px solid rgba(255,255,255,0.05)',
+    minHeight: '80px',
     display: 'flex',
     flexDirection: 'column',
     gap: '4px',
+    position: 'relative',
   },
   chipEarly: {
-    background: 'rgba(42,127,98,0.18)',
-    border: '1px solid rgba(42,127,98,0.35)',
-    color: '#2a7f62',
-    borderRadius: '6px',
-    padding: '4px 7px',
-    fontSize: '11px',
+    background: 'rgba(42,127,98,0.15)',
+    border: '1px solid rgba(42,127,98,0.3)',
+    borderRadius: '5px',
+    padding: '3px 6px',
     display: 'flex',
     alignItems: 'center',
     gap: '4px',
   },
   chipLate: {
-    background: 'rgba(122,79,168,0.18)',
-    border: '1px solid rgba(122,79,168,0.35)',
-    color: '#7a4fa8',
-    borderRadius: '6px',
-    padding: '4px 7px',
-    fontSize: '11px',
+    background: 'rgba(122,79,168,0.15)',
+    border: '1px solid rgba(122,79,168,0.3)',
+    borderRadius: '5px',
+    padding: '3px 6px',
     display: 'flex',
     alignItems: 'center',
     gap: '4px',
   },
   chipOncall: {
     background: 'rgba(58,138,196,0.12)',
-    color: '#3a8ac4',
+    border: '1px solid rgba(58,138,196,0.25)',
     borderRadius: '5px',
-    padding: '3px 7px',
+    padding: '3px 6px',
     fontSize: '11px',
+    color: '#3a8ac4',
   },
-  chipName: { flex: 1 },
+  chipName: { fontSize: '11px', color: '#e8eaf0', fontWeight: 500 },
   chipRole: {
     fontSize: '9px',
-    opacity: 0.7,
+    color: '#9499b0',
     fontFamily: 'DM Mono, monospace',
   },
-  sleepWarn: { fontSize: '10px', color: '#c4883a' },
   gapTag: {
-    fontSize: '10px',
-    fontWeight: 600,
+    fontSize: '9px',
+    fontWeight: 700,
     color: '#e85c3d',
-    background: 'rgba(232,92,61,0.12)',
-    padding: '2px 6px',
+    background: 'rgba(232,92,61,0.15)',
+    border: '1px solid rgba(232,92,61,0.3)',
     borderRadius: '4px',
-    width: 'fit-content',
+    padding: '2px 5px',
+    alignSelf: 'flex-start',
+  },
+  sleepWarn: {
+    fontSize: '10px',
+    color: '#c4883a',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '4px',
   },
   addBtn: {
-    fontSize: '11px',
+    fontSize: '10px',
     color: '#5d6180',
-    border: '1px dashed rgba(255,255,255,0.1)',
-    borderRadius: '6px',
-    padding: '4px 8px',
-    cursor: 'pointer',
-    textAlign: 'center',
     marginTop: 'auto',
-  },
-  yearWrap: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(4, 1fr)',
-    gap: '16px',
-  },
-  miniMonth: {
-    background: '#161820',
-    border: '1px solid rgba(255,255,255,0.07)',
-    borderRadius: '12px',
-    padding: '14px',
     cursor: 'pointer',
-    transition: 'border-color 0.15s, background 0.15s',
   },
-  miniMonthTitle: {
-    fontFamily: 'Syne, sans-serif',
-    fontSize: '13px',
-    fontWeight: 600,
-    color: '#e8eaf0',
-    marginBottom: '8px',
-    letterSpacing: '0.2px',
-  },
-  miniDayHeaders: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(7, 1fr)',
-    marginBottom: '4px',
-  },
-  miniDayHead: {
-    textAlign: 'center',
-    fontSize: '9px',
-    color: '#3d405a',
-    fontWeight: 500,
-    padding: '2px 0',
-  },
-  miniGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(7, 1fr)',
-    gap: '2px',
-  },
-  miniCell: {
-    borderRadius: '3px',
-    aspectRatio: '1',
+  // Overwrite warning modal
+  overlayWarn: {
+    position: 'fixed',
+    inset: 0,
+    background: 'rgba(0,0,0,0.85)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    cursor: 'pointer',
-    minWidth: 0,
-    transition: 'opacity 0.1s',
+    zIndex: 300,
+    padding: '20px',
   },
-  miniDateNum: {
-    fontSize: '9px',
-    lineHeight: 1,
-    userSelect: 'none',
-  },
-  miniFooter: {
+  warnModal: {
+    background: '#161820',
+    border: '1px solid rgba(232,92,61,0.3)',
+    borderRadius: '16px',
+    width: '100%',
+    maxWidth: '420px',
+    padding: '28px',
     display: 'flex',
-    gap: '4px',
-    flexWrap: 'wrap',
-    marginTop: '8px',
+    flexDirection: 'column',
+    alignItems: 'center',
+    textAlign: 'center',
+    gap: '12px',
   },
-  miniChip: {
-    fontSize: '9.5px',
+  warnIcon: {
+    fontSize: '32px',
+    color: '#e85c3d',
+    background: 'rgba(232,92,61,0.12)',
+    width: '60px',
+    height: '60px',
+    borderRadius: '50%',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  warnTitle: {
+    fontFamily: 'Syne, sans-serif',
+    fontSize: '18px',
+    fontWeight: 600,
+    color: '#e8eaf0',
+  },
+  warnBody: {
+    fontSize: '13px',
+    color: '#9499b0',
+    lineHeight: 1.6,
+    maxWidth: '340px',
+  },
+  warnActions: {
+    display: 'flex',
+    gap: '10px',
+    marginTop: '8px',
+    width: '100%',
+  },
+  warnCancelBtn: {
+    flex: 1,
+    background: 'transparent',
+    border: '1px solid rgba(255,255,255,0.1)',
+    borderRadius: '8px',
+    color: '#9499b0',
+    padding: '10px',
+    fontSize: '13px',
+    cursor: 'pointer',
+    fontFamily: 'DM Sans, sans-serif',
+  },
+  warnConfirmBtn: {
+    flex: 1,
+    background: 'rgba(232,92,61,0.15)',
+    border: '1px solid rgba(232,92,61,0.35)',
+    borderRadius: '8px',
+    color: '#e85c3d',
+    padding: '10px',
+    fontSize: '13px',
     fontWeight: 500,
-    padding: '2px 6px',
-    borderRadius: '4px',
+    cursor: 'pointer',
+    fontFamily: 'DM Sans, sans-serif',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '6px',
   },
 }
 

@@ -9,7 +9,6 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { dateKey } from '../../utils/dateUtils'
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-const DATES = ['31 Mar', '1 Apr', '2 Apr', '3 Apr', '4 Apr', '5 Apr', '6 Apr']
 const AVAIL_OPTIONS = [
   { value: 'B', label: 'Both' },
   { value: 'E', label: 'Early' },
@@ -87,6 +86,20 @@ function GenerateModal({
 
   const staffMap = Object.fromEntries(mockStaff.map((s) => [s.id, s]))
 
+  // Detect partial week — does this week span two calendar months?
+  const weekMonths = DAYS.map((_, i) => {
+    const d = new Date(currentMonday)
+    d.setDate(d.getDate() + i)
+    return d.getMonth()
+  })
+  const dominantMonth = weekMonths[3] // Wednesday is the tiebreaker
+  const prevMonthDays = weekMonths
+    .map((m, i) => ({ month: m, idx: i }))
+    .filter(({ month }) => month !== dominantMonth)
+
+  const isPartialWeek = prevMonthDays.length > 0
+  const [partialChoice, setPartialChoice] = useState(null)
+  // 'full' = generate all 7 days, 'new' = skip prevMonthDays
   const addLog = (msg, type = '') =>
     setLogLines((prev) => [...prev, { msg, type }])
 
@@ -287,232 +300,274 @@ function GenerateModal({
         {/* ── STEP 1: AVAILABILITY ── */}
         {step === 1 && (
           <>
-            <div style={s.body}>
-              {/* Scope toggle */}
-              <div style={s.scopeRow}>
-                <span style={s.scopeLabel}>Generate for:</span>
-                <div style={s.scopeToggle}>
-                  {[
-                    { value: 'week', label: 'This week' },
-                    { value: 'month', label: `${monthLabel}` },
-                  ].map((opt) => (
-                    <button
-                      key={opt.value}
-                      style={{
-                        ...s.scopeBtn,
-                        background:
-                          scope === opt.value
-                            ? '#6c8fff'
-                            : 'rgba(255,255,255,0.04)',
-                        color: scope === opt.value ? '#fff' : '#9499b0',
-                        border:
-                          scope === opt.value
-                            ? '1px solid #6c8fff'
-                            : '1px solid rgba(255,255,255,0.08)',
-                      }}
-                      onClick={() => setScope(opt.value)}
-                    >
-                      {opt.label}
-                    </button>
-                  ))}
+            {/* Partial week intercept banner */}
+            {isPartialWeek && partialChoice === null && (
+              <div style={s.partialBanner}>
+                <div style={s.partialTitle}>
+                  <FontAwesomeIcon icon='triangle-exclamation' /> This week
+                  spans two months
                 </div>
-                {scope === 'month' && (
-                  <span style={s.scopeNote}>
-                    Availability template applies to all{' '}
-                    {(() => {
-                      const d = new Date(scopeYear, scopeMonth + 1, 0)
-                      return Math.ceil(d.getDate() / 7)
-                    })()}{' '}
-                    weeks
-                  </span>
-                )}
-              </div>
-
-              <div style={s.availHeader}>
-                <div style={s.availInfo}>
-                  <FontAwesomeIcon
-                    icon='circle-info'
-                    style={{ color: '#6c8fff', fontSize: '13px' }}
-                  />
-                  <span>
-                    All permanent staff are available for both shifts by
-                    default. Mark specific days as{' '}
-                    <strong style={{ color: '#e85c3d' }}>Off</strong> for annual
-                    leave, sickness, or any absence. Relief staff availability
-                    is submitted separately by the staff member.
-                  </span>
+                <div style={s.partialBody}>
+                  {prevMonthDays.map(({ idx }) => headerDates[idx]).join(', ')}{' '}
+                  belong to the previous month. Any existing rota for those days
+                  could be overwritten.
+                </div>
+                <div style={s.partialActions}>
+                  <button
+                    style={s.partialBtnFull}
+                    onClick={() => setPartialChoice('full')}
+                  >
+                    Generate full week
+                  </button>
+                  <button
+                    style={s.partialBtnNew}
+                    onClick={() => setPartialChoice('new')}
+                  >
+                    New month days only
+                  </button>
                 </div>
               </div>
+            )}
 
-              {showInstructions && (
-                <div style={s.instructionsBox}>
-                  <div style={s.instrTitle}>How the rota generator works</div>
-                  <div style={s.instrGrid}>
-                    {[
-                      {
-                        val: 'B',
-                        bg: 'rgba(108,143,255,0.15)',
-                        color: '#6c8fff',
-                        label: 'Both',
-                        text: 'Staff can work either shift — generator decides based on coverage needs',
-                      },
-                      {
-                        val: 'E',
-                        bg: 'rgba(42,127,98,0.15)',
-                        color: '#2a7f62',
-                        label: 'Early',
-                        text: 'Staff is only available for the early shift (07:00–14:30)',
-                      },
-                      {
-                        val: 'L',
-                        bg: 'rgba(122,79,168,0.15)',
-                        color: '#7a4fa8',
-                        label: 'Late',
-                        text: 'Staff is only available for the late shift (14:00–23:00)',
-                      },
-                      {
-                        val: 'X',
-                        bg: 'rgba(255,255,255,0.06)',
-                        color: '#5d6180',
-                        label: 'Off',
-                        text: 'Staff is unavailable — on leave, sick, or rest day',
-                      },
-                    ].map((item) => (
-                      <div key={item.val} style={s.instrItem}>
-                        <span
+            {(!isPartialWeek || partialChoice !== null) && (
+              <>
+                <div style={s.body}>
+                  {/* Scope toggle */}
+                  <div style={s.scopeRow}>
+                    <span style={s.scopeLabel}>Generate for:</span>
+                    <div style={s.scopeToggle}>
+                      {[
+                        { value: 'week', label: 'This week' },
+                        { value: 'month', label: `${monthLabel}` },
+                      ].map((opt) => (
+                        <button
+                          key={opt.value}
                           style={{
-                            ...s.instrBadge,
-                            background: item.bg,
-                            color: item.color,
+                            ...s.scopeBtn,
+                            background:
+                              scope === opt.value
+                                ? '#6c8fff'
+                                : 'rgba(255,255,255,0.04)',
+                            color: scope === opt.value ? '#fff' : '#9499b0',
+                            border:
+                              scope === opt.value
+                                ? '1px solid #6c8fff'
+                                : '1px solid rgba(255,255,255,0.08)',
                           }}
+                          onClick={() => setScope(opt.value)}
                         >
-                          {item.label}
-                        </span>
-                        <span style={s.instrText}>{item.text}</span>
-                      </div>
-                    ))}
-                  </div>
-                  <div style={s.instrRules}>
-                    <div style={s.instrRuleTitle}>
-                      What the generator checks
-                    </div>
-                    {[
-                      {
-                        dot: 'hard',
-                        text: "Min 3 staff per shift (managers and deputies don't count)",
-                      },
-                      {
-                        dot: 'hard',
-                        text: 'Exactly 2 sleep-in tags per night',
-                      },
-                      {
-                        dot: 'soft',
-                        text: 'At least 1 female staff per shift where possible',
-                      },
-                      {
-                        dot: 'soft',
-                        text: 'At least 1 driver per shift where possible',
-                      },
-                      {
-                        dot: 'soft',
-                        text: 'At least 1 permanent staff per shift and on sleep-in',
-                      },
-                    ].map((r, i) => (
-                      <div key={i} style={s.instrRule}>
-                        <span
-                          style={r.dot === 'hard' ? s.hardDot : s.softDot}
-                        />
-                        {r.text}
-                      </div>
-                    ))}
-                    <div style={s.instrNote}>
-                      Staff marked off on the Leave tab will automatically
-                      appear as Off here.
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              <div style={s.tableWrap}>
-                <table style={s.table}>
-                  <thead>
-                    <tr>
-                      <th style={s.th}>Staff member</th>
-                      {DAYS.map((d, i) => (
-                        <th key={d} style={s.th}>
-                          {d}
-                          <br />
-                          <span
-                            style={{
-                              fontWeight: 400,
-                              color: '#5d6180',
-                              fontSize: '10px',
-                            }}
-                          >
-                            {DATES[i]}
-                          </span>
-                        </th>
+                          {opt.label}
+                        </button>
                       ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {mockStaff.map((staff) => (
-                      <tr key={staff.id}>
-                        <td style={s.td}>
-                          <div style={s.staffName}>
-                            {staff.name.split(' ')[0]}
+                    </div>
+                    {scope === 'month' && (
+                      <span style={s.scopeNote}>
+                        Availability template applies to all{' '}
+                        {(() => {
+                          const d = new Date(scopeYear, scopeMonth + 1, 0)
+                          return Math.ceil(d.getDate() / 7)
+                        })()}{' '}
+                        weeks
+                      </span>
+                    )}
+                  </div>
+
+                  <div style={s.availHeader}>
+                    <div style={s.availInfo}>
+                      <FontAwesomeIcon
+                        icon='circle-info'
+                        style={{ color: '#6c8fff', fontSize: '13px' }}
+                      />
+                      <span>
+                        All permanent staff are available for both shifts by
+                        default. Mark specific days as{' '}
+                        <strong style={{ color: '#e85c3d' }}>Off</strong> for
+                        annual leave, sickness, or any absence. Relief staff
+                        availability is submitted separately by the staff
+                        member.
+                      </span>
+                    </div>
+                  </div>
+
+                  {showInstructions && (
+                    <div style={s.instructionsBox}>
+                      <div style={s.instrTitle}>
+                        How the rota generator works
+                      </div>
+                      <div style={s.instrGrid}>
+                        {[
+                          {
+                            val: 'B',
+                            bg: 'rgba(108,143,255,0.15)',
+                            color: '#6c8fff',
+                            label: 'Both',
+                            text: 'Staff can work either shift — generator decides based on coverage needs',
+                          },
+                          {
+                            val: 'E',
+                            bg: 'rgba(42,127,98,0.15)',
+                            color: '#2a7f62',
+                            label: 'Early',
+                            text: 'Staff is only available for the early shift (07:00–14:30)',
+                          },
+                          {
+                            val: 'L',
+                            bg: 'rgba(122,79,168,0.15)',
+                            color: '#7a4fa8',
+                            label: 'Late',
+                            text: 'Staff is only available for the late shift (14:00–23:00)',
+                          },
+                          {
+                            val: 'X',
+                            bg: 'rgba(255,255,255,0.06)',
+                            color: '#5d6180',
+                            label: 'Off',
+                            text: 'Staff is unavailable — on leave, sick, or rest day',
+                          },
+                        ].map((item) => (
+                          <div key={item.val} style={s.instrItem}>
+                            <span
+                              style={{
+                                ...s.instrBadge,
+                                background: item.bg,
+                                color: item.color,
+                              }}
+                            >
+                              {item.label}
+                            </span>
+                            <span style={s.instrText}>{item.text}</span>
                           </div>
-                          <div style={s.staffRole}>{staff.roleCode}</div>
-                        </td>
-                        {DAYS.map((_, dayIdx) => {
-                          const val = availability[staff.id]?.[dayIdx] || 'B'
-                          const col = AVAIL_COLORS[val]
-                          return (
-                            <td key={dayIdx} style={s.td}>
-                              <select
-                                value={val}
-                                onChange={(e) =>
-                                  updateAvail(staff.id, dayIdx, e.target.value)
-                                }
+                        ))}
+                      </div>
+                      <div style={s.instrRules}>
+                        <div style={s.instrRuleTitle}>
+                          What the generator checks
+                        </div>
+                        {[
+                          {
+                            dot: 'hard',
+                            text: "Min 3 staff per shift (managers and deputies don't count)",
+                          },
+                          {
+                            dot: 'hard',
+                            text: 'Exactly 2 sleep-in tags per night',
+                          },
+                          {
+                            dot: 'soft',
+                            text: 'At least 1 female staff per shift where possible',
+                          },
+                          {
+                            dot: 'soft',
+                            text: 'At least 1 driver per shift where possible',
+                          },
+                          {
+                            dot: 'soft',
+                            text: 'At least 1 permanent staff per shift and on sleep-in',
+                          },
+                        ].map((r, i) => (
+                          <div key={i} style={s.instrRule}>
+                            <span
+                              style={r.dot === 'hard' ? s.hardDot : s.softDot}
+                            />
+                            {r.text}
+                          </div>
+                        ))}
+                        <div style={s.instrNote}>
+                          Staff marked off on the Leave tab will automatically
+                          appear as Off here.
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  <div style={s.tableWrap}>
+                    <table style={s.table}>
+                      <thead>
+                        <tr>
+                          <th style={s.th}>Staff member</th>
+                          {DAYS.map((d, i) => (
+                            <th key={d} style={s.th}>
+                              {d}
+                              <br />
+                              <span
                                 style={{
-                                  ...s.select,
-                                  background: col.bg,
-                                  color: col.color,
-                                  border: `1px solid ${col.border}`,
+                                  fontWeight: 400,
+                                  color: '#5d6180',
+                                  fontSize: '10px',
                                 }}
                               >
-                                {AVAIL_OPTIONS.map((opt) => (
-                                  <option key={opt.value} value={opt.value}>
-                                    {opt.label}
-                                  </option>
-                                ))}
-                              </select>
+                                {headerDates[i]}
+                              </span>
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {mockStaff.map((staff) => (
+                          <tr key={staff.id}>
+                            <td style={s.td}>
+                              <div style={s.staffName}>
+                                {staff.name.split(' ')[0]}
+                              </div>
+                              <div style={s.staffRole}>{staff.roleCode}</div>
                             </td>
-                          )
-                        })}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+                            {DAYS.map((_, dayIdx) => {
+                              const val =
+                                availability[staff.id]?.[dayIdx] || 'B'
+                              const col = AVAIL_COLORS[val]
+                              return (
+                                <td key={dayIdx} style={s.td}>
+                                  <select
+                                    value={val}
+                                    onChange={(e) =>
+                                      updateAvail(
+                                        staff.id,
+                                        dayIdx,
+                                        e.target.value
+                                      )
+                                    }
+                                    style={{
+                                      ...s.select,
+                                      background: col.bg,
+                                      color: col.color,
+                                      border: `1px solid ${col.border}`,
+                                    }}
+                                  >
+                                    {AVAIL_OPTIONS.map((opt) => (
+                                      <option key={opt.value} value={opt.value}>
+                                        {opt.label}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </td>
+                              )
+                            })}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
 
-            <div style={s.footer}>
-              <div style={s.footerNote}>
-                💡 Managers and deputies are excluded from the 3-staff minimum
-              </div>
-              <div style={s.footerActions}>
-                <button style={s.secondaryBtn} onClick={onClose}>
-                  Cancel
-                </button>
-                <button style={s.primaryBtn} onClick={runGeneration}>
-                  <FontAwesomeIcon icon='bolt' />{' '}
-                  {scope === 'week'
-                    ? 'Generate week'
-                    : `Generate ${monthLabel}`}
-                </button>
-              </div>
-            </div>
+                <div style={s.footer}>
+                  <div style={s.footerNote}>
+                    💡 Managers and deputies are excluded from the 3-staff
+                    minimum
+                  </div>
+                  <div style={s.footerActions}>
+                    <button style={s.secondaryBtn} onClick={onClose}>
+                      Cancel
+                    </button>
+                    <button style={s.primaryBtn} onClick={runGeneration}>
+                      <FontAwesomeIcon icon='bolt' />{' '}
+                      {scope === 'week'
+                        ? 'Generate week'
+                        : `Generate ${monthLabel}`}
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
           </>
         )}
 
@@ -1392,6 +1447,54 @@ const s = {
     alignItems: 'center',
     gap: '3px',
     fontSize: '11px',
+  },
+  partialBanner: {
+    margin: '20px 24px 0',
+    background: 'rgba(196,136,58,0.08)',
+    border: '1px solid rgba(196,136,58,0.25)',
+    borderRadius: '12px',
+    padding: '16px 18px',
+  },
+  partialTitle: {
+    fontSize: '13px',
+    fontWeight: 600,
+    color: '#c4883a',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    marginBottom: '8px',
+  },
+  partialBody: {
+    fontSize: '12.5px',
+    color: '#9499b0',
+    lineHeight: 1.6,
+    marginBottom: '14px',
+  },
+  partialActions: {
+    display: 'flex',
+    gap: '8px',
+  },
+  partialBtnFull: {
+    background: 'rgba(232,92,61,0.12)',
+    border: '1px solid rgba(232,92,61,0.3)',
+    borderRadius: '8px',
+    color: '#e85c3d',
+    padding: '8px 14px',
+    fontSize: '12.5px',
+    fontWeight: 500,
+    cursor: 'pointer',
+    fontFamily: 'DM Sans, sans-serif',
+  },
+  partialBtnNew: {
+    background: 'rgba(46,204,138,0.1)',
+    border: '1px solid rgba(46,204,138,0.25)',
+    borderRadius: '8px',
+    color: '#2ecc8a',
+    padding: '8px 14px',
+    fontSize: '12.5px',
+    fontWeight: 500,
+    cursor: 'pointer',
+    fontFamily: 'DM Sans, sans-serif',
   },
 }
 
