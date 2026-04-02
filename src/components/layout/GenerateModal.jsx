@@ -9,7 +9,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { dateKey } from '../../utils/dateUtils'
 
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-
+const DATES = ['31 Mar', '1 Apr', '2 Apr', '3 Apr', '4 Apr', '5 Apr', '6 Apr']
 const AVAIL_OPTIONS = [
   { value: 'B', label: 'Both' },
   { value: 'E', label: 'Early' },
@@ -81,7 +81,6 @@ function GenerateModal({
   const [generating, setGenerating] = useState(false)
   const [logLines, setLogLines] = useState([])
   const [showInstructions, setShowInstructions] = useState(false)
-  const [hiddenDays, setHiddenDays] = useState([])
 
   // Which week is expanded in the month review
   const [expandedWeek, setExpandedWeek] = useState(null)
@@ -96,17 +95,6 @@ function GenerateModal({
       ...prev,
       [staffId]: { ...prev[staffId], [dayIdx]: value },
     }))
-  }
-
-  const setAllAvail = (value) => {
-    const updated = {}
-    mockStaff.forEach((s) => {
-      updated[s.id] = {}
-      DAYS.forEach((_, i) => {
-        updated[s.id][i] = value
-      })
-    })
-    setAvailability(updated)
   }
 
   // Build dates for header row — use currentMonday for week scope
@@ -341,28 +329,18 @@ function GenerateModal({
               </div>
 
               <div style={s.availHeader}>
-                <div style={s.availNote}>
-                  E = Early only · L = Late only · B = Both · X = Off
-                </div>
-                <div
-                  style={{ display: 'flex', gap: '8px', alignItems: 'center' }}
-                >
-                  <div style={s.bulkBtns}>
-                    {AVAIL_OPTIONS.map((opt) => (
-                      <button
-                        key={opt.value}
-                        style={{
-                          ...s.bulkBtn,
-                          background: AVAIL_COLORS[opt.value].bg,
-                          color: AVAIL_COLORS[opt.value].color,
-                          border: `1px solid ${AVAIL_COLORS[opt.value].border}`,
-                        }}
-                        onClick={() => setAllAvail(opt.value)}
-                      >
-                        All {opt.label}
-                      </button>
-                    ))}
-                  </div>
+                <div style={s.availInfo}>
+                  <FontAwesomeIcon
+                    icon='circle-info'
+                    style={{ color: '#6c8fff', fontSize: '13px' }}
+                  />
+                  <span>
+                    All permanent staff are available for both shifts by
+                    default. Mark specific days as{' '}
+                    <strong style={{ color: '#e85c3d' }}>Off</strong> for annual
+                    leave, sickness, or any absence. Relief staff availability
+                    is submitted separately by the staff member.
+                  </span>
                 </div>
               </div>
 
@@ -459,55 +437,20 @@ function GenerateModal({
                 <table style={s.table}>
                   <thead>
                     <tr>
-                      <th style={s.th}>Staff</th>
+                      <th style={s.th}>Staff member</th>
                       {DAYS.map((d, i) => (
                         <th key={d} style={s.th}>
-                          <div style={s.dayHeadWrap}>
-                            <input
-                              type='checkbox'
-                              checked={!hiddenDays.includes(i)}
-                              onChange={() =>
-                                setHiddenDays((prev) =>
-                                  prev.includes(i)
-                                    ? prev.filter((x) => x !== i)
-                                    : [...prev, i]
-                                )
-                              }
-                              style={{
-                                cursor: 'pointer',
-                                accentColor: '#6c8fff',
-                              }}
-                              title={
-                                hiddenDays.includes(i) ? 'Show day' : 'Hide day'
-                              }
-                            />
-                            <span
-                              style={{
-                                color: hiddenDays.includes(i)
-                                  ? '#5d6180'
-                                  : '#9499b0',
-                                textDecoration: hiddenDays.includes(i)
-                                  ? 'line-through'
-                                  : 'none',
-                              }}
-                            >
-                              {d}
-                            </span>
-                            <span
-                              style={{
-                                fontWeight: 400,
-                                color: hiddenDays.includes(i)
-                                  ? '#3d3f50'
-                                  : '#5d6180',
-                                fontSize: '10px',
-                                textDecoration: hiddenDays.includes(i)
-                                  ? 'line-through'
-                                  : 'none',
-                              }}
-                            >
-                              {headerDates[i]}
-                            </span>
-                          </div>
+                          {d}
+                          <br />
+                          <span
+                            style={{
+                              fontWeight: 400,
+                              color: '#5d6180',
+                              fontSize: '10px',
+                            }}
+                          >
+                            {DATES[i]}
+                          </span>
                         </th>
                       ))}
                     </tr>
@@ -522,7 +465,6 @@ function GenerateModal({
                           <div style={s.staffRole}>{staff.roleCode}</div>
                         </td>
                         {DAYS.map((_, dayIdx) => {
-                          if (hiddenDays.includes(dayIdx)) return null
                           const val = availability[staff.id]?.[dayIdx] || 'B'
                           const col = AVAIL_COLORS[val]
                           return (
@@ -1125,14 +1067,17 @@ const s = {
     gap: '8px',
   },
   availNote: { fontSize: '12px', color: '#5d6180' },
-  bulkBtns: { display: 'flex', gap: '6px' },
-  bulkBtn: {
-    borderRadius: '6px',
-    padding: '5px 10px',
-    fontSize: '11.5px',
-    fontWeight: 500,
-    cursor: 'pointer',
-    fontFamily: 'DM Sans, sans-serif',
+  availInfo: {
+    display: 'flex',
+    alignItems: 'flex-start',
+    gap: '8px',
+    fontSize: '12.5px',
+    color: '#9499b0',
+    lineHeight: 1.6,
+    background: 'rgba(108,143,255,0.06)',
+    border: '1px solid rgba(108,143,255,0.15)',
+    borderRadius: '8px',
+    padding: '10px 12px',
   },
   tableWrap: { overflowX: 'auto' },
   table: { width: '100%', borderCollapse: 'collapse', minWidth: '700px' },

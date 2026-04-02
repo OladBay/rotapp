@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext'
 import Navbar from '../components/layout/Navbar'
 import GenerateModal from '../components/layout/GenerateModal'
 import CellEditModal from '../components/layout/CellEditModal'
-import { mockStaff, mockRota } from '../data/mockRota'
+import { mockStaff } from '../data/mockRota'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { useLocalStorage } from '../hooks/useLocalStorage'
 import {
@@ -60,7 +60,11 @@ function Rota() {
   const [currentMonday, setMonday] = useState(getMondayOfWeek(TODAY))
   const [currentYear, setCurrentYear] = useState(TODAY.getFullYear())
 
-  const [weekRota, setWeekRota] = useLocalStorage('rotapp_week_rota', mockRota)
+  const [weekRota, setWeekRota] = useLocalStorage('rotapp_week_rota', {
+    early: Array(7).fill([]),
+    late: Array(7).fill([]),
+    onCall: Array(7).fill([]),
+  })
   const [monthRota, setMonthRota] = useLocalStorage('rotapp_month_rota', {})
 
   const [showGenerate, setShowGenerate] = useState(false)
