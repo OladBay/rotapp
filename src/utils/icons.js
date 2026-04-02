@@ -22,6 +22,8 @@ import {
   faCar,
   faVenusMars,
   faFilter,
+  faChevronUp,
+  faChevronDown,
 } from '@fortawesome/free-solid-svg-icons'
 
 library.add(
@@ -46,5 +48,7 @@ library.add(
   faSquare,
   faCar,
   faVenusMars,
-  faFilter
+  faFilter,
+  faChevronUp,
+  faChevronDown
 )
