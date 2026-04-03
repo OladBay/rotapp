@@ -1,6 +1,7 @@
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { getPendingRequests } from '../../utils/cancelRequests'
 
 function Navbar() {
   const { user, logout } = useAuth()
@@ -11,6 +12,8 @@ function Navbar() {
     logout()
     navigate('/login')
   }
+  const pendingRequests = getPendingRequests().length
+  const hasStaffAction = pendingRequests > 0
 
   const canSeeStaff = ['manager', 'superadmin'].includes(user?.activeRole)
   const canSeeRota = [
@@ -45,10 +48,16 @@ function Navbar() {
                   location.pathname === link.path
                     ? '2px solid #6c8fff'
                     : '2px solid transparent',
+                position: 'relative',
               }}
               onClick={() => navigate(link.path)}
             >
               {link.label}
+              {link.label === 'Staff' && hasStaffAction && (
+                <span style={styles.badge}>
+                  {pendingRequests > 9 ? '9+' : pendingRequests}
+                </span>
+              )}
             </button>
           ))}
         </div>
@@ -112,6 +121,20 @@ const styles = {
     fontSize: '13px',
     cursor: 'pointer',
     fontFamily: 'DM Sans, sans-serif',
+  },
+  badge: {
+    position: 'absolute',
+    top: '8px',
+    right: '-8px',
+    background: '#e85c3d',
+    color: '#fff',
+    fontSize: '9px',
+    fontWeight: 600,
+    padding: '2px 5px',
+    borderRadius: '10px',
+    minWidth: '16px',
+    textAlign: 'center',
+    lineHeight: 1,
   },
 }
 

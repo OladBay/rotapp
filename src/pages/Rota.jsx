@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import Navbar from '../components/layout/Navbar'
@@ -84,6 +84,19 @@ function Rota() {
   const navigate = useNavigate()
   const [summaryExpanded, setSummaryExpanded] = useState(false) // collapsed by default
   const [hideZeroHours, setHideZeroHours] = useState(false) // show all staff by default
+
+  useEffect(() => {
+    const jumpDate = sessionStorage.getItem('rota_jump_date')
+    if (jumpDate) {
+      const targetDate = new Date(jumpDate)
+      if (!isNaN(targetDate)) {
+        setMonday(getMondayOfWeek(targetDate))
+        setCurrentYear(targetDate.getFullYear())
+        setViewMode('week')
+      }
+      sessionStorage.removeItem('rota_jump_date')
+    }
+  }, [])
   // Default view is now month
   const [viewMode, setViewMode] = useState('month')
   const [currentMonday, setMonday] = useState(getMondayOfWeek(TODAY))

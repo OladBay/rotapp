@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
+import { useNavigate } from 'react-router-dom'
 import Navbar from '../components/layout/Navbar'
 import { mockUsers } from '../data/mockUsers'
 import { mockLeave } from '../data/mockLeave'
@@ -29,6 +30,7 @@ const STATUS_COLORS = {
 
 function Staff() {
   const { user } = useAuth()
+  const navigate = useNavigate()
   const [tab, setTab] = useState('all')
   const [leaveData, setLeaveData] = useLocalStorage('rotapp_leave', mockLeave)
   const [leaveStaff, setLeaveStaff] = useState(null)
@@ -212,7 +214,8 @@ function Staff() {
             { key: 'leave', label: 'Leave & Absence' },
             {
               key: 'requests',
-              label: `Requests (${getPendingRequests().length})`,
+              label: `Requests ${getPendingRequests().length > 0 ? `(${getPendingRequests().length})` : ''}`,
+              hasBadge: getPendingRequests().length > 0,
             },
           ].map((t) => (
             <button
@@ -222,10 +225,14 @@ function Staff() {
                 color: tab === t.key ? '#6c8fff' : '#9499b0',
                 borderBottom:
                   tab === t.key ? '2px solid #6c8fff' : '2px solid transparent',
+                position: 'relative',
               }}
               onClick={() => setTab(t.key)}
             >
               {t.label}
+              {t.hasBadge && (
+                <span style={s.tabBadge}>{getPendingRequests().length}</span>
+              )}
             </button>
           ))}
         </div>
@@ -402,7 +409,23 @@ function Staff() {
                         </div>
                         <div style={s.requestDetails}>
                           <div>
-                            {request.shiftDate} · {request.shiftType} shift
+                            <span
+                              style={s.clickableDate}
+                              onClick={() => {
+                                const targetDate = new Date(request.shiftDate)
+                                navigate('/rota')
+                                sessionStorage.setItem(
+                                  'rota_jump_date',
+                                  request.shiftDate
+                                )
+                              }}
+                            >
+                              {request.shiftDate}
+                            </span>
+                            <span style={{ color: '#5d6180' }}>
+                              {' '}
+                              · {request.shiftType} shift
+                            </span>
                           </div>
                           <div>
                             Reason:{' '}
@@ -478,7 +501,23 @@ function Staff() {
                           </div>
                           <div style={s.requestDetails}>
                             <div>
-                              {request.shiftDate} · {request.shiftType} shift
+                              <span
+                                style={s.clickableDate}
+                                onClick={() => {
+                                  const targetDate = new Date(request.shiftDate)
+                                  navigate('/rota')
+                                  sessionStorage.setItem(
+                                    'rota_jump_date',
+                                    request.shiftDate
+                                  )
+                                }}
+                              >
+                                {request.shiftDate}
+                              </span>
+                              <span style={{ color: '#5d6180' }}>
+                                {' '}
+                                · {request.shiftType} shift
+                              </span>
                             </div>
                             <div>
                               Reason:{' '}
@@ -764,18 +803,20 @@ function Staff() {
               </div>
             </div>
             <div style={s.modalFooter}>
-              <button
-                style={s.secondaryBtn}
-                onClick={() => setSelectedRequest(null)}
-              >
-                Cancel
-              </button>
-              <button
-                style={s.approveBtn}
-                onClick={() => handleApproveRequest(selectedRequest)}
-              >
-                <FontAwesomeIcon icon='check' /> Approve & Remove Shift
-              </button>
+              <div style={s.modalButtonGroup}>
+                <button
+                  style={s.cancelModalBtn}
+                  onClick={() => setSelectedRequest(null)}
+                >
+                  Cancel
+                </button>
+                <button
+                  style={s.approveModalBtn}
+                  onClick={() => handleApproveRequest(selectedRequest)}
+                >
+                  <FontAwesomeIcon icon='check' /> Approve & Remove Shift
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -852,24 +893,27 @@ function Staff() {
                 notified.
               </div>
             </div>
+
             <div style={s.modalFooter}>
-              <button
-                style={s.secondaryBtn}
-                onClick={() => {
-                  setShowRejectModal(false)
-                  setSelectedRequest(null)
-                  setRejectionReason('')
-                  setManagerNotes('')
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                style={s.rejectBtn}
-                onClick={() => handleRejectRequest(selectedRequest)}
-              >
-                <FontAwesomeIcon icon='xmark' /> Reject Request
-              </button>
+              <div style={s.modalButtonGroup}>
+                <button
+                  style={s.cancelModalBtn}
+                  onClick={() => {
+                    setShowRejectModal(false)
+                    setSelectedRequest(null)
+                    setRejectionReason('')
+                    setManagerNotes('')
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  style={s.rejectModalBtn}
+                  onClick={() => handleRejectRequest(selectedRequest)}
+                >
+                  <FontAwesomeIcon icon='xmark' /> Reject Request
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -1341,6 +1385,80 @@ const s = {
     fontSize: '11px',
     color: '#9499b0',
     fontFamily: 'DM Mono, monospace',
+  },
+  tabBadge: {
+    position: 'absolute',
+    top: '6px',
+    right: '-12px',
+    background: '#e85c3d',
+    color: '#fff',
+    fontSize: '9px',
+    fontWeight: 600,
+    padding: '2px 5px',
+    borderRadius: '10px',
+    minWidth: '16px',
+    textAlign: 'center',
+  },
+
+  clickableDate: {
+    color: '#6c8fff',
+    cursor: 'pointer',
+    textDecoration: 'underline',
+    textDecorationStyle: 'dotted',
+    textUnderlineOffset: '2px',
+  },
+
+  modalButtonGroup: {
+    display: 'flex',
+    gap: '12px',
+    width: '100%',
+  },
+
+  cancelModalBtn: {
+    flex: 1,
+    background: 'transparent',
+    border: '1px solid rgba(255,255,255,0.15)',
+    borderRadius: '8px',
+    color: '#9499b0',
+    padding: '12px',
+    fontSize: '13px',
+    fontWeight: 500,
+    cursor: 'pointer',
+    fontFamily: 'DM Sans, sans-serif',
+  },
+
+  approveModalBtn: {
+    flex: 1,
+    background: '#2ecc8a',
+    border: 'none',
+    borderRadius: '8px',
+    color: '#fff',
+    padding: '12px',
+    fontSize: '13px',
+    fontWeight: 500,
+    cursor: 'pointer',
+    fontFamily: 'DM Sans, sans-serif',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '8px',
+  },
+
+  rejectModalBtn: {
+    flex: 1,
+    background: 'rgba(232,92,61,0.15)',
+    border: '1px solid rgba(232,92,61,0.4)',
+    borderRadius: '8px',
+    color: '#e85c3d',
+    padding: '12px',
+    fontSize: '13px',
+    fontWeight: 500,
+    cursor: 'pointer',
+    fontFamily: 'DM Sans, sans-serif',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '8px',
   },
 }
 
