@@ -82,7 +82,8 @@ function Rota() {
   const [leaveData] = useLocalStorage('rotapp_leave', {})
   const { user } = useAuth()
   const navigate = useNavigate()
-
+  const [summaryExpanded, setSummaryExpanded] = useState(false) // collapsed by default
+  const [hideZeroHours, setHideZeroHours] = useState(false) // show all staff by default
   // Default view is now month
   const [viewMode, setViewMode] = useState('month')
   const [currentMonday, setMonday] = useState(getMondayOfWeek(TODAY))
@@ -774,190 +775,237 @@ function Rota() {
               </div>
             </div>
 
-            {/* Staff Hours Summary Table */}
+            {/* Staff Hours Summary Table - Collapsible */}
             <div style={s.summarySection}>
-              <div style={s.summaryHeader}>
+              {/* Clickable Header Bar */}
+              <div
+                style={s.summaryHeaderBar}
+                onClick={() => setSummaryExpanded(!summaryExpanded)}
+              >
                 <div style={s.summaryTitle}>
-                  <FontAwesomeIcon icon='clock' /> Staff Hours Summary
+                  <FontAwesomeIcon
+                    icon={summaryExpanded ? 'chevron-down' : 'chevron-right'}
+                  />
+                  Staff Hours Summary
                 </div>
-                <div style={s.summarySubtitle}>
-                  Permanent staff only · Sorted by weekly shortfall
+                <div style={s.summaryHint}>
+                  Click to {summaryExpanded ? 'collapse' : 'expand'}
                 </div>
               </div>
 
-              <div style={s.tableWrap}>
-                <table style={s.summaryTable}>
-                  <thead>
-                    <tr style={s.tableHeaderRow}>
-                      <th style={s.tableHeader}>Staff</th>
-                      <th style={s.tableHeader}>This week</th>
-                      <th style={s.tableHeader}>Contracted</th>
-                      <th style={s.tableHeader}>Variance</th>
-                      <th style={s.tableHeader}>This month</th>
-                      <th style={s.tableHeader}>Contracted</th>
-                      <th style={s.tableHeader}>Variance</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(() => {
-                      // Get permanent staff (RCW and Senior only)
-                      const permanentStaff = mockStaff.filter(
-                        (staff) =>
-                          staff.role === 'rcw' || staff.role === 'senior'
-                      )
+              {/* Expandable Content */}
+              {summaryExpanded && (
+                <>
+                  <div style={s.summaryControls}>
+                    <div style={s.summarySubtitle}>
+                      Permanent staff (RCW + Senior) · Sorted by hours this week
+                      (highest to lowest)
+                    </div>
+                    <button
+                      style={s.toggleZeroBtn}
+                      onClick={() => setHideZeroHours(!hideZeroHours)}
+                    >
+                      <FontAwesomeIcon
+                        icon={hideZeroHours ? 'eye-slash' : 'eye'}
+                      />
+                      {hideZeroHours ? ' Show all staff' : ' Hide zero hours'}
+                    </button>
+                  </div>
 
-                      // Calculate hours for each staff member
-                      const currentMonth = currentMonday.getMonth()
-                      const currentYearNum = currentMonday.getFullYear()
-                      const weeksInMonth = getWeeksInMonth(
-                        currentYearNum,
-                        currentMonth
-                      )
-                      const contractedMonth = weeksInMonth * 37
+                  <div style={s.tableWrap}>
+                    <table style={s.summaryTable}>
+                      <thead>
+                        <tr style={s.tableHeaderRow}>
+                          <th style={s.tableHeader}>Staff</th>
+                          <th style={s.tableHeader}>This week</th>
+                          <th style={s.tableHeader}>Contracted</th>
+                          <th style={s.tableHeader}>Variance</th>
+                          <th style={s.tableHeader}>This month</th>
+                          <th style={s.tableHeader}>Contracted</th>
+                          <th style={s.tableHeader}>Variance</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(() => {
+                          // Get permanent staff (RCW and Senior only)
+                          const permanentStaff = mockStaff.filter(
+                            (staff) =>
+                              staff.role === 'rcw' || staff.role === 'senior'
+                          )
 
-                      const staffHours = permanentStaff.map((staff) => {
-                        const weekHours = calculateStaffHoursForWeek(
-                          staff.id,
-                          currentRotaForWeek,
-                          currentMonday,
-                          leaveData
-                        )
-                        const weekVariance = weekHours - 37
-                        const monthHours = calculateStaffHoursForMonth(
-                          staff.id,
-                          currentYearNum,
-                          currentMonth,
-                          monthRota,
-                          currentRotaForWeek,
-                          leaveData
-                        )
-                        const monthVariance = monthHours - contractedMonth
+                          // Calculate hours for each staff member
+                          const currentMonth = currentMonday.getMonth()
+                          const currentYearNum = currentMonday.getFullYear()
+                          const weeksInMonth = getWeeksInMonth(
+                            currentYearNum,
+                            currentMonth
+                          )
+                          const contractedMonth = weeksInMonth * 37
 
-                        return {
-                          ...staff,
-                          weekHours,
-                          weekVariance,
-                          monthHours,
-                          monthVariance,
-                        }
-                      })
+                          let staffHours = permanentStaff.map((staff) => {
+                            const weekHours = calculateStaffHoursForWeek(
+                              staff.id,
+                              currentRotaForWeek,
+                              currentMonday,
+                              leaveData
+                            )
+                            const weekVariance = weekHours - 37
+                            const monthHours = calculateStaffHoursForMonth(
+                              staff.id,
+                              currentYearNum,
+                              currentMonth,
+                              monthRota,
+                              currentRotaForWeek,
+                              currentMonday,
+                              leaveData
+                            )
+                            const monthVariance = monthHours - contractedMonth
 
-                      // Sort by weekly shortfall (most negative first)
-                      const sortedStaff = [...staffHours].sort(
-                        (a, b) => a.weekVariance - b.weekVariance
-                      )
+                            return {
+                              ...staff,
+                              weekHours,
+                              weekVariance,
+                              monthHours,
+                              monthVariance,
+                            }
+                          })
 
-                      return sortedStaff.map((staff) => {
-                        const isUnderWeek = staff.weekVariance < 0
-                        const isUnderMonth = staff.monthVariance < 0
+                          // Apply hide zero hours filter
+                          if (hideZeroHours) {
+                            staffHours = staffHours.filter(
+                              (staff) => staff.weekHours > 0
+                            )
+                          }
 
-                        return (
-                          <tr key={staff.id} style={s.tableRow}>
-                            <td style={s.tableCell}>
-                              <div style={s.staffCell}>
-                                <div
-                                  style={{
-                                    ...s.staffAvatar,
-                                    background:
-                                      staff.gender === 'F'
-                                        ? 'rgba(122,79,168,0.2)'
-                                        : 'rgba(108,143,255,0.15)',
-                                    color:
-                                      staff.gender === 'F'
-                                        ? '#7a4fa8'
-                                        : '#6c8fff',
-                                  }}
-                                >
-                                  {staff.name
-                                    .split(' ')
-                                    .map((n) => n[0])
-                                    .join('')}
-                                </div>
-                                <div>
-                                  <div style={s.staffCellName}>
-                                    {staff.name}
+                          // Sort by weekly hours (highest to lowest)
+                          const sortedStaff = [...staffHours].sort(
+                            (a, b) => b.weekHours - a.weekHours
+                          )
+
+                          if (sortedStaff.length === 0) {
+                            return (
+                              <tr>
+                                <td colSpan='7' style={s.emptyTableMessage}>
+                                  No staff scheduled this week
+                                </td>
+                              </tr>
+                            )
+                          }
+
+                          return sortedStaff.map((staff) => {
+                            const isUnderWeek = staff.weekVariance < 0
+                            const isOverWeek = staff.weekVariance > 0
+                            const isUnderMonth = staff.monthVariance < 0
+
+                            return (
+                              <tr key={staff.id} style={s.tableRow}>
+                                <td style={s.tableCell}>
+                                  <div style={s.staffCell}>
+                                    <div
+                                      style={{
+                                        ...s.staffAvatar,
+                                        background:
+                                          staff.gender === 'F'
+                                            ? 'rgba(122,79,168,0.2)'
+                                            : 'rgba(108,143,255,0.15)',
+                                        color:
+                                          staff.gender === 'F'
+                                            ? '#7a4fa8'
+                                            : '#6c8fff',
+                                      }}
+                                    >
+                                      {staff.name
+                                        .split(' ')
+                                        .map((n) => n[0])
+                                        .join('')}
+                                    </div>
+                                    <div>
+                                      <div style={s.staffCellName}>
+                                        {staff.name}
+                                      </div>
+                                      <div style={s.staffCellRole}>
+                                        {staff.roleCode}
+                                      </div>
+                                    </div>
                                   </div>
-                                  <div style={s.staffCellRole}>
-                                    {staff.roleCode}
-                                  </div>
-                                </div>
-                              </div>
-                            </td>
+                                </td>
 
-                            <td style={s.tableCell}>
-                              <span style={s.hoursValue}>
-                                {staff.weekHours.toFixed(1)}h
-                              </span>
-                            </td>
+                                <td style={s.tableCell}>
+                                  <span style={s.hoursValue}>
+                                    {staff.weekHours.toFixed(1)}h
+                                  </span>
+                                </td>
 
-                            <td style={s.tableCell}>
-                              <span style={s.contractedValue}>37h</span>
-                            </td>
+                                <td style={s.tableCell}>
+                                  <span style={s.contractedValue}>37h</span>
+                                </td>
 
-                            <td style={s.tableCell}>
-                              <span
-                                style={{
-                                  ...s.varianceValue,
-                                  color: isUnderWeek
-                                    ? '#e85c3d'
-                                    : staff.weekVariance > 0
-                                      ? '#2ecc8a'
-                                      : '#9499b0',
-                                  background: isUnderWeek
-                                    ? 'rgba(232,92,61,0.1)'
-                                    : 'transparent',
-                                  padding: isUnderWeek ? '2px 8px' : '0',
-                                  borderRadius: '4px',
-                                }}
-                              >
-                                {staff.weekVariance > 0 ? '+' : ''}
-                                {staff.weekVariance.toFixed(1)}h
-                                {isUnderWeek && (
-                                  <FontAwesomeIcon
-                                    icon='triangle-exclamation'
+                                <td style={s.tableCell}>
+                                  <span
                                     style={{
-                                      marginLeft: '6px',
-                                      fontSize: '10px',
+                                      ...s.varianceValue,
+                                      color: isUnderWeek
+                                        ? '#e85c3d'
+                                        : isOverWeek
+                                          ? '#2ecc8a'
+                                          : '#9499b0',
+                                      background: isUnderWeek
+                                        ? 'rgba(232,92,61,0.1)'
+                                        : 'transparent',
+                                      padding: isUnderWeek ? '2px 8px' : '0',
+                                      borderRadius: '4px',
                                     }}
-                                  />
-                                )}
-                              </span>
-                            </td>
+                                  >
+                                    {staff.weekVariance > 0 ? '+' : ''}
+                                    {staff.weekVariance.toFixed(1)}h
+                                    {isUnderWeek && (
+                                      <FontAwesomeIcon
+                                        icon='triangle-exclamation'
+                                        style={{
+                                          marginLeft: '6px',
+                                          fontSize: '10px',
+                                        }}
+                                      />
+                                    )}
+                                  </span>
+                                </td>
 
-                            <td style={s.tableCell}>
-                              <span style={s.hoursValue}>
-                                {staff.monthHours.toFixed(1)}h
-                              </span>
-                            </td>
+                                <td style={s.tableCell}>
+                                  <span style={s.hoursValue}>
+                                    {staff.monthHours.toFixed(1)}h
+                                  </span>
+                                </td>
 
-                            <td style={s.tableCell}>
-                              <span style={s.contractedValue}>
-                                {contractedMonth}h
-                              </span>
-                            </td>
+                                <td style={s.tableCell}>
+                                  <span style={s.contractedValue}>
+                                    {contractedMonth}h
+                                  </span>
+                                </td>
 
-                            <td style={s.tableCell}>
-                              <span
-                                style={{
-                                  ...s.varianceValue,
-                                  color: isUnderMonth
-                                    ? '#c4883a'
-                                    : staff.monthVariance > 0
-                                      ? '#2ecc8a'
-                                      : '#9499b0',
-                                }}
-                              >
-                                {staff.monthVariance > 0 ? '+' : ''}
-                                {staff.monthVariance.toFixed(1)}h
-                              </span>
-                            </td>
-                          </tr>
-                        )
-                      })
-                    })()}
-                  </tbody>
-                </table>
-              </div>
+                                <td style={s.tableCell}>
+                                  <span
+                                    style={{
+                                      ...s.varianceValue,
+                                      color: isUnderMonth
+                                        ? '#c4883a'
+                                        : staff.monthVariance > 0
+                                          ? '#2ecc8a'
+                                          : '#9499b0',
+                                    }}
+                                  >
+                                    {staff.monthVariance > 0 ? '+' : ''}
+                                    {staff.monthVariance.toFixed(1)}h
+                                  </span>
+                                </td>
+                              </tr>
+                            )
+                          })
+                        })()}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
             </div>
           </>
         )}
@@ -1593,6 +1641,168 @@ const s = {
     alignItems: 'center',
     gap: '4px',
     fontFamily: 'DM Mono, monospace',
+  },
+  summarySection: {
+    marginTop: '24px',
+    borderTop: '1px solid rgba(255,255,255,0.07)',
+  },
+
+  summaryHeaderBar: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: '14px 16px',
+    background: '#1d1f2b',
+    borderRadius: '10px',
+    cursor: 'pointer',
+    transition: 'background 0.15s',
+    '&:hover': {
+      background: '#222433',
+    },
+  },
+
+  summaryTitle: {
+    fontFamily: 'Syne, sans-serif',
+    fontSize: '14px',
+    fontWeight: 600,
+    color: '#e8eaf0',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+  },
+
+  summaryHint: {
+    fontSize: '11px',
+    color: '#5d6180',
+  },
+
+  summaryControls: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: '12px',
+    marginBottom: '16px',
+  },
+
+  summarySubtitle: {
+    fontSize: '11px',
+    color: '#5d6180',
+  },
+
+  toggleZeroBtn: {
+    background: 'rgba(108,143,255,0.1)',
+    border: '1px solid rgba(108,143,255,0.2)',
+    borderRadius: '6px',
+    padding: '5px 10px',
+    fontSize: '11px',
+    color: '#6c8fff',
+    cursor: 'pointer',
+    fontFamily: 'DM Sans, sans-serif',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    '&:hover': {
+      background: 'rgba(108,143,255,0.15)',
+    },
+  },
+
+  tableWrap: {
+    overflowX: 'auto',
+    borderRadius: '12px',
+    border: '1px solid rgba(255,255,255,0.07)',
+    background: '#161820',
+  },
+
+  summaryTable: {
+    width: '100%',
+    borderCollapse: 'collapse',
+    fontSize: '13px',
+    minWidth: '700px',
+  },
+
+  tableHeaderRow: {
+    borderBottom: '1px solid rgba(255,255,255,0.07)',
+    background: '#1d1f2b',
+  },
+
+  tableHeader: {
+    textAlign: 'left',
+    padding: '12px 16px',
+    color: '#9499b0',
+    fontWeight: 500,
+    fontSize: '11px',
+    textTransform: 'uppercase',
+    letterSpacing: '0.5px',
+  },
+
+  tableRow: {
+    borderBottom: '1px solid rgba(255,255,255,0.05)',
+    '&:hover': {
+      background: 'rgba(255,255,255,0.02)',
+    },
+  },
+
+  tableCell: {
+    padding: '10px 16px',
+    color: '#e8eaf0',
+  },
+
+  staffCell: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+  },
+
+  staffAvatar: {
+    width: '30px',
+    height: '30px',
+    borderRadius: '50%',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: '10px',
+    fontWeight: 600,
+    fontFamily: 'Syne, sans-serif',
+    flexShrink: 0,
+  },
+
+  staffCellName: {
+    fontSize: '13px',
+    fontWeight: 500,
+    color: '#e8eaf0',
+  },
+
+  staffCellRole: {
+    fontSize: '10px',
+    color: '#9499b0',
+    fontFamily: 'DM Mono, monospace',
+    marginTop: '2px',
+  },
+
+  hoursValue: {
+    fontWeight: 500,
+    color: '#e8eaf0',
+    fontFamily: 'DM Mono, monospace',
+  },
+
+  contractedValue: {
+    color: '#5d6180',
+    fontFamily: 'DM Mono, monospace',
+  },
+
+  varianceValue: {
+    fontWeight: 500,
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '4px',
+    fontFamily: 'DM Mono, monospace',
+  },
+
+  emptyTableMessage: {
+    textAlign: 'center',
+    padding: '32px',
+    color: '#5d6180',
+    fontSize: '13px',
   },
 }
 

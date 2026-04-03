@@ -3,6 +3,12 @@ import { useAuth } from '../context/AuthContext'
 import Navbar from '../components/layout/Navbar'
 import { mockShifts, staffIdMap } from '../data/mockCalendar'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import {
+  addRequest,
+  updateRequest,
+  getShiftRequest,
+  loadRequests,
+} from '../utils/cancelRequests'
 
 const WEEK = [
   { date: '2025-03-31', day: 'Mon', label: '31 Mar' },
@@ -17,11 +23,27 @@ const WEEK = [
 function Calendar() {
   const { user } = useAuth()
   const [selectedShift, setSelectedShift] = useState(null)
-  const [cancelConfirm, setCancelConfirm] = useState(false)
   const [cancelledShifts, setCancelledShifts] = useState([])
+  const [cancelReason, setCancelReason] = useState('')
+  const [customReasonText, setCustomReasonText] = useState('')
+  const [showReasonForm, setShowReasonForm] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
 
   const staffId = staffIdMap[user?.email]
   const myShifts = staffId ? mockShifts[staffId] || [] : []
+
+  // Helper to check if shift has pending request
+  const getShiftRequestStatus = (shift) => {
+    if (!shift || !staffId) return null
+    const requests = loadRequests()
+    const request = requests.find(
+      (r) =>
+        r.staffId === staffId &&
+        r.shiftDate === shift.date &&
+        r.shiftType === shift.type
+    )
+    return request
+  }
 
   const getShiftForDay = (date) =>
     myShifts.find((s) => s.date === date && !cancelledShifts.includes(s.date))
@@ -30,6 +52,43 @@ function Calendar() {
     setCancelledShifts((prev) => [...prev, shift.date])
     setSelectedShift(null)
     setCancelConfirm(false)
+  }
+
+  // Handle withdraw request
+  const handleWithdraw = (requestId) => {
+    updateRequest(requestId, {
+      status: 'withdrawn',
+      withdrawnAt: new Date().toISOString(),
+    })
+    setSelectedShift(null)
+    setCancelReason('')
+    setCustomReasonText('')
+    setShowReasonForm(false)
+  }
+
+  // Handle submit request
+  const handleSubmitRequest = () => {
+    if (!cancelReason) return
+    if (cancelReason === 'Other' && !customReasonText.trim()) return
+
+    setSubmitting(true)
+
+    addRequest({
+      staffId: staffId,
+      staffName: user?.name,
+      shiftDate: selectedShift.date,
+      shiftType: selectedShift.type,
+      reason: cancelReason,
+      customReason: cancelReason === 'Other' ? customReasonText : '',
+    })
+
+    setTimeout(() => {
+      setSelectedShift(null)
+      setCancelReason('')
+      setCustomReasonText('')
+      setShowReasonForm(false)
+      setSubmitting(false)
+    }, 500)
   }
 
   const workedDays = myShifts.filter(
@@ -69,6 +128,13 @@ function Calendar() {
               cancelledShifts.includes(date) &&
               myShifts.find((s) => s.date === date)
 
+            // Check if shift has pending request
+            const shiftRequest = shift ? getShiftRequestStatus(shift) : null
+            const isPending = shiftRequest?.status === 'pending'
+            const isApproved = shiftRequest?.status === 'approved'
+            const isRejected = shiftRequest?.status === 'rejected'
+            const isWithdrawn = shiftRequest?.status === 'withdrawn'
+
             return (
               <div
                 key={date}
@@ -102,16 +168,24 @@ function Calendar() {
 
                 {isCancelled ? (
                   <div style={s.cancelledTag}>Cancelled</div>
+                ) : isApproved ? (
+                  <div style={s.approvedTag}>Cancellation approved</div>
+                ) : isRejected ? (
+                  <div style={s.rejectedTag}>Cancellation rejected</div>
+                ) : isWithdrawn ? (
+                  <div style={s.withdrawnTag}>Request withdrawn</div>
                 ) : shift ? (
                   <div
                     style={{
                       ...s.shiftCard,
-                      background:
-                        shift.type === 'early'
+                      background: isPending
+                        ? 'rgba(196,136,58,0.15)'
+                        : shift.type === 'early'
                           ? 'rgba(42,127,98,0.15)'
                           : 'rgba(122,79,168,0.15)',
-                      border:
-                        shift.type === 'early'
+                      border: isPending
+                        ? '1px solid rgba(196,136,58,0.35)'
+                        : shift.type === 'early'
                           ? '1px solid rgba(42,127,98,0.35)'
                           : '1px solid rgba(122,79,168,0.35)',
                     }}
@@ -119,11 +193,16 @@ function Calendar() {
                     <div
                       style={{
                         ...s.shiftType,
-                        color: shift.type === 'early' ? '#2a7f62' : '#7a4fa8',
+                        color: isPending
+                          ? '#c4883a'
+                          : shift.type === 'early'
+                            ? '#2a7f62'
+                            : '#7a4fa8',
                       }}
                     >
                       {shift.type === 'early' ? 'Early' : 'Late'}
                       {shift.sleepIn && ' · 💤 Sleep-in'}
+                      {isPending && ' · ⏳ Pending'}
                     </div>
                     <div style={s.shiftTime}>{shift.time}</div>
                     <div style={s.shiftHome}>{shift.home}</div>
@@ -142,7 +221,9 @@ function Calendar() {
             style={s.overlay}
             onClick={() => {
               setSelectedShift(null)
-              setCancelConfirm(false)
+              setShowReasonForm(false)
+              setCancelReason('')
+              setCustomReasonText('')
             }}
           >
             <div style={s.modal} onClick={(e) => e.stopPropagation()}>
@@ -152,7 +233,9 @@ function Calendar() {
                   style={s.closeBtn}
                   onClick={() => {
                     setSelectedShift(null)
-                    setCancelConfirm(false)
+                    setShowReasonForm(false)
+                    setCancelReason('')
+                    setCustomReasonText('')
                   }}
                 >
                   <FontAwesomeIcon icon='xmark' />
@@ -197,41 +280,181 @@ function Calendar() {
                 )}
                 <div style={s.detailRow}>
                   <span style={s.detailLabel}>Status</span>
-                  <span style={{ ...s.detailVal, color: '#2ecc8a' }}>
-                    ✓ Confirmed
-                  </span>
+                  {(() => {
+                    const request = getShiftRequestStatus(selectedShift)
+                    if (request?.status === 'pending') {
+                      return (
+                        <span style={{ ...s.detailVal, color: '#c4883a' }}>
+                          ⏳ Cancellation requested
+                        </span>
+                      )
+                    }
+                    if (request?.status === 'approved') {
+                      return (
+                        <span style={{ ...s.detailVal, color: '#e85c3d' }}>
+                          ✗ Cancelled (approved)
+                        </span>
+                      )
+                    }
+                    if (request?.status === 'rejected') {
+                      return (
+                        <span style={{ ...s.detailVal, color: '#9499b0' }}>
+                          Cancellation rejected
+                        </span>
+                      )
+                    }
+                    if (request?.status === 'withdrawn') {
+                      return (
+                        <span style={{ ...s.detailVal, color: '#2ecc8a' }}>
+                          ✓ Confirmed (request withdrawn)
+                        </span>
+                      )
+                    }
+                    return (
+                      <span style={{ ...s.detailVal, color: '#2ecc8a' }}>
+                        ✓ Confirmed
+                      </span>
+                    )
+                  })()}
                 </div>
+
+                {/* Show rejection reason if present */}
+                {(() => {
+                  const request = getShiftRequestStatus(selectedShift)
+                  if (
+                    request?.status === 'rejected' &&
+                    request.rejectionReason
+                  ) {
+                    return (
+                      <div style={s.detailRow}>
+                        <span style={s.detailLabel}>Rejection reason</span>
+                        <span
+                          style={{
+                            ...s.detailVal,
+                            color: '#e85c3d',
+                            fontSize: '12px',
+                          }}
+                        >
+                          {request.rejectionReason}
+                        </span>
+                      </div>
+                    )
+                  }
+                  return null
+                })()}
               </div>
 
-              {!cancelConfirm ? (
-                <button
-                  style={s.cancelShiftBtn}
-                  onClick={() => setCancelConfirm(true)}
-                >
-                  Cancel this shift
-                </button>
-              ) : (
-                <div style={s.confirmBox}>
-                  <p style={s.confirmText}>
-                    Are you sure? Your manager will be notified and this shift
-                    will need to be filled.
-                  </p>
-                  <div style={s.confirmActions}>
+              {/* Show different buttons based on request status */}
+              {(() => {
+                const request = getShiftRequestStatus(selectedShift)
+
+                // If pending request exists, show withdraw button
+                if (request?.status === 'pending') {
+                  return (
+                    <>
+                      <div style={s.pendingWarning}>
+                        <FontAwesomeIcon icon='clock' /> Cancellation request
+                        pending manager approval
+                      </div>
+                      <button
+                        style={s.withdrawBtn}
+                        onClick={() => handleWithdraw(request.id)}
+                      >
+                        Withdraw request
+                      </button>
+                    </>
+                  )
+                }
+
+                // If already approved or rejected, don't show cancel button
+                if (
+                  request?.status === 'approved' ||
+                  request?.status === 'rejected'
+                ) {
+                  return null
+                }
+
+                // If withdrawn, show normal cancel button again
+                if (!showReasonForm) {
+                  return (
                     <button
-                      style={s.confirmNo}
-                      onClick={() => setCancelConfirm(false)}
+                      style={s.cancelShiftBtn}
+                      onClick={() => setShowReasonForm(true)}
                     >
-                      Keep shift
+                      Request cancellation
                     </button>
-                    <button
-                      style={s.confirmYes}
-                      onClick={() => handleCancel(selectedShift)}
+                  )
+                }
+
+                // Show reason form
+                return (
+                  <div style={s.reasonForm}>
+                    <div style={s.reasonLabel}>Reason for cancellation:</div>
+                    <select
+                      style={s.reasonSelect}
+                      value={cancelReason}
+                      onChange={(e) => setCancelReason(e.target.value)}
                     >
-                      Yes, cancel it
-                    </button>
+                      <option value=''>Select a reason...</option>
+                      <option value='Sick'>🤒 Sick</option>
+                      <option value='Family emergency'>
+                        🏠 Family emergency
+                      </option>
+                      <option value='Transport issue'>
+                        🚗 Transport issue
+                      </option>
+                      <option value='Other'>📝 Other (please specify)</option>
+                    </select>
+
+                    {cancelReason === 'Other' && (
+                      <textarea
+                        style={s.reasonTextarea}
+                        placeholder='Please specify your reason...'
+                        value={customReasonText}
+                        onChange={(e) => setCustomReasonText(e.target.value)}
+                        rows='3'
+                      />
+                    )}
+
+                    <div style={s.reasonActions}>
+                      <button
+                        style={s.cancelReasonBtn}
+                        onClick={() => {
+                          setShowReasonForm(false)
+                          setCancelReason('')
+                          setCustomReasonText('')
+                        }}
+                      >
+                        Back
+                      </button>
+                      <button
+                        style={{
+                          ...s.submitReasonBtn,
+                          opacity:
+                            !cancelReason ||
+                            (cancelReason === 'Other' &&
+                              !customReasonText.trim())
+                              ? 0.5
+                              : 1,
+                          cursor:
+                            !cancelReason ||
+                            (cancelReason === 'Other' &&
+                              !customReasonText.trim())
+                              ? 'not-allowed'
+                              : 'pointer',
+                        }}
+                        disabled={
+                          !cancelReason ||
+                          (cancelReason === 'Other' && !customReasonText.trim())
+                        }
+                        onClick={handleSubmitRequest}
+                      >
+                        {submitting ? 'Submitting...' : 'Submit request'}
+                      </button>
+                    </div>
                   </div>
-                </div>
-              )}
+                )
+              })()}
             </div>
           </div>
         )}
@@ -321,6 +544,30 @@ const s = {
     padding: '4px 8px',
     width: 'fit-content',
   },
+  approvedTag: {
+    fontSize: '11px',
+    color: '#e85c3d',
+    background: 'rgba(232,92,61,0.1)',
+    borderRadius: '6px',
+    padding: '4px 8px',
+    width: 'fit-content',
+  },
+  rejectedTag: {
+    fontSize: '11px',
+    color: '#9499b0',
+    background: 'rgba(255,255,255,0.05)',
+    borderRadius: '6px',
+    padding: '4px 8px',
+    width: 'fit-content',
+  },
+  withdrawnTag: {
+    fontSize: '11px',
+    color: '#2ecc8a',
+    background: 'rgba(46,204,138,0.1)',
+    borderRadius: '6px',
+    padding: '4px 8px',
+    width: 'fit-content',
+  },
   overlay: {
     position: 'fixed',
     inset: 0,
@@ -386,18 +633,67 @@ const s = {
     fontFamily: 'DM Sans, sans-serif',
     borderTop: '1px solid rgba(255,255,255,0.07)',
   },
-  confirmBox: {
-    padding: '16px 24px',
+  pendingWarning: {
+    padding: '12px 24px',
+    background: 'rgba(196,136,58,0.1)',
+    borderTop: '1px solid rgba(255,255,255,0.07)',
+    color: '#c4883a',
+    fontSize: '12px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+  },
+  withdrawBtn: {
+    width: '100%',
+    background: 'rgba(232,92,61,0.1)',
+    border: '1px solid rgba(232,92,61,0.25)',
+    color: '#e85c3d',
+    padding: '12px',
+    fontSize: '13px',
+    fontWeight: 500,
+    cursor: 'pointer',
+    fontFamily: 'DM Sans, sans-serif',
     borderTop: '1px solid rgba(255,255,255,0.07)',
   },
-  confirmText: {
-    fontSize: '13px',
-    color: '#9499b0',
-    marginBottom: '12px',
-    lineHeight: 1.5,
+  reasonForm: {
+    padding: '16px 24px',
+    borderTop: '1px solid rgba(255,255,255,0.07)',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '12px',
   },
-  confirmActions: { display: 'flex', gap: '8px' },
-  confirmNo: {
+  reasonLabel: {
+    fontSize: '13px',
+    fontWeight: 500,
+    color: '#9499b0',
+  },
+  reasonSelect: {
+    background: '#1d1f2b',
+    border: '1px solid rgba(255,255,255,0.08)',
+    borderRadius: '8px',
+    padding: '10px',
+    fontSize: '13px',
+    color: '#e8eaf0',
+    fontFamily: 'DM Sans, sans-serif',
+    width: '100%',
+  },
+  reasonTextarea: {
+    background: '#1d1f2b',
+    border: '1px solid rgba(255,255,255,0.08)',
+    borderRadius: '8px',
+    padding: '10px',
+    fontSize: '13px',
+    color: '#e8eaf0',
+    fontFamily: 'DM Sans, sans-serif',
+    width: '100%',
+    resize: 'vertical',
+  },
+  reasonActions: {
+    display: 'flex',
+    gap: '8px',
+    marginTop: '4px',
+  },
+  cancelReasonBtn: {
     flex: 1,
     background: 'transparent',
     border: '1px solid rgba(255,255,255,0.1)',
@@ -408,12 +704,12 @@ const s = {
     cursor: 'pointer',
     fontFamily: 'DM Sans, sans-serif',
   },
-  confirmYes: {
+  submitReasonBtn: {
     flex: 1,
-    background: 'rgba(232,92,61,0.15)',
-    border: '1px solid rgba(232,92,61,0.3)',
+    background: '#6c8fff',
+    border: 'none',
     borderRadius: '8px',
-    color: '#e85c3d',
+    color: '#fff',
     padding: '9px',
     fontSize: '13px',
     fontWeight: 500,

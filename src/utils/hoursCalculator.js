@@ -73,7 +73,8 @@ export function calculateStaffHoursForMonth(
   year,
   month,
   monthRota,
-  weekRota,
+  currentWeekRota,
+  currentMonday,
   leaveData
 ) {
   let totalHours = 0
@@ -96,14 +97,14 @@ export function calculateStaffHoursForMonth(
     const key = dateKey(monday)
     if (!key) return
 
-    // Get the rota for this week
+    // Get the rota for this week from monthRota
     let weekRotaData = monthRota[key]
 
-    // If not found in monthRota, check if this is the current week
-    if (!weekRotaData && weekRota) {
-      const currentWeekKey = dateKey(weekRota.monday)
+    // If not found in monthRota, check if this is the current week we're viewing
+    if (!weekRotaData && currentWeekRota && currentMonday) {
+      const currentWeekKey = dateKey(currentMonday)
       if (key === currentWeekKey) {
-        weekRotaData = weekRota
+        weekRotaData = currentWeekRota
       }
     }
 

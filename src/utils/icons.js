@@ -25,6 +25,8 @@ import {
   faChevronUp,
   faChevronDown,
   faClock,
+  faEye,
+  faEyeSlash,
 } from '@fortawesome/free-solid-svg-icons'
 
 library.add(
@@ -52,5 +54,7 @@ library.add(
   faFilter,
   faChevronUp,
   faChevronDown,
-  faClock
+  faClock,
+  faEye,
+  faEyeSlash
 )

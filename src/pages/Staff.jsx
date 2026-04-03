@@ -6,6 +6,12 @@ import { mockLeave } from '../data/mockLeave'
 import { mockStaff } from '../data/mockRota'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { useLocalStorage } from '../hooks/useLocalStorage'
+import {
+  loadRequests,
+  updateRequest,
+  getPendingRequests,
+  getAllRequests,
+} from '../utils/cancelRequests'
 
 const ROLE_LABELS = {
   manager: 'Manager',
@@ -30,6 +36,13 @@ function Staff() {
   const [selectedStaff, setSelectedStaff] = useState(null)
   const [approvedIds, setApprovedIds] = useLocalStorage('rotapp_approved', [])
   const [declinedIds, setDeclinedIds] = useLocalStorage('rotapp_declined', [])
+
+  // Request states
+  const [requests, setRequests] = useState(() => loadRequests())
+  const [selectedRequest, setSelectedRequest] = useState(null)
+  const [rejectionReason, setRejectionReason] = useState('')
+  const [managerNotes, setManagerNotes] = useState('')
+  const [showRejectModal, setShowRejectModal] = useState(false)
 
   const homeStaff = mockUsers
     .filter(
@@ -67,6 +80,69 @@ function Staff() {
   const handleDecline = (id) => {
     setDeclinedIds((prev) => [...prev, id])
     setSelectedStaff(null)
+  }
+
+  // Refresh requests list
+  const refreshRequests = () => {
+    setRequests(loadRequests())
+  }
+
+  // Handle approve request
+  const handleApproveRequest = (request) => {
+    updateRequest(request.id, {
+      status: 'approved',
+      reviewedAt: new Date().toISOString(),
+      reviewedBy: user?.name,
+      managerNotes: managerNotes || null,
+    })
+
+    // Simulated notifications
+    console.log(
+      `[SIMULATED] Shift removed from rota: ${request.staffName} - ${request.shiftDate} ${request.shiftType}`
+    )
+    console.log(`[SIMULATED] Gap notification sent to manager`)
+    console.log(
+      `[SIMULATED] Staff ${request.staffName} notified: Your cancellation request has been APPROVED`
+    )
+
+    if (managerNotes) {
+      console.log(`[SIMULATED] Manager notes sent to staff: ${managerNotes}`)
+    }
+
+    refreshRequests()
+    setSelectedRequest(null)
+    setManagerNotes('')
+  }
+
+  // Handle reject request
+  const handleRejectRequest = (request) => {
+    updateRequest(request.id, {
+      status: 'rejected',
+      reviewedAt: new Date().toISOString(),
+      reviewedBy: user?.name,
+      rejectionReason: rejectionReason || null,
+      managerNotes: managerNotes || null,
+    })
+
+    // Simulated notifications
+    console.log(
+      `[SIMULATED] Shift remains in rota: ${request.staffName} - ${request.shiftDate} ${request.shiftType}`
+    )
+    console.log(
+      `[SIMULATED] Staff ${request.staffName} notified: Your cancellation request has been REJECTED`
+    )
+    if (rejectionReason) {
+      console.log(`[SIMULATED] Rejection reason: ${rejectionReason}`)
+    }
+    if (managerNotes) {
+      console.log(`[SIMULATED] Manager notes: ${managerNotes}`)
+    }
+
+    refreshRequests()
+    setSelectedRequest(null)
+    setRejectionReason('')
+    setManagerNotes('')
+    setShowRejectModal(false)
   }
 
   return (
@@ -134,6 +210,10 @@ function Staff() {
             { key: 'pending', label: `Pending (${pending.length})` },
             { key: 'relief', label: `Relief pool (${reliefPool.length})` },
             { key: 'leave', label: 'Leave & Absence' },
+            {
+              key: 'requests',
+              label: `Requests (${getPendingRequests().length})`,
+            },
           ].map((t) => (
             <button
               key={t.key}
@@ -151,96 +231,99 @@ function Staff() {
         </div>
 
         {/* Staff list */}
-        <div style={s.list}>
-          {displayed.length === 0 && (
-            <div style={s.empty}>No staff in this category</div>
-          )}
-          {displayed.map((member) => (
-            <div
-              key={member.id}
-              style={{
-                ...s.staffRow,
-                background:
-                  member.status === 'pending'
-                    ? 'rgba(196,136,58,0.04)'
-                    : '#161820',
-                border:
-                  member.status === 'pending'
-                    ? '1px solid rgba(196,136,58,0.2)'
-                    : '1px solid rgba(255,255,255,0.07)',
-              }}
-              onClick={() => setSelectedStaff(member)}
-            >
-              {/* Avatar */}
+        {tab !== 'leave' && tab !== 'requests' && (
+          <div style={s.list}>
+            {displayed.length === 0 && (
+              <div style={s.empty}>No staff in this category</div>
+            )}
+            {displayed.map((member) => (
               <div
+                key={member.id}
                 style={{
-                  ...s.avatar,
+                  ...s.staffRow,
                   background:
-                    member.gender === 'F'
-                      ? 'rgba(122,79,168,0.2)'
-                      : 'rgba(108,143,255,0.15)',
-                  color: member.gender === 'F' ? '#7a4fa8' : '#6c8fff',
+                    member.status === 'pending'
+                      ? 'rgba(196,136,58,0.04)'
+                      : '#161820',
+                  border:
+                    member.status === 'pending'
+                      ? '1px solid rgba(196,136,58,0.2)'
+                      : '1px solid rgba(255,255,255,0.07)',
                 }}
+                onClick={() => setSelectedStaff(member)}
               >
-                {member.name
-                  .split(' ')
-                  .map((n) => n[0])
-                  .join('')}
-              </div>
-
-              {/* Info */}
-              <div style={s.staffInfo}>
-                <div style={s.staffName}>{member.name}</div>
-                <div style={s.staffMeta}>
-                  {ROLE_LABELS[member.role] || member.role}
-                  {member.driver && ' · 🚗 Driver'}
-                  {member.home === null && ' · Relief pool'}
-                </div>
-              </div>
-
-              {/* Tags */}
-              <div style={s.staffTags}>
-                {member.gender && (
-                  <span style={s.tag}>
-                    {member.gender === 'F' ? 'Female' : 'Male'}
-                  </span>
-                )}
-                <span
+                {/* Avatar */}
+                <div
                   style={{
-                    ...s.tag,
-                    background: STATUS_COLORS[member.status]?.bg,
-                    color: STATUS_COLORS[member.status]?.color,
+                    ...s.avatar,
+                    background:
+                      member.gender === 'F'
+                        ? 'rgba(122,79,168,0.2)'
+                        : 'rgba(108,143,255,0.15)',
+                    color: member.gender === 'F' ? '#7a4fa8' : '#6c8fff',
                   }}
                 >
-                  {member.status}
-                </span>
-              </div>
-
-              {/* Pending actions */}
-              {member.status === 'pending' && (
-                <div
-                  style={s.pendingActions}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <button
-                    style={s.approveBtn}
-                    onClick={() => handleApprove(member.id)}
-                  >
-                    Approve
-                  </button>
-                  <button
-                    style={s.declineBtn}
-                    onClick={() => handleDecline(member.id)}
-                  >
-                    Decline
-                  </button>
+                  {member.name
+                    .split(' ')
+                    .map((n) => n[0])
+                    .join('')}
                 </div>
-              )}
 
-              <div style={s.chevron}>›</div>
-            </div>
-          ))}
-        </div>
+                {/* Info */}
+                <div style={s.staffInfo}>
+                  <div style={s.staffName}>{member.name}</div>
+                  <div style={s.staffMeta}>
+                    {ROLE_LABELS[member.role] || member.role}
+                    {member.driver && ' · 🚗 Driver'}
+                    {member.home === null && ' · Relief pool'}
+                  </div>
+                </div>
+
+                {/* Tags */}
+                <div style={s.staffTags}>
+                  {member.gender && (
+                    <span style={s.tag}>
+                      {member.gender === 'F' ? 'Female' : 'Male'}
+                    </span>
+                  )}
+                  <span
+                    style={{
+                      ...s.tag,
+                      background: STATUS_COLORS[member.status]?.bg,
+                      color: STATUS_COLORS[member.status]?.color,
+                    }}
+                  >
+                    {member.status}
+                  </span>
+                </div>
+
+                {/* Pending actions */}
+                {member.status === 'pending' && (
+                  <div
+                    style={s.pendingActions}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <button
+                      style={s.approveBtn}
+                      onClick={() => handleApprove(member.id)}
+                    >
+                      Approve
+                    </button>
+                    <button
+                      style={s.declineBtn}
+                      onClick={() => handleDecline(member.id)}
+                    >
+                      Decline
+                    </button>
+                  </div>
+                )}
+
+                <div style={s.chevron}>›</div>
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* Leave tab */}
         {tab === 'leave' && (
           <div style={s.leaveWrap}>
@@ -296,6 +379,142 @@ function Staff() {
                   </div>
                 )
               })}
+          </div>
+        )}
+
+        {/* Requests tab */}
+        {tab === 'requests' && (
+          <div style={s.requestsWrap}>
+            {getPendingRequests().length === 0 &&
+            getAllRequests().length === 0 ? (
+              <div style={s.empty}>No cancellation requests</div>
+            ) : (
+              <>
+                {/* Pending requests section */}
+                {getPendingRequests().length > 0 && (
+                  <>
+                    <div style={s.sectionLabel}>Pending Requests</div>
+                    {getPendingRequests().map((request) => (
+                      <div key={request.id} style={s.requestCard}>
+                        <div style={s.requestHeader}>
+                          <div style={s.requestStaff}>{request.staffName}</div>
+                          <div style={s.requestStatus}>pending</div>
+                        </div>
+                        <div style={s.requestDetails}>
+                          <div>
+                            {request.shiftDate} · {request.shiftType} shift
+                          </div>
+                          <div>
+                            Reason:{' '}
+                            {request.reason === 'Other'
+                              ? request.customReason
+                              : request.reason}
+                          </div>
+                          <div style={s.requestTime}>
+                            Requested:{' '}
+                            {new Date(request.requestedAt).toLocaleString()}
+                          </div>
+                        </div>
+                        <div style={s.requestActions}>
+                          <button
+                            style={s.approveRequestBtn}
+                            onClick={() => setSelectedRequest(request)}
+                          >
+                            <FontAwesomeIcon icon='check' /> Approve
+                          </button>
+                          <button
+                            style={s.rejectRequestBtn}
+                            onClick={() => {
+                              setSelectedRequest(request)
+                              setShowRejectModal(true)
+                            }}
+                          >
+                            <FontAwesomeIcon icon='xmark' /> Reject
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </>
+                )}
+
+                {/* History section (approved/rejected/withdrawn) */}
+                {getAllRequests().filter((r) => r.status !== 'pending').length >
+                  0 && (
+                  <>
+                    <div style={{ ...s.sectionLabel, marginTop: '24px' }}>
+                      History
+                    </div>
+                    {getAllRequests()
+                      .filter((r) => r.status !== 'pending')
+                      .sort(
+                        (a, b) =>
+                          new Date(b.requestedAt) - new Date(a.requestedAt)
+                      )
+                      .map((request) => (
+                        <div key={request.id} style={s.requestCardHistory}>
+                          <div style={s.requestHeader}>
+                            <div style={s.requestStaff}>
+                              {request.staffName}
+                            </div>
+                            <div
+                              style={{
+                                ...s.requestStatus,
+                                background:
+                                  request.status === 'approved'
+                                    ? 'rgba(46,204,138,0.12)'
+                                    : request.status === 'rejected'
+                                      ? 'rgba(232,92,61,0.12)'
+                                      : 'rgba(108,143,255,0.12)',
+                                color:
+                                  request.status === 'approved'
+                                    ? '#2ecc8a'
+                                    : request.status === 'rejected'
+                                      ? '#e85c3d'
+                                      : '#6c8fff',
+                              }}
+                            >
+                              {request.status}
+                            </div>
+                          </div>
+                          <div style={s.requestDetails}>
+                            <div>
+                              {request.shiftDate} · {request.shiftType} shift
+                            </div>
+                            <div>
+                              Reason:{' '}
+                              {request.reason === 'Other'
+                                ? request.customReason
+                                : request.reason}
+                            </div>
+                            {request.rejectionReason && (
+                              <div
+                                style={{ color: '#e85c3d', fontSize: '12px' }}
+                              >
+                                Rejection reason: {request.rejectionReason}
+                              </div>
+                            )}
+                            {request.managerNotes && (
+                              <div
+                                style={{ color: '#6c8fff', fontSize: '12px' }}
+                              >
+                                Manager notes: {request.managerNotes}
+                              </div>
+                            )}
+                            <div style={s.requestTime}>
+                              Requested:{' '}
+                              {new Date(request.requestedAt).toLocaleString()}
+                              {request.reviewedAt &&
+                                ` · Reviewed: ${new Date(request.reviewedAt).toLocaleString()}`}
+                              {request.withdrawnAt &&
+                                ` · Withdrawn: ${new Date(request.withdrawnAt).toLocaleString()}`}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                  </>
+                )}
+              </>
+            )}
           </div>
         )}
       </div>
@@ -398,6 +617,7 @@ function Staff() {
           </div>
         </div>
       )}
+
       {/* Add leave modal */}
       {leaveStaff && (
         <div style={s.overlay} onClick={() => setLeaveStaff(null)}>
@@ -495,6 +715,165 @@ function Staff() {
           </div>
         </div>
       )}
+
+      {/* Approve request modal */}
+      {selectedRequest && !showRejectModal && (
+        <div style={s.overlay} onClick={() => setSelectedRequest(null)}>
+          <div style={s.modal} onClick={(e) => e.stopPropagation()}>
+            <div style={s.modalHeader}>
+              <div style={s.modalTitle}>Approve Cancellation</div>
+              <button
+                style={s.closeBtn}
+                onClick={() => setSelectedRequest(null)}
+              >
+                <FontAwesomeIcon icon='xmark' />
+              </button>
+            </div>
+            <div style={s.modalBody}>
+              <div style={s.detailRow}>
+                <span style={s.detailLabel}>Staff</span>
+                <span style={s.detailVal}>{selectedRequest.staffName}</span>
+              </div>
+              <div style={s.detailRow}>
+                <span style={s.detailLabel}>Shift</span>
+                <span style={s.detailVal}>
+                  {selectedRequest.shiftDate} · {selectedRequest.shiftType}
+                </span>
+              </div>
+              <div style={s.detailRow}>
+                <span style={s.detailLabel}>Reason</span>
+                <span style={s.detailVal}>
+                  {selectedRequest.reason === 'Other'
+                    ? selectedRequest.customReason
+                    : selectedRequest.reason}
+                </span>
+              </div>
+              <div style={s.field}>
+                <label style={s.detailLabel}>Notes to staff (optional)</label>
+                <textarea
+                  style={s.textarea}
+                  placeholder='Add any notes for the staff member...'
+                  value={managerNotes}
+                  onChange={(e) => setManagerNotes(e.target.value)}
+                  rows='3'
+                />
+              </div>
+              <div style={s.warningNote}>
+                <FontAwesomeIcon icon='triangle-exclamation' /> Approving will
+                remove this shift from the rota and create a gap.
+              </div>
+            </div>
+            <div style={s.modalFooter}>
+              <button
+                style={s.secondaryBtn}
+                onClick={() => setSelectedRequest(null)}
+              >
+                Cancel
+              </button>
+              <button
+                style={s.approveBtn}
+                onClick={() => handleApproveRequest(selectedRequest)}
+              >
+                <FontAwesomeIcon icon='check' /> Approve & Remove Shift
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reject request modal */}
+      {showRejectModal && selectedRequest && (
+        <div
+          style={s.overlay}
+          onClick={() => {
+            setShowRejectModal(false)
+            setSelectedRequest(null)
+            setRejectionReason('')
+            setManagerNotes('')
+          }}
+        >
+          <div style={s.modal} onClick={(e) => e.stopPropagation()}>
+            <div style={s.modalHeader}>
+              <div style={s.modalTitle}>Reject Cancellation</div>
+              <button
+                style={s.closeBtn}
+                onClick={() => {
+                  setShowRejectModal(false)
+                  setSelectedRequest(null)
+                  setRejectionReason('')
+                  setManagerNotes('')
+                }}
+              >
+                <FontAwesomeIcon icon='xmark' />
+              </button>
+            </div>
+            <div style={s.modalBody}>
+              <div style={s.detailRow}>
+                <span style={s.detailLabel}>Staff</span>
+                <span style={s.detailVal}>{selectedRequest.staffName}</span>
+              </div>
+              <div style={s.detailRow}>
+                <span style={s.detailLabel}>Shift</span>
+                <span style={s.detailVal}>
+                  {selectedRequest.shiftDate} · {selectedRequest.shiftType}
+                </span>
+              </div>
+              <div style={s.detailRow}>
+                <span style={s.detailLabel}>Reason</span>
+                <span style={s.detailVal}>
+                  {selectedRequest.reason === 'Other'
+                    ? selectedRequest.customReason
+                    : selectedRequest.reason}
+                </span>
+              </div>
+              <div style={s.field}>
+                <label style={s.detailLabel}>Rejection reason (optional)</label>
+                <textarea
+                  style={s.textarea}
+                  placeholder='Why is this cancellation being rejected? (optional but recommended)'
+                  value={rejectionReason}
+                  onChange={(e) => setRejectionReason(e.target.value)}
+                  rows='2'
+                />
+              </div>
+              <div style={s.field}>
+                <label style={s.detailLabel}>Notes to staff (optional)</label>
+                <textarea
+                  style={s.textarea}
+                  placeholder='Add any additional notes...'
+                  value={managerNotes}
+                  onChange={(e) => setManagerNotes(e.target.value)}
+                  rows='2'
+                />
+              </div>
+              <div style={s.warningNote}>
+                <FontAwesomeIcon icon='triangle-exclamation' /> Rejecting means
+                the shift remains in the rota. The staff member will be
+                notified.
+              </div>
+            </div>
+            <div style={s.modalFooter}>
+              <button
+                style={s.secondaryBtn}
+                onClick={() => {
+                  setShowRejectModal(false)
+                  setSelectedRequest(null)
+                  setRejectionReason('')
+                  setManagerNotes('')
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                style={s.rejectBtn}
+                onClick={() => handleRejectRequest(selectedRequest)}
+              >
+                <FontAwesomeIcon icon='xmark' /> Reject Request
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -565,6 +944,7 @@ const s = {
     gap: '0',
     borderBottom: '1px solid rgba(255,255,255,0.07)',
     marginBottom: '16px',
+    flexWrap: 'wrap',
   },
   tabBtn: {
     padding: '10px 14px',
@@ -753,6 +1133,7 @@ const s = {
     border: '1px solid rgba(255,255,255,0.07)',
     borderRadius: '12px',
     padding: '14px 16px',
+    flexWrap: 'wrap',
   },
   leaveStaffInfo: { minWidth: '120px' },
   leaveDates: { flex: 1, display: 'flex', flexWrap: 'wrap', gap: '6px' },
@@ -800,17 +1181,6 @@ const s = {
     width: '100%',
   },
   field: { display: 'flex', flexDirection: 'column' },
-  primaryBtn: {
-    background: '#6c8fff',
-    color: '#fff',
-    border: 'none',
-    borderRadius: '8px',
-    padding: '9px 16px',
-    fontSize: '13px',
-    fontWeight: 500,
-    cursor: 'pointer',
-    fontFamily: 'DM Sans, sans-serif',
-  },
   secondaryBtn: {
     background: 'transparent',
     color: '#9499b0',
@@ -820,6 +1190,157 @@ const s = {
     fontSize: '13px',
     cursor: 'pointer',
     fontFamily: 'DM Sans, sans-serif',
+  },
+  requestsWrap: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '16px',
+  },
+  sectionLabel: {
+    fontSize: '11px',
+    textTransform: 'uppercase',
+    letterSpacing: '0.8px',
+    color: '#5d6180',
+    fontWeight: 500,
+    marginBottom: '8px',
+  },
+  requestCard: {
+    background: '#161820',
+    border: '1px solid rgba(196,136,58,0.2)',
+    borderRadius: '12px',
+    padding: '16px',
+  },
+  requestCardHistory: {
+    background: '#161820',
+    border: '1px solid rgba(255,255,255,0.07)',
+    borderRadius: '12px',
+    padding: '16px',
+  },
+  requestHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: '10px',
+  },
+  requestStaff: {
+    fontSize: '14px',
+    fontWeight: 600,
+    color: '#e8eaf0',
+  },
+  requestStatus: {
+    fontSize: '11px',
+    fontWeight: 500,
+    padding: '3px 10px',
+    borderRadius: '5px',
+    background: 'rgba(196,136,58,0.12)',
+    color: '#c4883a',
+    textTransform: 'uppercase',
+  },
+  requestDetails: {
+    fontSize: '13px',
+    color: '#9499b0',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '4px',
+    marginBottom: '12px',
+  },
+  requestTime: {
+    fontSize: '11px',
+    color: '#5d6180',
+    marginTop: '4px',
+  },
+  requestActions: {
+    display: 'flex',
+    gap: '8px',
+  },
+  approveRequestBtn: {
+    flex: 1,
+    background: 'rgba(46,204,138,0.12)',
+    border: '1px solid rgba(46,204,138,0.25)',
+    borderRadius: '8px',
+    color: '#2ecc8a',
+    padding: '8px',
+    fontSize: '12px',
+    fontWeight: 500,
+    cursor: 'pointer',
+    fontFamily: 'DM Sans, sans-serif',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '6px',
+  },
+  rejectRequestBtn: {
+    flex: 1,
+    background: 'rgba(232,92,61,0.1)',
+    border: '1px solid rgba(232,92,61,0.25)',
+    borderRadius: '8px',
+    color: '#e85c3d',
+    padding: '8px',
+    fontSize: '12px',
+    fontWeight: 500,
+    cursor: 'pointer',
+    fontFamily: 'DM Sans, sans-serif',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '6px',
+  },
+  approveBtnLarge: {
+    background: '#2ecc8a',
+    color: '#fff',
+    border: 'none',
+    borderRadius: '8px',
+    padding: '9px 16px',
+    fontSize: '13px',
+    fontWeight: 500,
+    cursor: 'pointer',
+    fontFamily: 'DM Sans, sans-serif',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+  },
+  rejectBtn: {
+    background: 'rgba(232,92,61,0.15)',
+    border: '1px solid rgba(232,92,61,0.3)',
+    borderRadius: '8px',
+    color: '#e85c3d',
+    padding: '9px 16px',
+    fontSize: '13px',
+    fontWeight: 500,
+    cursor: 'pointer',
+    fontFamily: 'DM Sans, sans-serif',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+  },
+  warningNote: {
+    marginTop: '12px',
+    padding: '10px',
+    background: 'rgba(232,92,61,0.08)',
+    border: '1px solid rgba(232,92,61,0.2)',
+    borderRadius: '8px',
+    fontSize: '12px',
+    color: '#e85c3d',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+  },
+  textarea: {
+    background: '#1d1f2b',
+    border: '1px solid rgba(255,255,255,0.08)',
+    borderRadius: '10px',
+    padding: '11px 14px',
+    fontSize: '13px',
+    color: '#e8eaf0',
+    outline: 'none',
+    fontFamily: 'DM Sans, sans-serif',
+    width: '100%',
+    resize: 'vertical',
+  },
+  staffRole: {
+    fontSize: '11px',
+    color: '#9499b0',
+    fontFamily: 'DM Mono, monospace',
   },
 }
 
