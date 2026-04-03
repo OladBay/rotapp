@@ -71,6 +71,9 @@ export function isSameDay(a, b) {
 }
 
 export function dateKey(date) {
+  if (!date || !(date instanceof Date) || isNaN(date)) {
+    return ''
+  }
   return date.toISOString().split('T')[0]
 }
 

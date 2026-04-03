@@ -18,6 +18,11 @@ import {
   isSameDay,
   dateKey,
 } from '../utils/dateUtils'
+import {
+  calculateStaffHoursForWeek,
+  calculateStaffHoursForMonth,
+  getWeeksInMonth,
+} from '../utils/hoursCalculator'
 
 const TODAY = new Date()
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
@@ -596,175 +601,365 @@ function Rota() {
 
         {/* WEEK VIEW */}
         {viewMode === 'week' && (
-          <div style={s.gridWrap}>
-            <div
-              style={{
-                ...s.grid,
-                gridTemplateColumns: '120px repeat(7, 1fr)',
-              }}
-            >
-              {/* Header row */}
-              <div style={s.colLabel} />
-              {DAYS.map((day, i) => (
-                <div
-                  key={i}
-                  style={{
-                    ...s.dayHeader,
-                    background: isSameDay(weekDates[i], TODAY)
-                      ? 'rgba(108,143,255,0.06)'
-                      : 'transparent',
-                  }}
-                >
-                  <div
-                    style={{
-                      ...s.dayName,
-                      color: isSameDay(weekDates[i], TODAY)
-                        ? '#6c8fff'
-                        : '#9499b0',
-                    }}
-                  >
-                    {day}
-                  </div>
-                  <div
-                    style={{
-                      ...s.dayDate,
-                      color: isSameDay(weekDates[i], TODAY)
-                        ? '#6c8fff'
-                        : '#e8eaf0',
-                    }}
-                  >
-                    {formatShort(weekDates[i])}
-                  </div>
-                  {canSeeGaps && getViolations(i).length > 0 && (
-                    <div
-                      style={s.violationDot}
-                      title={getViolations(i).join(', ')}
-                    />
-                  )}
-                </div>
-              ))}
-
-              {/* Early row */}
-              <div style={s.shiftLabel}>
-                <div style={s.shiftName}>Early</div>
-                <div style={s.shiftTime}>07:00–14:30</div>
-              </div>
-              {DAYS.map((_, dayIdx) => {
-                const staffList = currentRotaForWeek.early[dayIdx] || []
-                const isGap = canSeeGaps && staffList.length < 3
-                return (
-                  <div
-                    key={dayIdx}
-                    style={{
-                      ...s.cell,
-                      background: isGap
-                        ? 'rgba(232,92,61,0.06)'
-                        : 'transparent',
-                      cursor: canEdit ? 'pointer' : 'default',
-                    }}
-                    onClick={() =>
-                      canEdit && setEditCell({ day: dayIdx, shift: 'early' })
-                    }
-                  >
-                    {staffList.map((entry) => {
-                      const st = staffMap[entry.id]
-                      if (!st) return null
-                      return (
-                        <div key={entry.id} style={s.chipEarly}>
-                          <span style={s.chipName}>
-                            {st.name.split(' ')[0]}
-                          </span>
-                          <span style={s.chipRole}>{st.roleCode}</span>
-                        </div>
-                      )
-                    })}
-                    {isGap && <div style={s.gapTag}>GAP</div>}
-                    {canEdit && <div style={s.addBtn}>+ Add</div>}
-                  </div>
-                )
-              })}
-
-              {/* Late row */}
-              <div style={s.shiftLabel}>
-                <div style={s.shiftName}>Late</div>
-                <div style={s.shiftTime}>14:00–23:00</div>
-              </div>
-              {DAYS.map((_, dayIdx) => {
-                const staffList = currentRotaForWeek.late[dayIdx] || []
-                const isGap = canSeeGaps && staffList.length < 3
-                const sleepCount = staffList.filter((e) => e.sleepIn).length
-                return (
-                  <div
-                    key={dayIdx}
-                    style={{
-                      ...s.cell,
-                      background: isGap
-                        ? 'rgba(232,92,61,0.06)'
-                        : 'transparent',
-                      cursor: canEdit ? 'pointer' : 'default',
-                    }}
-                    onClick={() =>
-                      canEdit && setEditCell({ day: dayIdx, shift: 'late' })
-                    }
-                  >
-                    {staffList.map((entry) => {
-                      const st = staffMap[entry.id]
-                      if (!st) return null
-                      return (
-                        <div key={entry.id} style={s.chipLate}>
-                          <span style={s.chipName}>
-                            {st.name.split(' ')[0]}
-                          </span>
-                          <span style={s.chipRole}>{st.roleCode}</span>
-                          {entry.sleepIn && (
-                            <FontAwesomeIcon
-                              icon='moon'
-                              style={{ fontSize: '9px', color: '#c4883a' }}
-                            />
-                          )}
-                        </div>
-                      )
-                    })}
-                    {canSeeGaps && sleepCount < 2 && (
-                      <div style={s.sleepWarn}>
-                        <FontAwesomeIcon icon='triangle-exclamation' />{' '}
-                        {sleepCount}/2 sleep-ins
-                      </div>
-                    )}
-                    {isGap && <div style={s.gapTag}>GAP</div>}
-                    {canEdit && <div style={s.addBtn}>+ Add</div>}
-                  </div>
-                )
-              })}
-
-              {/* On-call row */}
+          <>
+            <div style={s.gridWrap}>
               <div
                 style={{
-                  ...s.shiftLabel,
-                  background: 'rgba(58,138,196,0.06)',
+                  ...s.grid,
+                  gridTemplateColumns: '120px repeat(7, 1fr)',
                 }}
               >
-                <div style={{ ...s.shiftName, color: '#3a8ac4' }}>On-call</div>
-                <div style={s.shiftTime}>parallel</div>
-              </div>
-              {DAYS.map((_, dayIdx) => (
-                <div
-                  key={dayIdx}
-                  style={{ ...s.cell, background: 'rgba(58,138,196,0.04)' }}
-                >
-                  {(currentRotaForWeek.onCall[dayIdx] || []).map((id) => {
-                    const st = staffMap[id]
-                    if (!st) return null
-                    return (
-                      <div key={id} style={s.chipOncall}>
-                        {st.name.split(' ')[0]}
-                      </div>
-                    )
-                  })}
+                {/* Header row */}
+                <div style={s.colLabel} />
+                {DAYS.map((day, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      ...s.dayHeader,
+                      background: isSameDay(weekDates[i], TODAY)
+                        ? 'rgba(108,143,255,0.06)'
+                        : 'transparent',
+                    }}
+                  >
+                    <div
+                      style={{
+                        ...s.dayName,
+                        color: isSameDay(weekDates[i], TODAY)
+                          ? '#6c8fff'
+                          : '#9499b0',
+                      }}
+                    >
+                      {day}
+                    </div>
+                    <div
+                      style={{
+                        ...s.dayDate,
+                        color: isSameDay(weekDates[i], TODAY)
+                          ? '#6c8fff'
+                          : '#e8eaf0',
+                      }}
+                    >
+                      {formatShort(weekDates[i])}
+                    </div>
+                    {canSeeGaps && getViolations(i).length > 0 && (
+                      <div
+                        style={s.violationDot}
+                        title={getViolations(i).join(', ')}
+                      />
+                    )}
+                  </div>
+                ))}
+
+                {/* Early row */}
+                <div style={s.shiftLabel}>
+                  <div style={s.shiftName}>Early</div>
+                  <div style={s.shiftTime}>07:00–14:30</div>
                 </div>
-              ))}
+                {DAYS.map((_, dayIdx) => {
+                  const staffList = currentRotaForWeek.early[dayIdx] || []
+                  const isGap = canSeeGaps && staffList.length < 3
+                  return (
+                    <div
+                      key={dayIdx}
+                      style={{
+                        ...s.cell,
+                        background: isGap
+                          ? 'rgba(232,92,61,0.06)'
+                          : 'transparent',
+                        cursor: canEdit ? 'pointer' : 'default',
+                      }}
+                      onClick={() =>
+                        canEdit && setEditCell({ day: dayIdx, shift: 'early' })
+                      }
+                    >
+                      {staffList.map((entry) => {
+                        const st = staffMap[entry.id]
+                        if (!st) return null
+                        return (
+                          <div key={entry.id} style={s.chipEarly}>
+                            <span style={s.chipName}>
+                              {st.name.split(' ')[0]}
+                            </span>
+                            <span style={s.chipRole}>{st.roleCode}</span>
+                          </div>
+                        )
+                      })}
+                      {isGap && <div style={s.gapTag}>GAP</div>}
+                      {canEdit && <div style={s.addBtn}>+ Add</div>}
+                    </div>
+                  )
+                })}
+
+                {/* Late row */}
+                <div style={s.shiftLabel}>
+                  <div style={s.shiftName}>Late</div>
+                  <div style={s.shiftTime}>14:00–23:00</div>
+                </div>
+                {DAYS.map((_, dayIdx) => {
+                  const staffList = currentRotaForWeek.late[dayIdx] || []
+                  const isGap = canSeeGaps && staffList.length < 3
+                  const sleepCount = staffList.filter((e) => e.sleepIn).length
+                  return (
+                    <div
+                      key={dayIdx}
+                      style={{
+                        ...s.cell,
+                        background: isGap
+                          ? 'rgba(232,92,61,0.06)'
+                          : 'transparent',
+                        cursor: canEdit ? 'pointer' : 'default',
+                      }}
+                      onClick={() =>
+                        canEdit && setEditCell({ day: dayIdx, shift: 'late' })
+                      }
+                    >
+                      {staffList.map((entry) => {
+                        const st = staffMap[entry.id]
+                        if (!st) return null
+                        return (
+                          <div key={entry.id} style={s.chipLate}>
+                            <span style={s.chipName}>
+                              {st.name.split(' ')[0]}
+                            </span>
+                            <span style={s.chipRole}>{st.roleCode}</span>
+                            {entry.sleepIn && (
+                              <FontAwesomeIcon
+                                icon='moon'
+                                style={{ fontSize: '9px', color: '#c4883a' }}
+                              />
+                            )}
+                          </div>
+                        )
+                      })}
+                      {canSeeGaps && sleepCount < 2 && (
+                        <div style={s.sleepWarn}>
+                          <FontAwesomeIcon icon='triangle-exclamation' />{' '}
+                          {sleepCount}/2 sleep-ins
+                        </div>
+                      )}
+                      {isGap && <div style={s.gapTag}>GAP</div>}
+                      {canEdit && <div style={s.addBtn}>+ Add</div>}
+                    </div>
+                  )
+                })}
+
+                {/* On-call row */}
+                <div
+                  style={{
+                    ...s.shiftLabel,
+                    background: 'rgba(58,138,196,0.06)',
+                  }}
+                >
+                  <div style={{ ...s.shiftName, color: '#3a8ac4' }}>
+                    On-call
+                  </div>
+                  <div style={s.shiftTime}>parallel</div>
+                </div>
+                {DAYS.map((_, dayIdx) => (
+                  <div
+                    key={dayIdx}
+                    style={{ ...s.cell, background: 'rgba(58,138,196,0.04)' }}
+                  >
+                    {(currentRotaForWeek.onCall[dayIdx] || []).map((id) => {
+                      const st = staffMap[id]
+                      if (!st) return null
+                      return (
+                        <div key={id} style={s.chipOncall}>
+                          {st.name.split(' ')[0]}
+                        </div>
+                      )
+                    })}
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
+
+            {/* Staff Hours Summary Table */}
+            <div style={s.summarySection}>
+              <div style={s.summaryHeader}>
+                <div style={s.summaryTitle}>
+                  <FontAwesomeIcon icon='clock' /> Staff Hours Summary
+                </div>
+                <div style={s.summarySubtitle}>
+                  Permanent staff only · Sorted by weekly shortfall
+                </div>
+              </div>
+
+              <div style={s.tableWrap}>
+                <table style={s.summaryTable}>
+                  <thead>
+                    <tr style={s.tableHeaderRow}>
+                      <th style={s.tableHeader}>Staff</th>
+                      <th style={s.tableHeader}>This week</th>
+                      <th style={s.tableHeader}>Contracted</th>
+                      <th style={s.tableHeader}>Variance</th>
+                      <th style={s.tableHeader}>This month</th>
+                      <th style={s.tableHeader}>Contracted</th>
+                      <th style={s.tableHeader}>Variance</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(() => {
+                      // Get permanent staff (RCW and Senior only)
+                      const permanentStaff = mockStaff.filter(
+                        (staff) =>
+                          staff.role === 'rcw' || staff.role === 'senior'
+                      )
+
+                      // Calculate hours for each staff member
+                      const currentMonth = currentMonday.getMonth()
+                      const currentYearNum = currentMonday.getFullYear()
+                      const weeksInMonth = getWeeksInMonth(
+                        currentYearNum,
+                        currentMonth
+                      )
+                      const contractedMonth = weeksInMonth * 37
+
+                      const staffHours = permanentStaff.map((staff) => {
+                        const weekHours = calculateStaffHoursForWeek(
+                          staff.id,
+                          currentRotaForWeek,
+                          currentMonday,
+                          leaveData
+                        )
+                        const weekVariance = weekHours - 37
+                        const monthHours = calculateStaffHoursForMonth(
+                          staff.id,
+                          currentYearNum,
+                          currentMonth,
+                          monthRota,
+                          currentRotaForWeek,
+                          leaveData
+                        )
+                        const monthVariance = monthHours - contractedMonth
+
+                        return {
+                          ...staff,
+                          weekHours,
+                          weekVariance,
+                          monthHours,
+                          monthVariance,
+                        }
+                      })
+
+                      // Sort by weekly shortfall (most negative first)
+                      const sortedStaff = [...staffHours].sort(
+                        (a, b) => a.weekVariance - b.weekVariance
+                      )
+
+                      return sortedStaff.map((staff) => {
+                        const isUnderWeek = staff.weekVariance < 0
+                        const isUnderMonth = staff.monthVariance < 0
+
+                        return (
+                          <tr key={staff.id} style={s.tableRow}>
+                            <td style={s.tableCell}>
+                              <div style={s.staffCell}>
+                                <div
+                                  style={{
+                                    ...s.staffAvatar,
+                                    background:
+                                      staff.gender === 'F'
+                                        ? 'rgba(122,79,168,0.2)'
+                                        : 'rgba(108,143,255,0.15)',
+                                    color:
+                                      staff.gender === 'F'
+                                        ? '#7a4fa8'
+                                        : '#6c8fff',
+                                  }}
+                                >
+                                  {staff.name
+                                    .split(' ')
+                                    .map((n) => n[0])
+                                    .join('')}
+                                </div>
+                                <div>
+                                  <div style={s.staffCellName}>
+                                    {staff.name}
+                                  </div>
+                                  <div style={s.staffCellRole}>
+                                    {staff.roleCode}
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+
+                            <td style={s.tableCell}>
+                              <span style={s.hoursValue}>
+                                {staff.weekHours.toFixed(1)}h
+                              </span>
+                            </td>
+
+                            <td style={s.tableCell}>
+                              <span style={s.contractedValue}>37h</span>
+                            </td>
+
+                            <td style={s.tableCell}>
+                              <span
+                                style={{
+                                  ...s.varianceValue,
+                                  color: isUnderWeek
+                                    ? '#e85c3d'
+                                    : staff.weekVariance > 0
+                                      ? '#2ecc8a'
+                                      : '#9499b0',
+                                  background: isUnderWeek
+                                    ? 'rgba(232,92,61,0.1)'
+                                    : 'transparent',
+                                  padding: isUnderWeek ? '2px 8px' : '0',
+                                  borderRadius: '4px',
+                                }}
+                              >
+                                {staff.weekVariance > 0 ? '+' : ''}
+                                {staff.weekVariance.toFixed(1)}h
+                                {isUnderWeek && (
+                                  <FontAwesomeIcon
+                                    icon='triangle-exclamation'
+                                    style={{
+                                      marginLeft: '6px',
+                                      fontSize: '10px',
+                                    }}
+                                  />
+                                )}
+                              </span>
+                            </td>
+
+                            <td style={s.tableCell}>
+                              <span style={s.hoursValue}>
+                                {staff.monthHours.toFixed(1)}h
+                              </span>
+                            </td>
+
+                            <td style={s.tableCell}>
+                              <span style={s.contractedValue}>
+                                {contractedMonth}h
+                              </span>
+                            </td>
+
+                            <td style={s.tableCell}>
+                              <span
+                                style={{
+                                  ...s.varianceValue,
+                                  color: isUnderMonth
+                                    ? '#c4883a'
+                                    : staff.monthVariance > 0
+                                      ? '#2ecc8a'
+                                      : '#9499b0',
+                                }}
+                              >
+                                {staff.monthVariance > 0 ? '+' : ''}
+                                {staff.monthVariance.toFixed(1)}h
+                              </span>
+                            </td>
+                          </tr>
+                        )
+                      })
+                    })()}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </>
         )}
       </div>
 
@@ -1281,6 +1476,123 @@ const s = {
     alignItems: 'center',
     gap: '6px',
     marginBottom: '16px',
+  },
+  summarySection: {
+    marginTop: '32px',
+    paddingTop: '24px',
+    borderTop: '1px solid rgba(255,255,255,0.07)',
+  },
+
+  summaryHeader: {
+    marginBottom: '16px',
+  },
+
+  summaryTitle: {
+    fontFamily: 'Syne, sans-serif',
+    fontSize: '16px',
+    fontWeight: 600,
+    color: '#e8eaf0',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+  },
+
+  summarySubtitle: {
+    fontSize: '11px',
+    color: '#5d6180',
+    marginTop: '4px',
+  },
+
+  tableWrap: {
+    overflowX: 'auto',
+    borderRadius: '12px',
+    border: '1px solid rgba(255,255,255,0.07)',
+    background: '#161820',
+  },
+
+  summaryTable: {
+    width: '100%',
+    borderCollapse: 'collapse',
+    fontSize: '13px',
+    minWidth: '700px',
+  },
+
+  tableHeaderRow: {
+    borderBottom: '1px solid rgba(255,255,255,0.07)',
+    background: '#1d1f2b',
+  },
+
+  tableHeader: {
+    textAlign: 'left',
+    padding: '14px 16px',
+    color: '#9499b0',
+    fontWeight: 500,
+    fontSize: '11px',
+    textTransform: 'uppercase',
+    letterSpacing: '0.5px',
+  },
+
+  tableRow: {
+    borderBottom: '1px solid rgba(255,255,255,0.05)',
+    '&:hover': {
+      background: 'rgba(255,255,255,0.02)',
+    },
+  },
+
+  tableCell: {
+    padding: '12px 16px',
+    color: '#e8eaf0',
+  },
+
+  staffCell: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+  },
+
+  staffAvatar: {
+    width: '32px',
+    height: '32px',
+    borderRadius: '50%',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: '11px',
+    fontWeight: 600,
+    fontFamily: 'Syne, sans-serif',
+    flexShrink: 0,
+  },
+
+  staffCellName: {
+    fontSize: '13px',
+    fontWeight: 500,
+    color: '#e8eaf0',
+  },
+
+  staffCellRole: {
+    fontSize: '10px',
+    color: '#9499b0',
+    fontFamily: 'DM Mono, monospace',
+    marginTop: '2px',
+  },
+
+  hoursValue: {
+    fontWeight: 500,
+    color: '#e8eaf0',
+    fontFamily: 'DM Mono, monospace',
+  },
+
+  contractedValue: {
+    color: '#5d6180',
+    fontFamily: 'DM Mono, monospace',
+  },
+
+  varianceValue: {
+    fontWeight: 500,
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '4px',
+    fontFamily: 'DM Mono, monospace',
   },
 }
 
