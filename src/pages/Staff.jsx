@@ -74,6 +74,7 @@ function Staff() {
   const [leaveEndDate, setLeaveEndDate] = useState('')
   const [leaveNotes, setLeaveNotes] = useState('')
   const [leaveRefresh, setLeaveRefresh] = useState(0)
+  const [selectedLeaveEntry, setSelectedLeaveEntry] = useState(null)
   const [selectedStaff, setSelectedStaff] = useState(null)
   const [approvedIds, setApprovedIds] = useLocalStorage('rotapp_approved', [])
   const [declinedIds, setDeclinedIds] = useLocalStorage('rotapp_declined', [])
@@ -416,7 +417,14 @@ function Staff() {
                               style={{
                                 ...s.leaveTag,
                                 ...TYPE_STYLES[entry.type],
+                                cursor: 'pointer',
                               }}
+                              onClick={() =>
+                                setSelectedLeaveEntry({
+                                  ...entry,
+                                  staffName: st.name,
+                                })
+                              }
                             >
                               <span style={s.leaveTagLabel}>
                                 {TYPE_LABELS[entry.type]}
@@ -424,7 +432,8 @@ function Staff() {
                               <span style={s.leaveTagDate}>{entry.date}</span>
                               <button
                                 style={s.removeLeave}
-                                onClick={() => {
+                                onClick={(e) => {
+                                  e.stopPropagation()
                                   const [y, m, d] = entry.date
                                     .split('-')
                                     .map(Number)
@@ -437,6 +446,7 @@ function Staff() {
                               </button>
                             </span>
                           ))}
+
                           {pending.map((entry) => (
                             <span
                               key={entry.id}
@@ -445,7 +455,14 @@ function Staff() {
                                 background: 'rgba(196,136,58,0.12)',
                                 color: '#c4883a',
                                 border: '1px solid rgba(196,136,58,0.25)',
+                                cursor: 'pointer',
                               }}
+                              onClick={() =>
+                                setSelectedLeaveEntry({
+                                  ...entry,
+                                  staffName: st.name,
+                                })
+                              }
                             >
                               <span style={s.leaveTagLabel}>
                                 {TYPE_LABELS[entry.type]} · pending
@@ -453,7 +470,8 @@ function Staff() {
                               <span style={s.leaveTagDate}>{entry.date}</span>
                               <button
                                 style={s.approveLeaveBtn}
-                                onClick={() => {
+                                onClick={(e) => {
+                                  e.stopPropagation()
                                   // 1. Approve the time-off record
                                   const records = JSON.parse(
                                     localStorage.getItem('rotapp_time_off') ||
@@ -522,7 +540,8 @@ function Staff() {
                               </button>
                               <button
                                 style={s.removeLeave}
-                                onClick={() => {
+                                onClick={(e) => {
+                                  e.stopPropagation()
                                   const [y, m, d] = entry.date
                                     .split('-')
                                     .map(Number)
@@ -962,6 +981,153 @@ function Staff() {
               >
                 <FontAwesomeIcon icon='check' /> Confirm leave
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Leave entry detail modal */}
+      {selectedLeaveEntry && (
+        <div style={s.overlay} onClick={() => setSelectedLeaveEntry(null)}>
+          <div style={s.modal} onClick={(e) => e.stopPropagation()}>
+            <div style={s.modalHeader}>
+              <div style={s.modalTitle}>Leave Details</div>
+              <button
+                style={s.closeBtn}
+                onClick={() => setSelectedLeaveEntry(null)}
+              >
+                <FontAwesomeIcon icon='xmark' />
+              </button>
+            </div>
+            <div style={s.modalBody}>
+              <div style={s.detailRow}>
+                <span style={s.detailLabel}>Staff</span>
+                <span style={s.detailVal}>{selectedLeaveEntry.staffName}</span>
+              </div>
+              <div style={s.detailRow}>
+                <span style={s.detailLabel}>Type</span>
+                <span style={s.detailVal}>
+                  {TYPE_LABELS[selectedLeaveEntry.type] ||
+                    selectedLeaveEntry.type}
+                </span>
+              </div>
+              <div style={s.detailRow}>
+                <span style={s.detailLabel}>Date</span>
+                <span style={s.detailVal}>{selectedLeaveEntry.date}</span>
+              </div>
+              <div style={s.detailRow}>
+                <span style={s.detailLabel}>Status</span>
+                <span style={s.detailVal}>{selectedLeaveEntry.status}</span>
+              </div>
+              {selectedLeaveEntry.notes && (
+                <div style={s.detailRow}>
+                  <span style={s.detailLabel}>Note</span>
+                  <span style={s.detailVal}>{selectedLeaveEntry.notes}</span>
+                </div>
+              )}
+              {selectedLeaveEntry.requestedAt && (
+                <div style={s.detailRow}>
+                  <span style={s.detailLabel}>Requested</span>
+                  <span style={s.detailVal}>
+                    {new Date(
+                      selectedLeaveEntry.requestedAt
+                    ).toLocaleDateString('en-GB', {
+                      day: 'numeric',
+                      month: 'short',
+                      year: 'numeric',
+                    })}
+                  </span>
+                </div>
+              )}
+              {selectedLeaveEntry.approvedBy && (
+                <div style={s.detailRow}>
+                  <span style={s.detailLabel}>Approved by</span>
+                  <span style={s.detailVal}>
+                    {selectedLeaveEntry.approvedBy}
+                  </span>
+                </div>
+              )}
+
+              {/* Approve/Decline actions — only shown for pending entries */}
+              {selectedLeaveEntry.status === 'pending' && (
+                <div style={{ ...s.modalActions, marginTop: '20px' }}>
+                  <button
+                    style={s.declineBtn}
+                    onClick={() => {
+                      const [y, m, d] = selectedLeaveEntry.date
+                        .split('-')
+                        .map(Number)
+                      removeTimeOff(
+                        new Date(y, m - 1, d),
+                        selectedLeaveEntry.id
+                      )
+                      setLeaveRefresh((n) => n + 1)
+                      setSelectedLeaveEntry(null)
+                    }}
+                  >
+                    Decline
+                  </button>
+                  <button
+                    style={s.approveBtn}
+                    onClick={() => {
+                      // 1. Approve the time-off record
+                      const records = JSON.parse(
+                        localStorage.getItem('rotapp_time_off') || '{}'
+                      )
+                      if (records[selectedLeaveEntry.date]) {
+                        records[selectedLeaveEntry.date] = records[
+                          selectedLeaveEntry.date
+                        ].map((r) =>
+                          r.id === selectedLeaveEntry.id
+                            ? {
+                                ...r,
+                                status: 'approved',
+                                approvedBy: user?.name || 'Manager',
+                                approvedAt: new Date().toISOString(),
+                              }
+                            : r
+                        )
+                        localStorage.setItem(
+                          'rotapp_time_off',
+                          JSON.stringify(records)
+                        )
+                      }
+
+                      // 2. Remove from rota on that date
+                      const monthRota = JSON.parse(
+                        localStorage.getItem('rotapp_month_rota') || '{}'
+                      )
+                      const staffIdToRemove = selectedLeaveEntry.staffId
+                      const targetDate = new Date(
+                        selectedLeaveEntry.date + 'T00:00:00'
+                      )
+                      const dayOfWeek = (targetDate.getDay() + 6) % 7
+                      Object.keys(monthRota).forEach((mondayKey) => {
+                        const weekRota = monthRota[mondayKey]
+                        if (weekRota.early?.[dayOfWeek]) {
+                          weekRota.early[dayOfWeek] = weekRota.early[
+                            dayOfWeek
+                          ].filter((s) => s.id !== staffIdToRemove)
+                        }
+                        if (weekRota.late?.[dayOfWeek]) {
+                          weekRota.late[dayOfWeek] = weekRota.late[
+                            dayOfWeek
+                          ].filter((s) => s.id !== staffIdToRemove)
+                        }
+                        monthRota[mondayKey] = weekRota
+                      })
+                      localStorage.setItem(
+                        'rotapp_month_rota',
+                        JSON.stringify(monthRota)
+                      )
+
+                      setLeaveRefresh((n) => n + 1)
+                      setSelectedLeaveEntry(null)
+                    }}
+                  >
+                    Approve
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>
