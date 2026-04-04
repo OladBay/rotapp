@@ -5,7 +5,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { fetchBankHolidays, getBankHolidayForDate } from '../utils/bankHolidays'
 import { getTimeOffRecords, removeTimeOff } from '../utils/timeOffStorage'
 import { toLocalDateString, fromLocalDateString } from '../utils/dateUtils'
-import { getEventsForDate, getEventColor } from '../utils/worldEvents'
+import { getEventsForDate, getEventColor } from '../data/worldEvents'
 
 const MONTHS = [
   'January',
