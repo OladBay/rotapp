@@ -24,6 +24,11 @@ import {
   pingRequest,
   getPingInfo,
 } from '../utils/cancelRequests'
+import {
+  getTimeOffForStaff,
+  addTimeOff,
+  generateTimeOffId,
+} from '../utils/timeOffStorage'
 
 const TODAY = new Date()
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
@@ -38,26 +43,33 @@ function Calendar() {
   })
 
   // View state
-  const [viewMode, setViewMode] = useState('week') // Default week for staff
+  const [viewMode, setViewMode] = useState('week')
   const [currentMonday, setMonday] = useState(getMondayOfWeek(TODAY))
   const [currentYear, setCurrentYear] = useState(TODAY.getFullYear())
   const [hoveredMonth, setHoveredMonth] = useState(null)
 
-  // Modal states
+  // Shift cancel modal states
   const [selectedShift, setSelectedShift] = useState(null)
   const [cancelReason, setCancelReason] = useState('')
   const [customReasonText, setCustomReasonText] = useState('')
   const [showReasonForm, setShowReasonForm] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
+  // Time-off request modal
+  const [showTimeOffModal, setShowTimeOffModal] = useState(false)
+  const [timeOffType, setTimeOffType] = useState('annual_leave')
+  const [timeOffStart, setTimeOffStart] = useState('')
+  const [timeOffEnd, setTimeOffEnd] = useState('')
+  const [timeOffNote, setTimeOffNote] = useState('')
+  const [timeOffRefresh, setTimeOffRefresh] = useState(0)
+  const [timeOffSubmitted, setTimeOffSubmitted] = useState(false)
+
   const staffId = user?.id
   const staffName = user?.name
 
-  // Get the current week's rota (from monthRota if available, else weekRotaState)
   const currentWeekKey = getGeneratorMondayKey(currentMonday)
   const currentWeekRota = monthRota[currentWeekKey] || weekRotaState
 
-  // Extract staff's shifts for current week
   const myShiftsForWeek = useMemo(() => {
     const shifts = []
     for (let dayIdx = 0; dayIdx < 7; dayIdx++) {
@@ -68,7 +80,6 @@ function Calendar() {
       const d = String(date.getDate()).padStart(2, '0')
       const dateStr = `${y}-${m}-${d}`
 
-      // Check early shift
       const earlyStaff = currentWeekRota.early?.[dayIdx] || []
       const myEarly = earlyStaff.find((s) => s.id === staffId)
       if (myEarly) {
@@ -82,7 +93,6 @@ function Calendar() {
         })
       }
 
-      // Check late shift
       const lateStaff = currentWeekRota.late?.[dayIdx] || []
       const myLate = lateStaff.find((s) => s.id === staffId)
       if (myLate) {
@@ -99,12 +109,8 @@ function Calendar() {
     return shifts
   }, [currentWeekRota, currentMonday, staffId, user?.home])
 
-  // Get shift for a specific day
-  const getShiftForDay = (date) => {
-    return myShiftsForWeek.find((s) => s.date === date)
-  }
+  const getShiftForDay = (date) => myShiftsForWeek.find((s) => s.date === date)
 
-  // Helper to check request status
   const getShiftRequestStatus = (shift) => {
     if (!shift || !staffId) return null
     const requests = loadRequests()
@@ -116,6 +122,15 @@ function Calendar() {
     )
   }
 
+  // Time-off helpers — re-reads on timeOffRefresh
+  const myTimeOff = useMemo(
+    () => getTimeOffForStaff(staffId || ''),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [staffId, timeOffRefresh]
+  )
+  const getTimeOffForDateStr = (dateStr) =>
+    myTimeOff.filter((e) => e.date === dateStr)
+
   // Navigation
   const prevWeek = () => setMonday((prev) => addWeeks(prev, -1))
   const nextWeek = () => setMonday((prev) => addWeeks(prev, 1))
@@ -123,7 +138,6 @@ function Calendar() {
   const startLabel = formatDate(weekDates[0])
   const endLabel = formatDate(weekDates[6])
 
-  // Handle withdraw
   const handleWithdraw = (requestId) => {
     updateRequest(requestId, {
       status: 'withdrawn',
@@ -132,22 +146,18 @@ function Calendar() {
     setSelectedShift(null)
   }
 
-  // Handle submit request
   const handleSubmitRequest = () => {
     if (!cancelReason) return
     if (cancelReason === 'Other' && !customReasonText.trim()) return
-
     setSubmitting(true)
-
     addRequest({
-      staffId: staffId,
-      staffName: staffName,
+      staffId,
+      staffName,
       shiftDate: selectedShift.date,
       shiftType: selectedShift.type,
       reason: cancelReason,
       customReason: cancelReason === 'Other' ? customReasonText : '',
     })
-
     setTimeout(() => {
       setSelectedShift(null)
       setCancelReason('')
@@ -157,7 +167,36 @@ function Calendar() {
     }, 500)
   }
 
-  // Month view helpers
+  const handleSubmitTimeOff = () => {
+    if (!timeOffStart || !timeOffEnd || timeOffEnd < timeOffStart) return
+    const start = new Date(timeOffStart + 'T00:00:00')
+    const end = new Date(timeOffEnd + 'T00:00:00')
+    const current = new Date(start)
+    while (current <= end) {
+      addTimeOff(new Date(current), {
+        id: generateTimeOffId(),
+        staffId,
+        staffName,
+        type: timeOffType,
+        status: 'pending',
+        notes: timeOffNote || null,
+        requestedAt: new Date().toISOString(),
+      })
+      current.setDate(current.getDate() + 1)
+    }
+    setTimeOffRefresh((n) => n + 1)
+    setTimeOffSubmitted(true)
+  }
+
+  const closeTimeOffModal = () => {
+    setShowTimeOffModal(false)
+    setTimeOffStart('')
+    setTimeOffEnd('')
+    setTimeOffNote('')
+    setTimeOffType('annual_leave')
+    setTimeOffSubmitted(false)
+  }
+
   const getRotaForDate = (date) => {
     const monday = getMondayOfWeek(date)
     const key = dateKey(monday)
@@ -184,6 +223,14 @@ function Calendar() {
     setViewMode('week')
   }
 
+  // Days requested count for modal info
+  const timeOffDayCount = (() => {
+    if (!timeOffStart || !timeOffEnd || timeOffEnd < timeOffStart) return 0
+    const a = new Date(timeOffStart + 'T00:00:00')
+    const b = new Date(timeOffEnd + 'T00:00:00')
+    return Math.round((b - a) / 86400000) + 1
+  })()
+
   return (
     <div style={s.page}>
       <Navbar />
@@ -199,23 +246,32 @@ function Calendar() {
                 : `${currentYear}`}
             </p>
           </div>
-          <div style={s.viewToggle}>
-            {[
-              { value: 'week', label: 'Week' },
-              { value: 'month', label: 'Month' },
-            ].map((v) => (
-              <button
-                key={v.value}
-                style={{
-                  ...s.toggleBtn,
-                  background: viewMode === v.value ? '#6c8fff' : 'transparent',
-                  color: viewMode === v.value ? '#fff' : '#9499b0',
-                }}
-                onClick={() => setViewMode(v.value)}
-              >
-                {v.label}
-              </button>
-            ))}
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+            <button
+              style={s.requestTimeOffBtn}
+              onClick={() => setShowTimeOffModal(true)}
+            >
+              <FontAwesomeIcon icon='calendar-plus' /> Request time off
+            </button>
+            <div style={s.viewToggle}>
+              {[
+                { value: 'week', label: 'Week' },
+                { value: 'month', label: 'Month' },
+              ].map((v) => (
+                <button
+                  key={v.value}
+                  style={{
+                    ...s.toggleBtn,
+                    background:
+                      viewMode === v.value ? '#6c8fff' : 'transparent',
+                    color: viewMode === v.value ? '#fff' : '#9499b0',
+                  }}
+                  onClick={() => setViewMode(v.value)}
+                >
+                  {v.label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -292,6 +348,7 @@ function Calendar() {
                     : null
                   const isPending = shiftRequest?.status === 'pending'
                   const isApproved = shiftRequest?.status === 'approved'
+                  const timeOffEntries = getTimeOffForDateStr(dateStr)
 
                   return (
                     <div
@@ -342,7 +399,38 @@ function Calendar() {
                           <div style={s.shiftHome}>{shift.home}</div>
                         </div>
                       ) : (
-                        <div style={s.offDay}>—</div>
+                        <div style={s.offDay}>
+                          {timeOffEntries.length > 0
+                            ? timeOffEntries.map((e) => (
+                                <div
+                                  key={e.id}
+                                  style={{
+                                    ...s.timeOffBadge,
+                                    background:
+                                      e.status === 'pending'
+                                        ? 'rgba(196,136,58,0.15)'
+                                        : 'rgba(108,143,255,0.12)',
+                                    color:
+                                      e.status === 'pending'
+                                        ? '#c4883a'
+                                        : '#6c8fff',
+                                    border:
+                                      e.status === 'pending'
+                                        ? '1px solid rgba(196,136,58,0.3)'
+                                        : '1px solid rgba(108,143,255,0.25)',
+                                  }}
+                                >
+                                  <FontAwesomeIcon
+                                    icon='umbrella-beach'
+                                    style={{ marginRight: '4px' }}
+                                  />
+                                  {e.status === 'pending'
+                                    ? 'Leave pending'
+                                    : 'On leave'}
+                                </div>
+                              ))
+                            : '—'}
+                        </div>
                       )}
                     </div>
                   )
@@ -384,7 +472,6 @@ function Calendar() {
               {yearMonths.map(({ year, month, label }) => {
                 const monthDates = getMonthDates(year, month)
                 const isHovered = hoveredMonth === `${year}-${month}`
-                // Count shifts this month for this staff
                 let shiftCount = 0
                 monthDates.forEach((date) => {
                   if (
@@ -490,7 +577,7 @@ function Calendar() {
         )}
       </div>
 
-      {/* Shift detail modal (same as before) */}
+      {/* Shift detail modal */}
       {selectedShift && (
         <div
           style={s.overlay}
@@ -561,34 +648,30 @@ function Calendar() {
                 <span style={s.detailLabel}>Status</span>
                 {(() => {
                   const request = getShiftRequestStatus(selectedShift)
-                  if (request?.status === 'pending') {
+                  if (request?.status === 'pending')
                     return (
                       <span style={{ ...s.detailVal, color: '#c4883a' }}>
                         ⏳ Cancellation requested
                       </span>
                     )
-                  }
-                  if (request?.status === 'approved') {
+                  if (request?.status === 'approved')
                     return (
                       <span style={{ ...s.detailVal, color: '#e85c3d' }}>
                         ✗ Cancelled (approved)
                       </span>
                     )
-                  }
-                  if (request?.status === 'rejected') {
+                  if (request?.status === 'rejected')
                     return (
                       <span style={{ ...s.detailVal, color: '#9499b0' }}>
                         Cancellation rejected
                       </span>
                     )
-                  }
-                  if (request?.status === 'withdrawn') {
+                  if (request?.status === 'withdrawn')
                     return (
                       <span style={{ ...s.detailVal, color: '#2ecc8a' }}>
                         ✓ Confirmed (request withdrawn)
                       </span>
                     )
-                  }
                   return (
                     <span style={{ ...s.detailVal, color: '#2ecc8a' }}>
                       ✓ Confirmed
@@ -667,9 +750,7 @@ function Calendar() {
                   </>
                 )
               }
-              if (request?.status === 'approved') {
-                return null
-              }
+              if (request?.status === 'approved') return null
               if (!showReasonForm) {
                 return (
                   <button
@@ -755,6 +836,119 @@ function Calendar() {
           </div>
         </div>
       )}
+
+      {/* Time-off request modal */}
+      {showTimeOffModal && (
+        <div style={s.overlay} onClick={closeTimeOffModal}>
+          <div style={s.modal} onClick={(e) => e.stopPropagation()}>
+            <div style={s.modalHeader}>
+              <div style={s.modalTitle}>Request Time Off</div>
+              <button style={s.closeBtn} onClick={closeTimeOffModal}>
+                <FontAwesomeIcon icon='xmark' />
+              </button>
+            </div>
+
+            {timeOffSubmitted ? (
+              <div style={s.confirmWrap}>
+                <div style={s.confirmIcon}>
+                  <FontAwesomeIcon icon='circle-check' />
+                </div>
+                <div style={s.confirmTitle}>Request submitted</div>
+                <div style={s.confirmBody}>
+                  Your manager has been notified and will review your request.
+                  You'll see a pending badge on your calendar until it's
+                  approved.
+                </div>
+                <button style={s.submitReasonBtn} onClick={closeTimeOffModal}>
+                  Close
+                </button>
+              </div>
+            ) : (
+              <>
+                <div style={s.modalBody}>
+                  <p style={s.modalNote}>
+                    Your request will be sent to your manager for approval.
+                  </p>
+
+                  <div style={s.field}>
+                    <label style={s.detailLabel}>Leave type</label>
+                    <select
+                      style={{ ...s.reasonSelect, marginTop: '6px' }}
+                      value={timeOffType}
+                      onChange={(e) => setTimeOffType(e.target.value)}
+                    >
+                      <option value='annual_leave'>Annual leave</option>
+                      <option value='sick'>Sick</option>
+                      <option value='training'>Training</option>
+                      <option value='other'>Other</option>
+                    </select>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '12px' }}>
+                    <div style={{ flex: 1 }}>
+                      <label style={s.detailLabel}>Start date</label>
+                      <input
+                        style={{ ...s.reasonSelect, marginTop: '6px' }}
+                        type='date'
+                        value={timeOffStart}
+                        onChange={(e) => setTimeOffStart(e.target.value)}
+                      />
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <label style={s.detailLabel}>End date</label>
+                      <input
+                        style={{ ...s.reasonSelect, marginTop: '6px' }}
+                        type='date'
+                        value={timeOffEnd}
+                        onChange={(e) => setTimeOffEnd(e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  <div style={s.field}>
+                    <label style={s.detailLabel}>Note (optional)</label>
+                    <input
+                      style={{ ...s.reasonSelect, marginTop: '6px' }}
+                      type='text'
+                      placeholder='e.g. holiday, appointment'
+                      value={timeOffNote}
+                      onChange={(e) => setTimeOffNote(e.target.value)}
+                    />
+                  </div>
+
+                  {timeOffDayCount > 0 && (
+                    <div style={s.rangeInfo}>
+                      <FontAwesomeIcon
+                        icon='circle-info'
+                        style={{ marginRight: '6px' }}
+                      />
+                      {timeOffDayCount} day{timeOffDayCount > 1 ? 's' : ''}{' '}
+                      requested
+                    </div>
+                  )}
+                </div>
+
+                <div style={s.reasonActions}>
+                  <button style={s.cancelReasonBtn} onClick={closeTimeOffModal}>
+                    Cancel
+                  </button>
+                  <button
+                    style={{
+                      ...s.submitReasonBtn,
+                      opacity: timeOffDayCount > 0 ? 1 : 0.5,
+                      cursor: timeOffDayCount > 0 ? 'pointer' : 'not-allowed',
+                    }}
+                    disabled={timeOffDayCount === 0}
+                    onClick={handleSubmitTimeOff}
+                  >
+                    Submit request
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -780,6 +974,21 @@ const s = {
     margin: 0,
   },
   subtitle: { fontSize: '13px', color: '#9499b0', marginTop: '4px' },
+  requestTimeOffBtn: {
+    background: 'rgba(108,143,255,0.12)',
+    border: '1px solid rgba(108,143,255,0.25)',
+    borderRadius: '8px',
+    padding: '8px 14px',
+    fontSize: '13px',
+    fontWeight: 500,
+    color: '#6c8fff',
+    cursor: 'pointer',
+    fontFamily: 'DM Sans, sans-serif',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    whiteSpace: 'nowrap',
+  },
   viewToggle: {
     display: 'flex',
     background: '#1d1f2b',
@@ -899,7 +1108,16 @@ const s = {
     fontSize: '12px',
     color: '#5d6180',
     textAlign: 'center',
-    marginTop: '20px',
+    marginTop: '8px',
+  },
+  timeOffBadge: {
+    borderRadius: '6px',
+    padding: '4px 8px',
+    fontSize: '11px',
+    fontWeight: 500,
+    display: 'flex',
+    alignItems: 'center',
+    marginBottom: '3px',
   },
   cancelledTag: {
     fontSize: '11px',
@@ -969,7 +1187,6 @@ const s = {
     fontSize: '9px',
     fontFamily: 'DM Mono, monospace',
   },
-  // Modal styles (same as before, compact)
   overlay: {
     position: 'fixed',
     inset: 0,
@@ -1022,6 +1239,15 @@ const s = {
     overflowY: 'auto',
     flex: 1,
   },
+  modalNote: {
+    fontSize: '13px',
+    color: '#9499b0',
+    margin: 0,
+  },
+  field: {
+    display: 'flex',
+    flexDirection: 'column',
+  },
   detailRow: {
     display: 'flex',
     justifyContent: 'space-between',
@@ -1029,6 +1255,16 @@ const s = {
   },
   detailLabel: { fontSize: '13px', color: '#9499b0' },
   detailVal: { fontSize: '13px', fontWeight: 500, color: '#e8eaf0' },
+  rangeInfo: {
+    fontSize: '12px',
+    color: '#6c8fff',
+    background: 'rgba(108,143,255,0.08)',
+    border: '1px solid rgba(108,143,255,0.15)',
+    borderRadius: '6px',
+    padding: '8px 12px',
+    display: 'flex',
+    alignItems: 'center',
+  },
   pendingWarning: {
     padding: '12px 24px',
     background: 'rgba(196,136,58,0.1)',
@@ -1152,7 +1388,12 @@ const s = {
     maxHeight: '120px',
     boxSizing: 'border-box',
   },
-  reasonActions: { display: 'flex', gap: '8px', marginTop: '4px' },
+  reasonActions: {
+    display: 'flex',
+    gap: '8px',
+    padding: '16px 24px',
+    borderTop: '1px solid rgba(255,255,255,0.07)',
+  },
   cancelReasonBtn: {
     flex: 1,
     background: 'transparent',
@@ -1187,6 +1428,31 @@ const s = {
     alignItems: 'center',
     gap: '8px',
     marginBottom: '4px',
+  },
+  confirmWrap: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    textAlign: 'center',
+    padding: '32px 24px',
+    gap: '12px',
+  },
+  confirmIcon: {
+    fontSize: '40px',
+    color: '#2ecc8a',
+  },
+  confirmTitle: {
+    fontFamily: 'Syne, sans-serif',
+    fontSize: '17px',
+    fontWeight: 600,
+    color: '#e8eaf0',
+  },
+  confirmBody: {
+    fontSize: '13px',
+    color: '#9499b0',
+    lineHeight: 1.6,
+    maxWidth: '300px',
+    marginBottom: '8px',
   },
 }
 

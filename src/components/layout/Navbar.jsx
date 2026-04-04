@@ -2,6 +2,7 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { getPendingRequests } from '../../utils/cancelRequests'
+import { getPendingTimeOffCount } from '../../utils/timeOffStorage'
 
 function Navbar() {
   const { user, logout } = useAuth()
@@ -12,8 +13,11 @@ function Navbar() {
     logout()
     navigate('/login')
   }
+
   const pendingRequests = getPendingRequests().length
-  const hasStaffAction = pendingRequests > 0
+  const pendingTimeOff = getPendingTimeOffCount()
+  const totalPending = pendingRequests + pendingTimeOff
+  const hasStaffAction = totalPending > 0
 
   const canSeeStaff = ['manager', 'superadmin'].includes(user?.activeRole)
   const canSeeRota = [
@@ -29,7 +33,7 @@ function Navbar() {
     { path: '/rota', label: 'Rota', show: canSeeRota },
     { path: '/staff', label: 'Staff', show: canSeeStaff },
     { path: '/calendar', label: 'My shifts', show: true },
-    { path: '/year-calendar', label: 'Year Calendar', show: canSeeRota }, // Only managers see this
+    { path: '/year-calendar', label: 'Year Calendar', show: canSeeRota },
   ].filter((l) => l.show)
 
   return (
@@ -56,7 +60,7 @@ function Navbar() {
               {link.label}
               {link.label === 'Staff' && hasStaffAction && (
                 <span style={styles.badge}>
-                  {pendingRequests > 9 ? '9+' : pendingRequests}
+                  {totalPending > 9 ? '9+' : totalPending}
                 </span>
               )}
             </button>

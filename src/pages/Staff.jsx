@@ -3,7 +3,6 @@ import { useAuth } from '../context/AuthContext'
 import { useNavigate } from 'react-router-dom'
 import Navbar from '../components/layout/Navbar'
 import { mockUsers } from '../data/mockUsers'
-import { mockLeave } from '../data/mockLeave'
 import { mockStaff } from '../data/mockRota'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { useLocalStorage } from '../hooks/useLocalStorage'
@@ -13,6 +12,13 @@ import {
   getPendingRequests,
   getAllRequests,
 } from '../utils/cancelRequests'
+import {
+  getTimeOffForStaff,
+  addTimeOff,
+  removeTimeOff,
+  generateTimeOffId,
+  getPendingTimeOffCount,
+} from '../utils/timeOffStorage'
 
 const ROLE_LABELS = {
   manager: 'Manager',
@@ -28,13 +34,46 @@ const STATUS_COLORS = {
   off: { bg: 'rgba(108,143,255,0.12)', color: '#6c8fff' },
 }
 
+const TYPE_LABELS = {
+  annual_leave: 'Annual',
+  sick: 'Sick',
+  training: 'Training',
+  other: 'Other',
+}
+
+const TYPE_STYLES = {
+  annual_leave: {
+    background: 'rgba(108,143,255,0.12)',
+    color: '#6c8fff',
+    border: '1px solid rgba(108,143,255,0.25)',
+  },
+  sick: {
+    background: 'rgba(232,92,61,0.12)',
+    color: '#e85c3d',
+    border: '1px solid rgba(232,92,61,0.25)',
+  },
+  training: {
+    background: 'rgba(46,204,138,0.12)',
+    color: '#2ecc8a',
+    border: '1px solid rgba(46,204,138,0.25)',
+  },
+  other: {
+    background: 'rgba(148,153,176,0.12)',
+    color: '#9499b0',
+    border: '1px solid rgba(148,153,176,0.25)',
+  },
+}
+
 function Staff() {
   const { user } = useAuth()
   const navigate = useNavigate()
   const [tab, setTab] = useState('all')
-  const [leaveData, setLeaveData] = useLocalStorage('rotapp_leave', mockLeave)
   const [leaveStaff, setLeaveStaff] = useState(null)
-  const [leaveInput, setLeaveInput] = useState('')
+  const [leaveModalType, setLeaveModalType] = useState('annual_leave')
+  const [leaveStartDate, setLeaveStartDate] = useState('')
+  const [leaveEndDate, setLeaveEndDate] = useState('')
+  const [leaveNotes, setLeaveNotes] = useState('')
+  const [leaveRefresh, setLeaveRefresh] = useState(0)
   const [selectedStaff, setSelectedStaff] = useState(null)
   const [approvedIds, setApprovedIds] = useLocalStorage('rotapp_approved', [])
   const [declinedIds, setDeclinedIds] = useLocalStorage('rotapp_declined', [])
@@ -211,7 +250,12 @@ function Staff() {
             { key: 'off', label: `Off (${off.length})` },
             { key: 'pending', label: `Pending (${pending.length})` },
             { key: 'relief', label: `Relief pool (${reliefPool.length})` },
-            { key: 'leave', label: 'Leave & Absence' },
+            {
+              key: 'leave',
+              label: 'Leave & Absence',
+              hasBadge: getPendingTimeOffCount() > 0,
+              badgeCount: getPendingTimeOffCount(),
+            },
             {
               key: 'requests',
               label: `Requests ${getPendingRequests().length > 0 ? `(${getPendingRequests().length})` : ''}`,
@@ -231,7 +275,9 @@ function Staff() {
             >
               {t.label}
               {t.hasBadge && (
-                <span style={s.tabBadge}>{getPendingRequests().length}</span>
+                <span style={s.tabBadge}>
+                  {t.badgeCount ?? getPendingRequests().length}
+                </span>
               )}
             </button>
           ))}
@@ -335,53 +381,170 @@ function Staff() {
         {tab === 'leave' && (
           <div style={s.leaveWrap}>
             <div style={s.leaveNote}>
-              Mark staff as off for specific dates. These dates will
-              automatically appear as unavailable in the rota generator.
+              Add and manage staff absences. Approved leave is automatically
+              excluded from rota generation.
             </div>
 
             {mockStaff
               .filter(
                 (st) => !['relief', 'manager', 'deputy'].includes(st.role)
               )
-              .map((staff) => {
-                const dates = leaveData[staff.id] || []
+              .map((st) => {
+                const entries = getTimeOffForStaff(st.id)
+                const approved = entries.filter((e) => e.status === 'approved')
+                const pending = entries.filter((e) => e.status === 'pending')
+
                 return (
-                  <div key={staff.id} style={s.leaveRow}>
+                  <div key={st.id} style={s.leaveRow}>
+                    {/* Staff info */}
                     <div style={s.leaveStaffInfo}>
-                      <div style={s.staffName}>{staff.name}</div>
-                      <div style={s.staffRole}>{staff.roleCode}</div>
+                      <div style={s.staffName}>{st.name}</div>
+                      <div style={s.staffRole}>
+                        {ROLE_LABELS[st.role] || st.role}
+                      </div>
                     </div>
 
+                    {/* Leave entries */}
                     <div style={s.leaveDates}>
-                      {dates.length === 0 ? (
+                      {approved.length === 0 && pending.length === 0 ? (
                         <span style={s.noLeave}>No absences recorded</span>
                       ) : (
-                        dates.map((d) => (
-                          <span key={d} style={s.leaveTag}>
-                            {d}
-                            <button
-                              style={s.removeLeave}
-                              onClick={() => {
-                                setLeaveData((prev) => ({
-                                  ...prev,
-                                  [staff.id]: (prev[staff.id] || []).filter(
-                                    (x) => x !== d
-                                  ),
-                                }))
+                        <>
+                          {approved.map((entry) => (
+                            <span
+                              key={entry.id}
+                              style={{
+                                ...s.leaveTag,
+                                ...TYPE_STYLES[entry.type],
                               }}
                             >
-                              ✕
-                            </button>
-                          </span>
-                        ))
+                              <span style={s.leaveTagLabel}>
+                                {TYPE_LABELS[entry.type]}
+                              </span>
+                              <span style={s.leaveTagDate}>{entry.date}</span>
+                              <button
+                                style={s.removeLeave}
+                                onClick={() => {
+                                  const [y, m, d] = entry.date
+                                    .split('-')
+                                    .map(Number)
+                                  removeTimeOff(new Date(y, m - 1, d), entry.id)
+                                  setLeaveRefresh((n) => n + 1)
+                                }}
+                                title='Remove'
+                              >
+                                <FontAwesomeIcon icon='xmark' />
+                              </button>
+                            </span>
+                          ))}
+                          {pending.map((entry) => (
+                            <span
+                              key={entry.id}
+                              style={{
+                                ...s.leaveTag,
+                                background: 'rgba(196,136,58,0.12)',
+                                color: '#c4883a',
+                                border: '1px solid rgba(196,136,58,0.25)',
+                              }}
+                            >
+                              <span style={s.leaveTagLabel}>
+                                {TYPE_LABELS[entry.type]} · pending
+                              </span>
+                              <span style={s.leaveTagDate}>{entry.date}</span>
+                              <button
+                                style={s.approveLeaveBtn}
+                                onClick={() => {
+                                  // 1. Approve the time-off record
+                                  const records = JSON.parse(
+                                    localStorage.getItem('rotapp_time_off') ||
+                                      '{}'
+                                  )
+                                  if (records[entry.date]) {
+                                    records[entry.date] = records[
+                                      entry.date
+                                    ].map((r) =>
+                                      r.id === entry.id
+                                        ? {
+                                            ...r,
+                                            status: 'approved',
+                                            approvedBy: user?.name,
+                                            approvedAt:
+                                              new Date().toISOString(),
+                                          }
+                                        : r
+                                    )
+                                    localStorage.setItem(
+                                      'rotapp_time_off',
+                                      JSON.stringify(records)
+                                    )
+                                  }
+
+                                  // 2. Remove staff from any existing rota on this date
+                                  const [y, m, d] = entry.date
+                                    .split('-')
+                                    .map(Number)
+                                  const date = new Date(y, m - 1, d)
+                                  const dayOfWeek = (date.getDay() + 6) % 7 // Mon=0
+                                  const monday = new Date(date)
+                                  monday.setDate(date.getDate() - dayOfWeek)
+                                  const mondayKey = `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, '0')}-${String(monday.getDate()).padStart(2, '0')}`
+
+                                  const monthRota = JSON.parse(
+                                    localStorage.getItem('rotapp_month_rota') ||
+                                      '{}'
+                                  )
+                                  if (monthRota[mondayKey]) {
+                                    const staffIdToRemove = entry.staffId
+                                    const weekRota = monthRota[mondayKey]
+                                    if (weekRota.early?.[dayOfWeek]) {
+                                      weekRota.early[dayOfWeek] =
+                                        weekRota.early[dayOfWeek].filter(
+                                          (s) => s.id !== staffIdToRemove
+                                        )
+                                    }
+                                    if (weekRota.late?.[dayOfWeek]) {
+                                      weekRota.late[dayOfWeek] = weekRota.late[
+                                        dayOfWeek
+                                      ].filter((s) => s.id !== staffIdToRemove)
+                                    }
+                                    monthRota[mondayKey] = weekRota
+                                    localStorage.setItem(
+                                      'rotapp_month_rota',
+                                      JSON.stringify(monthRota)
+                                    )
+                                  }
+
+                                  setLeaveRefresh((n) => n + 1)
+                                }}
+                                title='Approve'
+                              >
+                                <FontAwesomeIcon icon='check' />
+                              </button>
+                              <button
+                                style={s.removeLeave}
+                                onClick={() => {
+                                  const [y, m, d] = entry.date
+                                    .split('-')
+                                    .map(Number)
+                                  removeTimeOff(new Date(y, m - 1, d), entry.id)
+                                  setLeaveRefresh((n) => n + 1)
+                                }}
+                                title='Decline'
+                              >
+                                <FontAwesomeIcon icon='xmark' />
+                              </button>
+                            </span>
+                          ))}
+                        </>
                       )}
                     </div>
 
+                    {/* Add leave button */}
                     <button
                       style={s.addLeaveBtn}
-                      onClick={() => setLeaveStaff(staff)}
+                      onClick={() => setLeaveStaff(st)}
                     >
-                      + Add dates
+                      <FontAwesomeIcon icon='plus' /> Add leave
                     </button>
                   </div>
                 )
@@ -669,96 +832,135 @@ function Staff() {
 
       {/* Add leave modal */}
       {leaveStaff && (
-        <div style={s.overlay} onClick={() => setLeaveStaff(null)}>
+        <div
+          style={s.overlay}
+          onClick={() => {
+            setLeaveStaff(null)
+            setLeaveStartDate('')
+            setLeaveEndDate('')
+            setLeaveNotes('')
+          }}
+        >
           <div style={s.modal} onClick={(e) => e.stopPropagation()}>
             <div style={s.modalHeader}>
-              <div style={s.modalTitle}>Add Absence — {leaveStaff.name}</div>
+              <div style={s.modalTitle}>Add Leave — {leaveStaff.name}</div>
               <button style={s.closeBtn} onClick={() => setLeaveStaff(null)}>
                 <FontAwesomeIcon icon='xmark' />
               </button>
             </div>
             <div style={s.modalBody}>
-              <p
-                style={{
-                  fontSize: '13px',
-                  color: '#9499b0',
-                  marginBottom: '16px',
-                }}
-              >
-                Select dates this staff member is off. These will auto-fill as
-                unavailable in the rota generator.
-              </p>
+              {/* Leave type */}
               <div style={s.field}>
-                <label style={s.detailLabel}>Date (YYYY-MM-DD)</label>
+                <label style={s.detailLabel}>Leave type</label>
+                <select
+                  style={{ ...s.input, marginTop: '6px' }}
+                  value={leaveModalType}
+                  onChange={(e) => setLeaveModalType(e.target.value)}
+                >
+                  <option value='annual_leave'>Annual leave</option>
+                  <option value='sick'>Sick</option>
+                  <option value='training'>Training</option>
+                  <option value='other'>Other</option>
+                </select>
+              </div>
+
+              {/* Date range */}
+              <div style={{ display: 'flex', gap: '12px', marginTop: '14px' }}>
+                <div style={{ flex: 1 }}>
+                  <label style={s.detailLabel}>Start date</label>
+                  <input
+                    style={{ ...s.input, marginTop: '6px' }}
+                    type='date'
+                    value={leaveStartDate}
+                    onChange={(e) => setLeaveStartDate(e.target.value)}
+                  />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={s.detailLabel}>End date</label>
+                  <input
+                    style={{ ...s.input, marginTop: '6px' }}
+                    type='date'
+                    value={leaveEndDate}
+                    onChange={(e) => setLeaveEndDate(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              {/* Notes */}
+              <div style={{ marginTop: '14px' }}>
+                <label style={s.detailLabel}>Notes (optional)</label>
                 <input
                   style={{ ...s.input, marginTop: '6px' }}
-                  type='date'
-                  value={leaveInput}
-                  onChange={(e) => setLeaveInput(e.target.value)}
+                  type='text'
+                  placeholder='e.g. Doctor appointment, holiday'
+                  value={leaveNotes}
+                  onChange={(e) => setLeaveNotes(e.target.value)}
                 />
               </div>
-              {(leaveData[leaveStaff.id] || []).length > 0 && (
-                <div style={{ marginTop: '14px' }}>
-                  <div style={s.detailLabel}>Recorded absences</div>
-                  <div
-                    style={{
-                      display: 'flex',
-                      flexWrap: 'wrap',
-                      gap: '6px',
-                      marginTop: '8px',
-                    }}
-                  >
-                    {(leaveData[leaveStaff.id] || []).map((d) => (
-                      <span key={d} style={s.leaveTag}>
-                        {d}
-                        <button
-                          style={s.removeLeave}
-                          onClick={() => {
-                            setLeaveData((prev) => ({
-                              ...prev,
-                              [leaveStaff.id]: (
-                                prev[leaveStaff.id] || []
-                              ).filter((x) => x !== d),
-                            }))
-                          }}
-                        >
-                          ✕
-                        </button>
-                      </span>
-                    ))}
+
+              {/* Date range info */}
+              {leaveStartDate &&
+                leaveEndDate &&
+                leaveEndDate >= leaveStartDate && (
+                  <div style={s.leaveRangeInfo}>
+                    <FontAwesomeIcon
+                      icon='circle-info'
+                      style={{ marginRight: '6px' }}
+                    />
+                    {(() => {
+                      const start = new Date(leaveStartDate + 'T00:00:00')
+                      const end = new Date(leaveEndDate + 'T00:00:00')
+                      const days = Math.round((end - start) / 86400000) + 1
+                      return `${days} day${days > 1 ? 's' : ''} will be recorded`
+                    })()}
                   </div>
-                </div>
-              )}
+                )}
             </div>
-            <div
-              style={{
-                padding: '16px 24px',
-                borderTop: '1px solid rgba(255,255,255,0.07)',
-                display: 'flex',
-                gap: '8px',
-                justifyContent: 'flex-end',
-              }}
-            >
+
+            <div style={s.modalFooterRow}>
               <button
                 style={s.secondaryBtn}
-                onClick={() => setLeaveStaff(null)}
+                onClick={() => {
+                  setLeaveStaff(null)
+                  setLeaveStartDate('')
+                  setLeaveEndDate('')
+                  setLeaveNotes('')
+                }}
               >
-                Done
+                Cancel
               </button>
               <button
                 style={s.primaryBtn}
+                disabled={
+                  !leaveStartDate ||
+                  !leaveEndDate ||
+                  leaveEndDate < leaveStartDate
+                }
                 onClick={() => {
-                  if (!leaveInput) return
-                  setLeaveData((prev) => ({
-                    ...prev,
-                    [leaveStaff.id]: [
-                      ...new Set([...(prev[leaveStaff.id] || []), leaveInput]),
-                    ],
-                  }))
-                  setLeaveInput('')
+                  const start = new Date(leaveStartDate + 'T00:00:00')
+                  const end = new Date(leaveEndDate + 'T00:00:00')
+                  const current = new Date(start)
+                  while (current <= end) {
+                    addTimeOff(new Date(current), {
+                      id: generateTimeOffId(),
+                      staffId: leaveStaff.id,
+                      staffName: leaveStaff.name,
+                      type: leaveModalType,
+                      status: 'approved',
+                      approvedBy: user?.name || 'Manager',
+                      approvedAt: new Date().toISOString(),
+                      notes: leaveNotes || null,
+                    })
+                    current.setDate(current.getDate() + 1)
+                  }
+                  setLeaveRefresh((n) => n + 1)
+                  setLeaveStaff(null)
+                  setLeaveStartDate('')
+                  setLeaveEndDate('')
+                  setLeaveNotes('')
                 }}
               >
-                Add date
+                <FontAwesomeIcon icon='check' /> Confirm leave
               </button>
             </div>
           </div>
@@ -1493,6 +1695,41 @@ const s = {
     display: 'flex',
     alignItems: 'center',
     gap: '5px',
+  },
+  leaveTagLabel: {
+    fontWeight: 500,
+    fontSize: '11px',
+  },
+  leaveTagDate: {
+    fontSize: '11px',
+    fontFamily: 'DM Mono, monospace',
+    opacity: 0.8,
+    marginLeft: '4px',
+  },
+  approveLeaveBtn: {
+    background: 'none',
+    border: 'none',
+    cursor: 'pointer',
+    color: '#2ecc8a',
+    padding: '0 2px',
+    fontSize: '11px',
+    marginLeft: '4px',
+  },
+  leaveRangeInfo: {
+    marginTop: '12px',
+    fontSize: '12px',
+    color: '#6c8fff',
+    background: 'rgba(108,143,255,0.08)',
+    border: '1px solid rgba(108,143,255,0.15)',
+    borderRadius: '6px',
+    padding: '8px 12px',
+  },
+  modalFooterRow: {
+    padding: '16px 24px',
+    borderTop: '1px solid rgba(255,255,255,0.07)',
+    display: 'flex',
+    gap: '8px',
+    justifyContent: 'flex-end',
   },
 }
 

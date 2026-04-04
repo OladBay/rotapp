@@ -27,6 +27,8 @@ import {
   faClock,
   faEye,
   faEyeSlash,
+  faUmbrellaBeach,
+  faCalendarPlus,
 } from '@fortawesome/free-solid-svg-icons'
 
 library.add(
@@ -56,5 +58,8 @@ library.add(
   faChevronDown,
   faClock,
   faEye,
-  faEyeSlash
+  faEyeSlash,
+  faUmbrellaBeach,
+  faCalendarPlus,
+  faCircleCheck
 )

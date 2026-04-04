@@ -144,3 +144,14 @@ export function migrateLeaveDataIfNeeded() {
 
   return migratedCount > 0
 }
+// Count pending time-off requests (for navbar badge)
+export function getPendingTimeOffCount() {
+  const records = getTimeOffRecords()
+  let count = 0
+  for (const entries of Object.values(records)) {
+    entries.forEach((e) => {
+      if (e.status === 'pending') count++
+    })
+  }
+  return count
+}
