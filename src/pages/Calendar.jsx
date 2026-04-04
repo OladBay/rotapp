@@ -8,6 +8,9 @@ import {
   updateRequest,
   getShiftRequest,
   loadRequests,
+  getRecentRequestWarning,
+  pingRequest,
+  getPingInfo,
 } from '../utils/cancelRequests'
 
 const WEEK = [
@@ -86,8 +89,9 @@ function Calendar() {
       setSelectedShift(null)
       setCancelReason('')
       setCustomReasonText('')
-      setShowReasonForm(false)
       setSubmitting(false)
+      // Force a re-render of the calendar by refreshing the component
+      // The parent component will reload when modal closes
     }, 500)
   }
 
@@ -170,11 +174,8 @@ function Calendar() {
                   <div style={s.cancelledTag}>Cancelled</div>
                 ) : isApproved ? (
                   <div style={s.approvedTag}>Cancellation approved</div>
-                ) : isRejected ? (
-                  <div style={s.rejectedTag}>Cancellation rejected</div>
-                ) : isWithdrawn ? (
-                  <div style={s.withdrawnTag}>Request withdrawn</div>
                 ) : shift ? (
+                  // Show normal shift card for all other cases (including rejected, withdrawn, no request)
                   <div
                     style={{
                       ...s.shiftCard,
@@ -347,48 +348,120 @@ function Calendar() {
               {/* Show different buttons based on request status */}
               {(() => {
                 const request = getShiftRequestStatus(selectedShift)
+                const { count, shouldWarn, message } = getRecentRequestWarning(
+                  staffId,
+                  selectedShift.date,
+                  selectedShift.type
+                )
 
-                // If pending request exists, show withdraw button
+                // If pending request exists, show withdraw button (and allow new request option)
                 if (request?.status === 'pending') {
+                  const pingInfo = getPingInfo(request)
+
                   return (
                     <>
                       <div style={s.pendingWarning}>
                         <FontAwesomeIcon icon='clock' /> Cancellation request
                         pending manager approval
                       </div>
-                      <button
-                        style={s.withdrawBtn}
-                        onClick={() => handleWithdraw(request.id)}
-                      >
-                        Withdraw request
-                      </button>
+
+                      {pingInfo.lastPingedAt && (
+                        <div style={s.lastPingInfo}>
+                          <FontAwesomeIcon icon='paper-plane' /> Last pinged:{' '}
+                          {new Date(pingInfo.lastPingedAt).toLocaleString()}
+                        </div>
+                      )}
+
+                      <div style={s.buttonGroup}>
+                        <button
+                          style={s.withdrawBtn}
+                          onClick={() => handleWithdraw(request.id)}
+                        >
+                          Withdraw request
+                        </button>
+
+                        {pingInfo.canPing ? (
+                          <button
+                            style={s.pingBtn}
+                            onClick={() => {
+                              const updated = pingRequest(request.id, staffId)
+                              if (updated) {
+                                // Refresh the request status
+                                const refreshed =
+                                  getShiftRequestStatus(selectedShift)
+                                setSelectedShift({ ...selectedShift }) // Force re-render
+                                // Show temporary feedback
+                                alert(
+                                  `Ping sent! Manager has been notified. (${pingInfo.remainingPings - 1} pings remaining)`
+                                )
+                              }
+                            }}
+                          >
+                            <FontAwesomeIcon icon='bell' /> Ping Manager (
+                            {pingInfo.remainingPings} left)
+                          </button>
+                        ) : (
+                          <button
+                            style={s.pingBtnDisabled}
+                            disabled
+                            title={pingInfo.message}
+                          >
+                            <FontAwesomeIcon icon='bell-slash' /> Ping limit
+                            reached
+                          </button>
+                        )}
+                      </div>
+
+                      {pingInfo.message && !pingInfo.canPing && (
+                        <div style={s.pingLimitWarning}>
+                          <FontAwesomeIcon icon='triangle-exclamation' /> Max
+                          pings reached (3/3)
+                        </div>
+                      )}
                     </>
                   )
                 }
 
-                // If already approved or rejected, don't show cancel button
-                if (
-                  request?.status === 'approved' ||
-                  request?.status === 'rejected'
-                ) {
-                  return null
+                // ALWAYS show cancel button for approved, rejected, withdrawn, or no request
+                // Only hide if shift is already cancelled (approved) - that shift is gone
+                if (request?.status === 'approved') {
+                  return (
+                    <div style={s.approvedNote}>
+                      <FontAwesomeIcon icon='check-circle' /> This shift has
+                      been cancelled and removed from the rota.
+                    </div>
+                  )
                 }
 
-                // If withdrawn, show normal cancel button again
+                // Show cancel button for all other cases (rejected, withdrawn, or no request)
                 if (!showReasonForm) {
                   return (
-                    <button
-                      style={s.cancelShiftBtn}
-                      onClick={() => setShowReasonForm(true)}
-                    >
-                      Request cancellation
-                    </button>
+                    <>
+                      {shouldWarn && (
+                        <div style={s.warningNote}>
+                          <FontAwesomeIcon icon='triangle-exclamation' />{' '}
+                          {message}
+                        </div>
+                      )}
+                      <button
+                        style={s.cancelShiftBtn}
+                        onClick={() => setShowReasonForm(true)}
+                      >
+                        Request cancellation
+                      </button>
+                    </>
                   )
                 }
 
                 // Show reason form
                 return (
                   <div style={s.reasonForm}>
+                    {shouldWarn && (
+                      <div style={s.warningNoteInline}>
+                        <FontAwesomeIcon icon='triangle-exclamation' />{' '}
+                        {message}
+                      </div>
+                    )}
                     <div style={s.reasonLabel}>Reason for cancellation:</div>
                     <select
                       style={s.reasonSelect}
@@ -584,6 +657,9 @@ const s = {
     borderRadius: '16px',
     width: '100%',
     maxWidth: '400px',
+    maxHeight: '90vh',
+    display: 'flex',
+    flexDirection: 'column',
     overflow: 'hidden',
   },
   modalHeader: {
@@ -613,6 +689,8 @@ const s = {
     display: 'flex',
     flexDirection: 'column',
     gap: '12px',
+    overflowY: 'auto',
+    flex: 1,
   },
   detailRow: {
     display: 'flex',
@@ -621,18 +699,7 @@ const s = {
   },
   detailLabel: { fontSize: '13px', color: '#9499b0' },
   detailVal: { fontSize: '13px', fontWeight: 500, color: '#e8eaf0' },
-  cancelShiftBtn: {
-    width: '100%',
-    background: 'rgba(232,92,61,0.1)',
-    border: '1px solid rgba(232,92,61,0.25)',
-    color: '#e85c3d',
-    padding: '12px',
-    fontSize: '13px',
-    fontWeight: 500,
-    cursor: 'pointer',
-    fontFamily: 'DM Sans, sans-serif',
-    borderTop: '1px solid rgba(255,255,255,0.07)',
-  },
+
   pendingWarning: {
     padding: '12px 24px',
     background: 'rgba(196,136,58,0.1)',
@@ -643,20 +710,9 @@ const s = {
     alignItems: 'center',
     gap: '8px',
   },
-  withdrawBtn: {
-    width: '100%',
-    background: 'rgba(232,92,61,0.1)',
-    border: '1px solid rgba(232,92,61,0.25)',
-    color: '#e85c3d',
-    padding: '12px',
-    fontSize: '13px',
-    fontWeight: 500,
-    cursor: 'pointer',
-    fontFamily: 'DM Sans, sans-serif',
-    borderTop: '1px solid rgba(255,255,255,0.07)',
-  },
+
   reasonForm: {
-    padding: '16px 24px',
+    padding: '16px 24px 20px 24px',
     borderTop: '1px solid rgba(255,255,255,0.07)',
     display: 'flex',
     flexDirection: 'column',
@@ -671,38 +727,163 @@ const s = {
     background: '#1d1f2b',
     border: '1px solid rgba(255,255,255,0.08)',
     borderRadius: '8px',
-    padding: '10px',
+    padding: '10px 12px',
     fontSize: '13px',
     color: '#e8eaf0',
     fontFamily: 'DM Sans, sans-serif',
     width: '100%',
+    boxSizing: 'border-box',
   },
   reasonTextarea: {
     background: '#1d1f2b',
     border: '1px solid rgba(255,255,255,0.08)',
     borderRadius: '8px',
-    padding: '10px',
+    padding: '10px 12px',
     fontSize: '13px',
     color: '#e8eaf0',
     fontFamily: 'DM Sans, sans-serif',
     width: '100%',
     resize: 'vertical',
+    minHeight: '70px',
+    maxHeight: '120px',
+    boxSizing: 'border-box',
   },
   reasonActions: {
     display: 'flex',
     gap: '8px',
     marginTop: '4px',
   },
-  cancelReasonBtn: {
-    flex: 1,
-    background: 'transparent',
-    border: '1px solid rgba(255,255,255,0.1)',
-    borderRadius: '8px',
-    color: '#9499b0',
-    padding: '9px',
+
+  dividerLight: {
+    height: '1px',
+    background: 'rgba(255,255,255,0.05)',
+    margin: '12px 0',
+  },
+  cancelShiftBtnSecondary: {
+    width: '100%',
+    background: 'rgba(108,143,255,0.08)',
+    border: '1px solid rgba(108,143,255,0.25)',
+    color: '#6c8fff',
+    padding: '12px',
     fontSize: '13px',
+    fontWeight: 500,
     cursor: 'pointer',
     fontFamily: 'DM Sans, sans-serif',
+    borderRadius: '8px',
+    marginBottom: '8px',
+  },
+  approvedNote: {
+    padding: '16px 24px',
+    background: 'rgba(46,204,138,0.08)',
+    borderTop: '1px solid rgba(255,255,255,0.07)',
+    color: '#2ecc8a',
+    fontSize: '13px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+  },
+  warningNoteInline: {
+    padding: '10px',
+    background: 'rgba(196,136,58,0.08)',
+    border: '1px solid rgba(196,136,58,0.2)',
+    borderRadius: '8px',
+    fontSize: '12px',
+    color: '#c4883a',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    marginBottom: '12px',
+  },
+  buttonGroup: {
+    display: 'flex',
+    gap: '10px',
+    padding: '12px 24px 16px 24px',
+    borderTop: '1px solid rgba(255,255,255,0.05)',
+  },
+
+  lastPingInfo: {
+    padding: '8px 24px',
+    fontSize: '12px',
+    color: '#9499b0',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    borderBottom: '1px solid rgba(255,255,255,0.05)',
+  },
+  pingLimitWarning: {
+    padding: '12px 24px',
+    background: 'rgba(232,92,61,0.08)',
+    borderTop: '1px solid rgba(255,255,255,0.05)',
+    fontSize: '12px',
+    color: '#e85c3d',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+  },
+  withdrawBtn: {
+    flex: 1,
+    background: 'rgba(232,92,61,0.1)',
+    border: '1px solid rgba(232,92,61,0.25)',
+    borderRadius: '8px',
+    color: '#e85c3d',
+    padding: '8px 12px',
+    fontSize: '12px',
+    fontWeight: 500,
+    cursor: 'pointer',
+    fontFamily: 'DM Sans, sans-serif',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '6px',
+  },
+  pingBtn: {
+    flex: 1,
+    background: 'rgba(108,143,255,0.12)',
+    border: '1px solid rgba(108,143,255,0.3)',
+    borderRadius: '8px',
+    color: '#6c8fff',
+    padding: '8px 12px',
+    fontSize: '12px',
+    fontWeight: 500,
+    cursor: 'pointer',
+    fontFamily: 'DM Sans, sans-serif',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '6px',
+  },
+  pingBtnDisabled: {
+    flex: 1,
+    background: 'rgba(255,255,255,0.04)',
+    border: '1px solid rgba(255,255,255,0.1)',
+    borderRadius: '8px',
+    color: '#5d6180',
+    padding: '8px 12px',
+    fontSize: '12px',
+    fontWeight: 500,
+    cursor: 'not-allowed',
+    fontFamily: 'DM Sans, sans-serif',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '6px',
+  },
+  cancelShiftBtn: {
+    width: '100%',
+    background: 'rgba(232,92,61,0.1)',
+    border: '1px solid rgba(232,92,61,0.25)',
+    borderRadius: '8px',
+    color: '#e85c3d',
+    padding: '10px 12px',
+    fontSize: '12px',
+    fontWeight: 500,
+    cursor: 'pointer',
+    fontFamily: 'DM Sans, sans-serif',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '6px',
+    marginTop: '8px',
   },
   submitReasonBtn: {
     flex: 1,
@@ -710,9 +891,20 @@ const s = {
     border: 'none',
     borderRadius: '8px',
     color: '#fff',
-    padding: '9px',
-    fontSize: '13px',
+    padding: '8px 12px',
+    fontSize: '12px',
     fontWeight: 500,
+    cursor: 'pointer',
+    fontFamily: 'DM Sans, sans-serif',
+  },
+  cancelReasonBtn: {
+    flex: 1,
+    background: 'transparent',
+    border: '1px solid rgba(255,255,255,0.1)',
+    borderRadius: '8px',
+    color: '#9499b0',
+    padding: '8px 12px',
+    fontSize: '12px',
     cursor: 'pointer',
     fontFamily: 'DM Sans, sans-serif',
   },

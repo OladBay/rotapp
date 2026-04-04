@@ -405,7 +405,17 @@ function Staff() {
                       <div key={request.id} style={s.requestCard}>
                         <div style={s.requestHeader}>
                           <div style={s.requestStaff}>{request.staffName}</div>
-                          <div style={s.requestStatus}>pending</div>
+                          <div style={s.requestHeaderRight}>
+                            {request.pingCount > 0 && (
+                              <span style={s.pingBadge}>
+                                <FontAwesomeIcon icon='bell' /> Pinged{' '}
+                                {request.pingCount}x
+                                {request.lastPingedAt &&
+                                  ` · ${new Date(request.lastPingedAt).toLocaleDateString()}`}
+                              </span>
+                            )}
+                            <div style={s.requestStatus}>pending</div>
+                          </div>
                         </div>
                         <div style={s.requestDetails}>
                           <div>
@@ -1079,6 +1089,9 @@ const s = {
     borderRadius: '16px',
     width: '100%',
     maxWidth: '400px',
+    maxHeight: '90vh',
+    display: 'flex',
+    flexDirection: 'column',
     overflow: 'hidden',
   },
   modalHeader: {
@@ -1108,6 +1121,8 @@ const s = {
     display: 'flex',
     flexDirection: 'column',
     gap: '14px',
+    overflowY: 'auto',
+    flex: 1,
   },
   profileTop: { display: 'flex', alignItems: 'center', gap: '14px' },
   profileAvatar: {
@@ -1140,6 +1155,7 @@ const s = {
   modalFooter: {
     padding: '16px 24px',
     borderTop: '1px solid rgba(255,255,255,0.07)',
+    flexShrink: 0,
   },
   modalNote: {
     fontSize: '12.5px',
@@ -1358,28 +1374,31 @@ const s = {
     gap: '6px',
   },
   warningNote: {
-    marginTop: '12px',
-    padding: '10px',
+    marginTop: '8px',
+    padding: '8px 10px',
     background: 'rgba(232,92,61,0.08)',
     border: '1px solid rgba(232,92,61,0.2)',
     borderRadius: '8px',
-    fontSize: '12px',
+    fontSize: '11px',
     color: '#e85c3d',
     display: 'flex',
     alignItems: 'center',
-    gap: '8px',
+    gap: '6px',
   },
   textarea: {
     background: '#1d1f2b',
     border: '1px solid rgba(255,255,255,0.08)',
-    borderRadius: '10px',
-    padding: '11px 14px',
+    borderRadius: '8px',
+    padding: '10px 12px',
     fontSize: '13px',
     color: '#e8eaf0',
     outline: 'none',
     fontFamily: 'DM Sans, sans-serif',
     width: '100%',
     resize: 'vertical',
+    minHeight: '60px',
+    maxHeight: '100px',
+    boxSizing: 'border-box',
   },
   staffRole: {
     fontSize: '11px',
@@ -1410,7 +1429,7 @@ const s = {
 
   modalButtonGroup: {
     display: 'flex',
-    gap: '12px',
+    gap: '10px',
     width: '100%',
   },
 
@@ -1420,8 +1439,8 @@ const s = {
     border: '1px solid rgba(255,255,255,0.15)',
     borderRadius: '8px',
     color: '#9499b0',
-    padding: '12px',
-    fontSize: '13px',
+    padding: '10px 12px',
+    fontSize: '12px',
     fontWeight: 500,
     cursor: 'pointer',
     fontFamily: 'DM Sans, sans-serif',
@@ -1433,15 +1452,15 @@ const s = {
     border: 'none',
     borderRadius: '8px',
     color: '#fff',
-    padding: '12px',
-    fontSize: '13px',
+    padding: '10px 12px',
+    fontSize: '12px',
     fontWeight: 500,
     cursor: 'pointer',
     fontFamily: 'DM Sans, sans-serif',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: '8px',
+    gap: '6px',
   },
 
   rejectModalBtn: {
@@ -1450,15 +1469,30 @@ const s = {
     border: '1px solid rgba(232,92,61,0.4)',
     borderRadius: '8px',
     color: '#e85c3d',
-    padding: '12px',
-    fontSize: '13px',
+    padding: '10px 12px',
+    fontSize: '12px',
     fontWeight: 500,
     cursor: 'pointer',
     fontFamily: 'DM Sans, sans-serif',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: '8px',
+    gap: '6px',
+  },
+  requestHeaderRight: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+  },
+  pingBadge: {
+    fontSize: '10px',
+    padding: '3px 8px',
+    borderRadius: '5px',
+    background: 'rgba(39, 45, 65, 0.12)',
+    color: '#6c8fff',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '5px',
   },
 }
 
