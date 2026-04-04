@@ -20,7 +20,7 @@ export const mockUsers = [
     status: 'active',
   },
   {
-    id: 'u3',
+    id: 's1',
     name: 'Claire Hadley',
     email: 'claire@rotapp.com',
     password: 'test123',
@@ -28,9 +28,11 @@ export const mockUsers = [
     activeRole: 'manager',
     home: 'meadowview',
     status: 'active',
+    gender: 'F',
+    driver: true,
   },
   {
-    id: 'u4',
+    id: 's2',
     name: 'James Osei',
     email: 'james@rotapp.com',
     password: 'test123',
@@ -38,9 +40,11 @@ export const mockUsers = [
     activeRole: 'deputy',
     home: 'meadowview',
     status: 'active',
+    gender: 'M',
+    driver: true,
   },
   {
-    id: 'u5',
+    id: 's3',
     name: 'Priya Nair',
     email: 'priya@rotapp.com',
     password: 'test123',
@@ -48,9 +52,11 @@ export const mockUsers = [
     activeRole: 'senior',
     home: 'meadowview',
     status: 'active',
+    gender: 'F',
+    driver: true,
   },
   {
-    id: 'u6',
+    id: 's4',
     name: 'Dayo Adeyemi',
     email: 'dayo@rotapp.com',
     password: 'test123',
@@ -62,7 +68,7 @@ export const mockUsers = [
     driver: false,
   },
   {
-    id: 'u7',
+    id: 's5',
     name: 'Sophie Wright',
     email: 'sophie@rotapp.com',
     password: 'test123',
@@ -74,7 +80,7 @@ export const mockUsers = [
     driver: false,
   },
   {
-    id: 'u8',
+    id: 's6',
     name: 'Marco Testa',
     email: 'marco@rotapp.com',
     password: 'test123',
@@ -86,7 +92,7 @@ export const mockUsers = [
     driver: true,
   },
   {
-    id: 'u9',
+    id: 's7',
     name: 'Amara Diallo',
     email: 'amara@rotapp.com',
     password: 'test123',
@@ -98,7 +104,7 @@ export const mockUsers = [
     driver: false,
   },
   {
-    id: 'u10',
+    id: 's8',
     name: 'Tyler Beckett',
     email: 'tyler@rotapp.com',
     password: 'test123',
@@ -110,7 +116,7 @@ export const mockUsers = [
     driver: true,
   },
   {
-    id: 'u11',
+    id: 's9',
     name: 'Kezia Okonkwo',
     email: 'kezia@rotapp.com',
     password: 'test123',

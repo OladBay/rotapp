@@ -1,8 +1,20 @@
-import { useState } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useAuth } from '../context/AuthContext'
 import Navbar from '../components/layout/Navbar'
-import { mockShifts, staffIdMap } from '../data/mockCalendar'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { useLocalStorage } from '../hooks/useLocalStorage'
+import {
+  getWeekDates,
+  formatDate,
+  formatShort,
+  getMondayOfWeek,
+  addWeeks,
+  getMonthDates,
+  getYearMonths,
+  isSameDay,
+  dateKey,
+  getGeneratorMondayKey,
+} from '../utils/dateUtils'
 import {
   addRequest,
   updateRequest,
@@ -13,60 +25,111 @@ import {
   getPingInfo,
 } from '../utils/cancelRequests'
 
-const WEEK = [
-  { date: '2025-03-31', day: 'Mon', label: '31 Mar' },
-  { date: '2025-04-01', day: 'Tue', label: '1 Apr' },
-  { date: '2025-04-02', day: 'Wed', label: '2 Apr' },
-  { date: '2025-04-03', day: 'Thu', label: '3 Apr' },
-  { date: '2025-04-04', day: 'Fri', label: '4 Apr' },
-  { date: '2025-04-05', day: 'Sat', label: '5 Apr' },
-  { date: '2025-04-06', day: 'Sun', label: '6 Apr' },
-]
+const TODAY = new Date()
+const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
 function Calendar() {
   const { user } = useAuth()
+  const [monthRota] = useLocalStorage('rotapp_month_rota', {})
+  const [weekRotaState, setWeekRota] = useLocalStorage('rotapp_week_rota', {
+    early: Array(7).fill([]),
+    late: Array(7).fill([]),
+    onCall: Array(7).fill([]),
+  })
+
+  // View state
+  const [viewMode, setViewMode] = useState('week') // Default week for staff
+  const [currentMonday, setMonday] = useState(getMondayOfWeek(TODAY))
+  const [currentYear, setCurrentYear] = useState(TODAY.getFullYear())
+  const [hoveredMonth, setHoveredMonth] = useState(null)
+
+  // Modal states
   const [selectedShift, setSelectedShift] = useState(null)
-  const [cancelledShifts, setCancelledShifts] = useState([])
   const [cancelReason, setCancelReason] = useState('')
   const [customReasonText, setCustomReasonText] = useState('')
   const [showReasonForm, setShowReasonForm] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
-  const staffId = staffIdMap[user?.email]
-  const myShifts = staffId ? mockShifts[staffId] || [] : []
+  const staffId = user?.id
+  const staffName = user?.name
 
-  // Helper to check if shift has pending request
+  // Get the current week's rota (from monthRota if available, else weekRotaState)
+  const currentWeekKey = getGeneratorMondayKey(currentMonday)
+  const currentWeekRota = monthRota[currentWeekKey] || weekRotaState
+
+  // Extract staff's shifts for current week
+  const myShiftsForWeek = useMemo(() => {
+    const shifts = []
+    for (let dayIdx = 0; dayIdx < 7; dayIdx++) {
+      const date = new Date(currentMonday)
+      date.setDate(currentMonday.getDate() + dayIdx)
+      const y = date.getFullYear()
+      const m = String(date.getMonth() + 1).padStart(2, '0')
+      const d = String(date.getDate()).padStart(2, '0')
+      const dateStr = `${y}-${m}-${d}`
+
+      // Check early shift
+      const earlyStaff = currentWeekRota.early?.[dayIdx] || []
+      const myEarly = earlyStaff.find((s) => s.id === staffId)
+      if (myEarly) {
+        shifts.push({
+          date: dateStr,
+          day: dayIdx,
+          dayName: DAYS[dayIdx],
+          type: 'early',
+          sleepIn: false,
+          home: user?.home || 'Meadowview House',
+        })
+      }
+
+      // Check late shift
+      const lateStaff = currentWeekRota.late?.[dayIdx] || []
+      const myLate = lateStaff.find((s) => s.id === staffId)
+      if (myLate) {
+        shifts.push({
+          date: dateStr,
+          day: dayIdx,
+          dayName: DAYS[dayIdx],
+          type: 'late',
+          sleepIn: myLate.sleepIn || false,
+          home: user?.home || 'Meadowview House',
+        })
+      }
+    }
+    return shifts
+  }, [currentWeekRota, currentMonday, staffId, user?.home])
+
+  // Get shift for a specific day
+  const getShiftForDay = (date) => {
+    return myShiftsForWeek.find((s) => s.date === date)
+  }
+
+  // Helper to check request status
   const getShiftRequestStatus = (shift) => {
     if (!shift || !staffId) return null
     const requests = loadRequests()
-    const request = requests.find(
+    return requests.find(
       (r) =>
         r.staffId === staffId &&
         r.shiftDate === shift.date &&
         r.shiftType === shift.type
     )
-    return request
   }
 
-  const getShiftForDay = (date) =>
-    myShifts.find((s) => s.date === date && !cancelledShifts.includes(s.date))
+  // Navigation
+  const prevWeek = () => setMonday((prev) => addWeeks(prev, -1))
+  const nextWeek = () => setMonday((prev) => addWeeks(prev, 1))
+  const weekDates = getWeekDates(currentMonday)
+  const startLabel = formatDate(weekDates[0])
+  const endLabel = formatDate(weekDates[6])
 
-  const handleCancel = (shift) => {
-    setCancelledShifts((prev) => [...prev, shift.date])
-    setSelectedShift(null)
-    setCancelConfirm(false)
-  }
-
-  // Handle withdraw request
+  // Handle withdraw
   const handleWithdraw = (requestId) => {
     updateRequest(requestId, {
       status: 'withdrawn',
       withdrawnAt: new Date().toISOString(),
     })
     setSelectedShift(null)
-    setCancelReason('')
-    setCustomReasonText('')
-    setShowReasonForm(false)
   }
 
   // Handle submit request
@@ -78,7 +141,7 @@ function Calendar() {
 
     addRequest({
       staffId: staffId,
-      staffName: user?.name,
+      staffName: staffName,
       shiftDate: selectedShift.date,
       shiftType: selectedShift.type,
       reason: cancelReason,
@@ -89,16 +152,37 @@ function Calendar() {
       setSelectedShift(null)
       setCancelReason('')
       setCustomReasonText('')
+      setShowReasonForm(false)
       setSubmitting(false)
-      // Force a re-render of the calendar by refreshing the component
-      // The parent component will reload when modal closes
     }, 500)
   }
 
-  const workedDays = myShifts.filter(
-    (s) => !cancelledShifts.includes(s.date)
-  ).length
-  const hoursThisWeek = workedDays * 7.5
+  // Month view helpers
+  const getRotaForDate = (date) => {
+    const monday = getMondayOfWeek(date)
+    const key = dateKey(monday)
+    return monthRota[key] || null
+  }
+
+  const hasShiftOnDate = (date, staffId) => {
+    const rota = getRotaForDate(date)
+    if (!rota) return false
+    const dayOfWeek = (date.getDay() + 6) % 7
+    const earlyHas = (rota.early?.[dayOfWeek] || []).some(
+      (s) => s.id === staffId
+    )
+    const lateHas = (rota.late?.[dayOfWeek] || []).some((s) => s.id === staffId)
+    return earlyHas || lateHas
+  }
+
+  const yearMonths = useMemo(() => getYearMonths(currentYear), [currentYear])
+
+  const handleMonthClick = (year, month) => {
+    const firstOfMonth = new Date(year, month, 1)
+    setMonday(getMondayOfWeek(firstOfMonth))
+    setCurrentYear(year)
+    setViewMode('week')
+  }
 
   return (
     <div style={s.page}>
@@ -109,429 +193,568 @@ function Calendar() {
         <div style={s.header}>
           <div>
             <h1 style={s.title}>My Schedule</h1>
-            <p style={s.subtitle}>w/c 31 Mar 2025</p>
+            <p style={s.subtitle}>
+              {viewMode === 'week'
+                ? `${startLabel} – ${endLabel}`
+                : `${currentYear}`}
+            </p>
           </div>
-          <div style={s.statsRow}>
-            <div style={s.stat}>
-              <div style={s.statVal}>{workedDays}</div>
-              <div style={s.statLabel}>Shifts</div>
-            </div>
-            <div style={s.stat}>
-              <div style={s.statVal}>{hoursThisWeek}h</div>
-              <div style={s.statLabel}>Hours</div>
-            </div>
+          <div style={s.viewToggle}>
+            {[
+              { value: 'week', label: 'Week' },
+              { value: 'month', label: 'Month' },
+            ].map((v) => (
+              <button
+                key={v.value}
+                style={{
+                  ...s.toggleBtn,
+                  background: viewMode === v.value ? '#6c8fff' : 'transparent',
+                  color: viewMode === v.value ? '#fff' : '#9499b0',
+                }}
+                onClick={() => setViewMode(v.value)}
+              >
+                {v.label}
+              </button>
+            ))}
           </div>
         </div>
 
-        {/* Week grid */}
-        <div style={s.weekGrid}>
-          {WEEK.map(({ date, day, label }) => {
-            const shift = getShiftForDay(date)
-            const isToday = date === '2025-04-01'
-            const isCancelled =
-              cancelledShifts.includes(date) &&
-              myShifts.find((s) => s.date === date)
-
-            // Check if shift has pending request
-            const shiftRequest = shift ? getShiftRequestStatus(shift) : null
-            const isPending = shiftRequest?.status === 'pending'
-            const isApproved = shiftRequest?.status === 'approved'
-            const isRejected = shiftRequest?.status === 'rejected'
-            const isWithdrawn = shiftRequest?.status === 'withdrawn'
-
-            return (
-              <div
-                key={date}
-                style={{
-                  ...s.dayCard,
-                  border: isToday
-                    ? '1px solid rgba(108,143,255,0.4)'
-                    : '1px solid rgba(255,255,255,0.07)',
-                  cursor: shift ? 'pointer' : 'default',
-                }}
-                onClick={() => shift && setSelectedShift(shift)}
+        {/* WEEK VIEW */}
+        {viewMode === 'week' && (
+          <>
+            <div style={s.weekNav}>
+              <button style={s.navArrow} onClick={prevWeek}>
+                <FontAwesomeIcon icon='chevron-left' />
+              </button>
+              <span style={s.weekLabel}>{`${startLabel} – ${endLabel}`}</span>
+              <button style={s.navArrow} onClick={nextWeek}>
+                <FontAwesomeIcon icon='chevron-right' />
+              </button>
+              <button
+                style={s.todayBtn}
+                onClick={() => setMonday(getMondayOfWeek(TODAY))}
               >
-                <div style={s.dayTop}>
-                  <span
-                    style={{
-                      ...s.dayName,
-                      color: isToday ? '#6c8fff' : '#9499b0',
-                    }}
-                  >
-                    {day}
-                  </span>
-                  <span
-                    style={{
-                      ...s.dayDate,
-                      color: isToday ? '#6c8fff' : '#e8eaf0',
-                    }}
-                  >
-                    {label}
-                  </span>
-                </div>
+                Today
+              </button>
+            </div>
 
-                {isCancelled ? (
-                  <div style={s.cancelledTag}>Cancelled</div>
-                ) : isApproved ? (
-                  <div style={s.approvedTag}>Cancellation approved</div>
-                ) : shift ? (
-                  // Show normal shift card for all other cases (including rejected, withdrawn, no request)
-                  <div
-                    style={{
-                      ...s.shiftCard,
-                      background: isPending
-                        ? 'rgba(196,136,58,0.15)'
-                        : shift.type === 'early'
-                          ? 'rgba(42,127,98,0.15)'
-                          : 'rgba(122,79,168,0.15)',
-                      border: isPending
-                        ? '1px solid rgba(196,136,58,0.35)'
-                        : shift.type === 'early'
-                          ? '1px solid rgba(42,127,98,0.35)'
-                          : '1px solid rgba(122,79,168,0.35)',
-                    }}
-                  >
+            <div style={s.gridWrap}>
+              <div style={s.grid}>
+                {/* Header row */}
+                <div style={s.colLabel} />
+                {DAYS.map((day, i) => {
+                  const date = weekDates[i]
+                  const isToday = isSameDay(date, TODAY)
+                  return (
                     <div
+                      key={i}
                       style={{
-                        ...s.shiftType,
-                        color: isPending
-                          ? '#c4883a'
-                          : shift.type === 'early'
-                            ? '#2a7f62'
-                            : '#7a4fa8',
+                        ...s.dayHeader,
+                        background: isToday
+                          ? 'rgba(108,143,255,0.06)'
+                          : 'transparent',
                       }}
                     >
-                      {shift.type === 'early' ? 'Early' : 'Late'}
-                      {shift.sleepIn && ' · 💤 Sleep-in'}
-                      {isPending && ' · ⏳ Pending'}
+                      <div
+                        style={{
+                          ...s.dayName,
+                          color: isToday ? '#6c8fff' : '#9499b0',
+                        }}
+                      >
+                        {day}
+                      </div>
+                      <div
+                        style={{
+                          ...s.dayDate,
+                          color: isToday ? '#6c8fff' : '#e8eaf0',
+                        }}
+                      >
+                        {formatShort(date)}
+                      </div>
                     </div>
-                    <div style={s.shiftTime}>{shift.time}</div>
-                    <div style={s.shiftHome}>{shift.home}</div>
-                  </div>
-                ) : (
-                  <div style={s.offDay}>Day off</div>
-                )}
-              </div>
-            )
-          })}
-        </div>
+                  )
+                })}
 
-        {/* Shift detail modal */}
-        {selectedShift && (
-          <div
-            style={s.overlay}
-            onClick={() => {
-              setSelectedShift(null)
-              setShowReasonForm(false)
-              setCancelReason('')
-              setCustomReasonText('')
-            }}
-          >
-            <div style={s.modal} onClick={(e) => e.stopPropagation()}>
-              <div style={s.modalHeader}>
-                <div style={s.modalTitle}>Shift Details</div>
-                <button
-                  style={s.closeBtn}
-                  onClick={() => {
-                    setSelectedShift(null)
-                    setShowReasonForm(false)
-                    setCancelReason('')
-                    setCustomReasonText('')
-                  }}
-                >
-                  <FontAwesomeIcon icon='xmark' />
-                </button>
-              </div>
+                {/* My Shifts row */}
+                <div style={s.shiftLabel}>
+                  <div style={s.shiftName}>My Shifts</div>
+                  <div style={s.shiftTime}>Your assigned shifts</div>
+                </div>
+                {DAYS.map((_, dayIdx) => {
+                  const date = weekDates[dayIdx]
+                  const y2 = date.getFullYear()
+                  const m2 = String(date.getMonth() + 1).padStart(2, '0')
+                  const d2 = String(date.getDate()).padStart(2, '0')
+                  const dateStr = `${y2}-${m2}-${d2}`
+                  const shift = getShiftForDay(dateStr)
+                  const shiftRequest = shift
+                    ? getShiftRequestStatus(shift)
+                    : null
+                  const isPending = shiftRequest?.status === 'pending'
+                  const isApproved = shiftRequest?.status === 'approved'
 
-              <div style={s.modalBody}>
-                <div style={s.detailRow}>
-                  <span style={s.detailLabel}>Day</span>
-                  <span style={s.detailVal}>
-                    {selectedShift.day}, {selectedShift.date}
-                  </span>
-                </div>
-                <div style={s.detailRow}>
-                  <span style={s.detailLabel}>Shift</span>
-                  <span
-                    style={{
-                      ...s.detailVal,
-                      color:
-                        selectedShift.type === 'early' ? '#2a7f62' : '#7a4fa8',
-                      textTransform: 'capitalize',
-                    }}
-                  >
-                    {selectedShift.type}
-                  </span>
-                </div>
-                <div style={s.detailRow}>
-                  <span style={s.detailLabel}>Time</span>
-                  <span style={s.detailVal}>{selectedShift.time}</span>
-                </div>
-                <div style={s.detailRow}>
-                  <span style={s.detailLabel}>Home</span>
-                  <span style={s.detailVal}>{selectedShift.home}</span>
-                </div>
-                {selectedShift.sleepIn && (
-                  <div style={s.detailRow}>
-                    <span style={s.detailLabel}>Sleep-in</span>
-                    <span style={{ ...s.detailVal, color: '#c4883a' }}>
-                      💤 Yes
-                    </span>
-                  </div>
-                )}
-                <div style={s.detailRow}>
-                  <span style={s.detailLabel}>Status</span>
-                  {(() => {
-                    const request = getShiftRequestStatus(selectedShift)
-                    if (request?.status === 'pending') {
-                      return (
-                        <span style={{ ...s.detailVal, color: '#c4883a' }}>
-                          ⏳ Cancellation requested
-                        </span>
-                      )
-                    }
-                    if (request?.status === 'approved') {
-                      return (
-                        <span style={{ ...s.detailVal, color: '#e85c3d' }}>
-                          ✗ Cancelled (approved)
-                        </span>
-                      )
-                    }
-                    if (request?.status === 'rejected') {
-                      return (
-                        <span style={{ ...s.detailVal, color: '#9499b0' }}>
-                          Cancellation rejected
-                        </span>
-                      )
-                    }
-                    if (request?.status === 'withdrawn') {
-                      return (
-                        <span style={{ ...s.detailVal, color: '#2ecc8a' }}>
-                          ✓ Confirmed (request withdrawn)
-                        </span>
-                      )
-                    }
-                    return (
-                      <span style={{ ...s.detailVal, color: '#2ecc8a' }}>
-                        ✓ Confirmed
-                      </span>
-                    )
-                  })()}
-                </div>
-
-                {/* Show rejection reason if present */}
-                {(() => {
-                  const request = getShiftRequestStatus(selectedShift)
-                  if (
-                    request?.status === 'rejected' &&
-                    request.rejectionReason
-                  ) {
-                    return (
-                      <div style={s.detailRow}>
-                        <span style={s.detailLabel}>Rejection reason</span>
-                        <span
+                  return (
+                    <div
+                      key={dayIdx}
+                      style={{
+                        ...s.cell,
+                        cursor: shift ? 'pointer' : 'default',
+                      }}
+                      onClick={() => shift && setSelectedShift(shift)}
+                    >
+                      {isApproved ? (
+                        <div style={s.cancelledTag}>Cancelled</div>
+                      ) : shift ? (
+                        <div
                           style={{
-                            ...s.detailVal,
-                            color: '#e85c3d',
-                            fontSize: '12px',
+                            ...s.shiftCard,
+                            background: isPending
+                              ? 'rgba(196,136,58,0.15)'
+                              : shift.type === 'early'
+                                ? 'rgba(42,127,98,0.15)'
+                                : 'rgba(122,79,168,0.15)',
+                            border: isPending
+                              ? '1px solid rgba(196,136,58,0.35)'
+                              : shift.type === 'early'
+                                ? '1px solid rgba(42,127,98,0.35)'
+                                : '1px solid rgba(122,79,168,0.35)',
                           }}
                         >
-                          {request.rejectionReason}
-                        </span>
-                      </div>
-                    )
-                  }
-                  return null
-                })()}
-              </div>
-
-              {/* Show different buttons based on request status */}
-              {(() => {
-                const request = getShiftRequestStatus(selectedShift)
-                const { count, shouldWarn, message } = getRecentRequestWarning(
-                  staffId,
-                  selectedShift.date,
-                  selectedShift.type
-                )
-
-                // If pending request exists, show withdraw button (and allow new request option)
-                if (request?.status === 'pending') {
-                  const pingInfo = getPingInfo(request)
-
-                  return (
-                    <>
-                      <div style={s.pendingWarning}>
-                        <FontAwesomeIcon icon='clock' /> Cancellation request
-                        pending manager approval
-                      </div>
-
-                      {pingInfo.lastPingedAt && (
-                        <div style={s.lastPingInfo}>
-                          <FontAwesomeIcon icon='paper-plane' /> Last pinged:{' '}
-                          {new Date(pingInfo.lastPingedAt).toLocaleString()}
-                        </div>
-                      )}
-
-                      <div style={s.buttonGroup}>
-                        <button
-                          style={s.withdrawBtn}
-                          onClick={() => handleWithdraw(request.id)}
-                        >
-                          Withdraw request
-                        </button>
-
-                        {pingInfo.canPing ? (
-                          <button
-                            style={s.pingBtn}
-                            onClick={() => {
-                              const updated = pingRequest(request.id, staffId)
-                              if (updated) {
-                                // Refresh the request status
-                                const refreshed =
-                                  getShiftRequestStatus(selectedShift)
-                                setSelectedShift({ ...selectedShift }) // Force re-render
-                                // Show temporary feedback
-                                alert(
-                                  `Ping sent! Manager has been notified. (${pingInfo.remainingPings - 1} pings remaining)`
-                                )
-                              }
+                          <div
+                            style={{
+                              ...s.shiftType,
+                              color: isPending
+                                ? '#c4883a'
+                                : shift.type === 'early'
+                                  ? '#2a7f62'
+                                  : '#7a4fa8',
                             }}
                           >
-                            <FontAwesomeIcon icon='bell' /> Ping Manager (
-                            {pingInfo.remainingPings} left)
-                          </button>
-                        ) : (
-                          <button
-                            style={s.pingBtnDisabled}
-                            disabled
-                            title={pingInfo.message}
-                          >
-                            <FontAwesomeIcon icon='bell-slash' /> Ping limit
-                            reached
-                          </button>
-                        )}
-                      </div>
-
-                      {pingInfo.message && !pingInfo.canPing && (
-                        <div style={s.pingLimitWarning}>
-                          <FontAwesomeIcon icon='triangle-exclamation' /> Max
-                          pings reached (3/3)
+                            {shift.type === 'early' ? 'Early' : 'Late'}
+                            {shift.sleepIn && ' · 💤 Sleep-in'}
+                            {isPending && ' · ⏳ Pending'}
+                          </div>
+                          <div style={s.shiftTime}>
+                            {shift.type === 'early'
+                              ? '07:00–14:30'
+                              : '14:00–23:00'}
+                          </div>
+                          <div style={s.shiftHome}>{shift.home}</div>
                         </div>
+                      ) : (
+                        <div style={s.offDay}>—</div>
                       )}
-                    </>
-                  )
-                }
-
-                // ALWAYS show cancel button for approved, rejected, withdrawn, or no request
-                // Only hide if shift is already cancelled (approved) - that shift is gone
-                if (request?.status === 'approved') {
-                  return (
-                    <div style={s.approvedNote}>
-                      <FontAwesomeIcon icon='check-circle' /> This shift has
-                      been cancelled and removed from the rota.
                     </div>
                   )
-                }
+                })}
+              </div>
+            </div>
+          </>
+        )}
 
-                // Show cancel button for all other cases (rejected, withdrawn, or no request)
-                if (!showReasonForm) {
-                  return (
-                    <>
-                      {shouldWarn && (
-                        <div style={s.warningNote}>
-                          <FontAwesomeIcon icon='triangle-exclamation' />{' '}
-                          {message}
-                        </div>
-                      )}
-                      <button
-                        style={s.cancelShiftBtn}
-                        onClick={() => setShowReasonForm(true)}
-                      >
-                        Request cancellation
-                      </button>
-                    </>
-                  )
-                }
+        {/* MONTH VIEW */}
+        {viewMode === 'month' && (
+          <>
+            <div style={s.monthNav}>
+              <button
+                style={s.navArrow}
+                onClick={() => setCurrentYear((y) => y - 1)}
+              >
+                <FontAwesomeIcon icon='chevron-left' />
+              </button>
+              <span style={s.weekLabel}>{currentYear}</span>
+              <button
+                style={s.navArrow}
+                onClick={() => setCurrentYear((y) => y + 1)}
+              >
+                <FontAwesomeIcon icon='chevron-right' />
+              </button>
+              <button
+                style={s.todayBtn}
+                onClick={() => {
+                  setCurrentYear(TODAY.getFullYear())
+                  setMonday(getMondayOfWeek(TODAY))
+                }}
+              >
+                Today
+              </button>
+            </div>
 
-                // Show reason form
+            <div style={s.yearWrap}>
+              {yearMonths.map(({ year, month, label }) => {
+                const monthDates = getMonthDates(year, month)
+                const isHovered = hoveredMonth === `${year}-${month}`
+                // Count shifts this month for this staff
+                let shiftCount = 0
+                monthDates.forEach((date) => {
+                  if (
+                    date.getMonth() === month &&
+                    hasShiftOnDate(date, staffId)
+                  ) {
+                    shiftCount++
+                  }
+                })
+
                 return (
-                  <div style={s.reasonForm}>
-                    {shouldWarn && (
-                      <div style={s.warningNoteInline}>
-                        <FontAwesomeIcon icon='triangle-exclamation' />{' '}
-                        {message}
-                      </div>
-                    )}
-                    <div style={s.reasonLabel}>Reason for cancellation:</div>
-                    <select
-                      style={s.reasonSelect}
-                      value={cancelReason}
-                      onChange={(e) => setCancelReason(e.target.value)}
-                    >
-                      <option value=''>Select a reason...</option>
-                      <option value='Sick'>🤒 Sick</option>
-                      <option value='Family emergency'>
-                        🏠 Family emergency
-                      </option>
-                      <option value='Transport issue'>
-                        🚗 Transport issue
-                      </option>
-                      <option value='Other'>📝 Other (please specify)</option>
-                    </select>
+                  <div
+                    key={`${year}-${month}`}
+                    style={{
+                      ...s.miniMonth,
+                      border:
+                        shiftCount > 0
+                          ? '1px solid rgba(108,143,255,0.3)'
+                          : '1px solid rgba(255,255,255,0.06)',
+                      background:
+                        shiftCount > 0 ? 'rgba(108,143,255,0.04)' : '#161820',
+                      transform: isHovered
+                        ? 'translateY(-3px)'
+                        : 'translateY(0)',
+                      boxShadow: isHovered
+                        ? '0 8px 24px rgba(0,0,0,0.35)'
+                        : '0 1px 4px rgba(0,0,0,0.15)',
+                    }}
+                    onMouseEnter={() => setHoveredMonth(`${year}-${month}`)}
+                    onMouseLeave={() => setHoveredMonth(null)}
+                    onClick={() => handleMonthClick(year, month)}
+                  >
+                    <div style={s.miniMonthHeader}>
+                      <div style={s.miniMonthTitle}>{label}</div>
+                      {shiftCount > 0 && (
+                        <span style={s.shiftCountBadge}>
+                          {shiftCount} shift{shiftCount > 1 ? 's' : ''}
+                        </span>
+                      )}
+                    </div>
 
-                    {cancelReason === 'Other' && (
-                      <textarea
-                        style={s.reasonTextarea}
-                        placeholder='Please specify your reason...'
-                        value={customReasonText}
-                        onChange={(e) => setCustomReasonText(e.target.value)}
-                        rows='3'
-                      />
-                    )}
+                    <div style={s.miniDayHeaders}>
+                      {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d, i) => (
+                        <div key={i} style={s.miniDayHead}>
+                          {d}
+                        </div>
+                      ))}
+                    </div>
 
-                    <div style={s.reasonActions}>
-                      <button
-                        style={s.cancelReasonBtn}
-                        onClick={() => {
-                          setShowReasonForm(false)
-                          setCancelReason('')
-                          setCustomReasonText('')
-                        }}
-                      >
-                        Back
-                      </button>
-                      <button
-                        style={{
-                          ...s.submitReasonBtn,
-                          opacity:
-                            !cancelReason ||
-                            (cancelReason === 'Other' &&
-                              !customReasonText.trim())
-                              ? 0.5
-                              : 1,
-                          cursor:
-                            !cancelReason ||
-                            (cancelReason === 'Other' &&
-                              !customReasonText.trim())
-                              ? 'not-allowed'
-                              : 'pointer',
-                        }}
-                        disabled={
-                          !cancelReason ||
-                          (cancelReason === 'Other' && !customReasonText.trim())
-                        }
-                        onClick={handleSubmitRequest}
-                      >
-                        {submitting ? 'Submitting...' : 'Submit request'}
-                      </button>
+                    <div style={s.miniGrid}>
+                      {monthDates.map((date, i) => {
+                        const inMonth = date.getMonth() === month
+                        const isToday = isSameDay(date, TODAY)
+                        const hasShift =
+                          inMonth && hasShiftOnDate(date, staffId)
+                        return (
+                          <div
+                            key={i}
+                            style={{
+                              ...s.miniCell,
+                              opacity: inMonth ? 1 : 0,
+                              background: hasShift
+                                ? 'rgba(108,143,255,0.25)'
+                                : 'transparent',
+                              border: isToday
+                                ? '1.5px solid #6c8fff'
+                                : hasShift
+                                  ? '1px solid rgba(108,143,255,0.4)'
+                                  : '1px solid rgba(255,255,255,0.04)',
+                            }}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              if (!inMonth) return
+                              setMonday(getMondayOfWeek(date))
+                              setCurrentYear(year)
+                              setViewMode('week')
+                            }}
+                          >
+                            <span
+                              style={{
+                                ...s.miniDateNum,
+                                color: isToday
+                                  ? '#6c8fff'
+                                  : hasShift
+                                    ? '#6c8fff'
+                                    : inMonth
+                                      ? '#5d6180'
+                                      : 'transparent',
+                                fontWeight: hasShift ? 600 : 400,
+                              }}
+                            >
+                              {date.getDate()}
+                            </span>
+                          </div>
+                        )
+                      })}
                     </div>
                   </div>
                 )
-              })()}
+              })}
             </div>
-          </div>
+          </>
         )}
       </div>
+
+      {/* Shift detail modal (same as before) */}
+      {selectedShift && (
+        <div
+          style={s.overlay}
+          onClick={() => {
+            setSelectedShift(null)
+            setShowReasonForm(false)
+            setCancelReason('')
+            setCustomReasonText('')
+          }}
+        >
+          <div style={s.modal} onClick={(e) => e.stopPropagation()}>
+            <div style={s.modalHeader}>
+              <div style={s.modalTitle}>Shift Details</div>
+              <button
+                style={s.closeBtn}
+                onClick={() => {
+                  setSelectedShift(null)
+                  setShowReasonForm(false)
+                  setCancelReason('')
+                  setCustomReasonText('')
+                }}
+              >
+                <FontAwesomeIcon icon='xmark' />
+              </button>
+            </div>
+
+            <div style={s.modalBody}>
+              <div style={s.detailRow}>
+                <span style={s.detailLabel}>Day</span>
+                <span style={s.detailVal}>
+                  {selectedShift.dayName}, {selectedShift.date}
+                </span>
+              </div>
+              <div style={s.detailRow}>
+                <span style={s.detailLabel}>Shift</span>
+                <span
+                  style={{
+                    ...s.detailVal,
+                    color:
+                      selectedShift.type === 'early' ? '#2a7f62' : '#7a4fa8',
+                    textTransform: 'capitalize',
+                  }}
+                >
+                  {selectedShift.type}
+                </span>
+              </div>
+              <div style={s.detailRow}>
+                <span style={s.detailLabel}>Time</span>
+                <span style={s.detailVal}>
+                  {selectedShift.type === 'early'
+                    ? '07:00–14:30'
+                    : '14:00–23:00'}
+                </span>
+              </div>
+              <div style={s.detailRow}>
+                <span style={s.detailLabel}>Home</span>
+                <span style={s.detailVal}>{selectedShift.home}</span>
+              </div>
+              {selectedShift.sleepIn && (
+                <div style={s.detailRow}>
+                  <span style={s.detailLabel}>Sleep-in</span>
+                  <span style={{ ...s.detailVal, color: '#c4883a' }}>
+                    💤 Yes
+                  </span>
+                </div>
+              )}
+              <div style={s.detailRow}>
+                <span style={s.detailLabel}>Status</span>
+                {(() => {
+                  const request = getShiftRequestStatus(selectedShift)
+                  if (request?.status === 'pending') {
+                    return (
+                      <span style={{ ...s.detailVal, color: '#c4883a' }}>
+                        ⏳ Cancellation requested
+                      </span>
+                    )
+                  }
+                  if (request?.status === 'approved') {
+                    return (
+                      <span style={{ ...s.detailVal, color: '#e85c3d' }}>
+                        ✗ Cancelled (approved)
+                      </span>
+                    )
+                  }
+                  if (request?.status === 'rejected') {
+                    return (
+                      <span style={{ ...s.detailVal, color: '#9499b0' }}>
+                        Cancellation rejected
+                      </span>
+                    )
+                  }
+                  if (request?.status === 'withdrawn') {
+                    return (
+                      <span style={{ ...s.detailVal, color: '#2ecc8a' }}>
+                        ✓ Confirmed (request withdrawn)
+                      </span>
+                    )
+                  }
+                  return (
+                    <span style={{ ...s.detailVal, color: '#2ecc8a' }}>
+                      ✓ Confirmed
+                    </span>
+                  )
+                })()}
+              </div>
+              {(() => {
+                const request = getShiftRequestStatus(selectedShift)
+                if (request?.status === 'rejected' && request.rejectionReason) {
+                  return (
+                    <div style={s.detailRow}>
+                      <span style={s.detailLabel}>Rejection reason</span>
+                      <span
+                        style={{
+                          ...s.detailVal,
+                          color: '#e85c3d',
+                          fontSize: '12px',
+                        }}
+                      >
+                        {request.rejectionReason}
+                      </span>
+                    </div>
+                  )
+                }
+                return null
+              })()}
+            </div>
+
+            {(() => {
+              const request = getShiftRequestStatus(selectedShift)
+              if (request?.status === 'pending') {
+                const pingInfo = getPingInfo(request)
+                return (
+                  <>
+                    <div style={s.pendingWarning}>
+                      <FontAwesomeIcon icon='clock' /> Cancellation request
+                      pending manager approval
+                    </div>
+                    {pingInfo.lastPingedAt && (
+                      <div style={s.lastPingInfo}>
+                        <FontAwesomeIcon icon='paper-plane' /> Last pinged:{' '}
+                        {new Date(pingInfo.lastPingedAt).toLocaleString()}
+                      </div>
+                    )}
+                    <div style={s.buttonGroup}>
+                      <button
+                        style={s.withdrawBtn}
+                        onClick={() => handleWithdraw(request.id)}
+                      >
+                        Withdraw request
+                      </button>
+                      {pingInfo.canPing ? (
+                        <button
+                          style={s.pingBtn}
+                          onClick={() => {
+                            const updated = pingRequest(request.id, staffId)
+                            if (updated) {
+                              setSelectedShift({ ...selectedShift })
+                              alert(
+                                `Ping sent! (${pingInfo.remainingPings - 1} pings remaining)`
+                              )
+                            }
+                          }}
+                        >
+                          <FontAwesomeIcon icon='bell' /> Ping (
+                          {pingInfo.remainingPings})
+                        </button>
+                      ) : (
+                        <button style={s.pingBtnDisabled} disabled>
+                          <FontAwesomeIcon icon='bell-slash' /> Ping limit
+                          reached
+                        </button>
+                      )}
+                    </div>
+                  </>
+                )
+              }
+              if (request?.status === 'approved') {
+                return null
+              }
+              if (!showReasonForm) {
+                return (
+                  <button
+                    style={s.cancelShiftBtn}
+                    onClick={() => setShowReasonForm(true)}
+                  >
+                    Request cancellation
+                  </button>
+                )
+              }
+              const { shouldWarn, message } = getRecentRequestWarning(
+                staffId,
+                selectedShift.date,
+                selectedShift.type
+              )
+              return (
+                <div style={s.reasonForm}>
+                  {shouldWarn && (
+                    <div style={s.warningNoteInline}>
+                      <FontAwesomeIcon icon='triangle-exclamation' /> {message}
+                    </div>
+                  )}
+                  <div style={s.reasonLabel}>Reason for cancellation:</div>
+                  <select
+                    style={s.reasonSelect}
+                    value={cancelReason}
+                    onChange={(e) => setCancelReason(e.target.value)}
+                  >
+                    <option value=''>Select a reason...</option>
+                    <option value='Sick'>🤒 Sick</option>
+                    <option value='Family emergency'>
+                      🏠 Family emergency
+                    </option>
+                    <option value='Transport issue'>🚗 Transport issue</option>
+                    <option value='Other'>📝 Other (please specify)</option>
+                  </select>
+                  {cancelReason === 'Other' && (
+                    <textarea
+                      style={s.reasonTextarea}
+                      placeholder='Please specify your reason...'
+                      value={customReasonText}
+                      onChange={(e) => setCustomReasonText(e.target.value)}
+                      rows='3'
+                    />
+                  )}
+                  <div style={s.reasonActions}>
+                    <button
+                      style={s.cancelReasonBtn}
+                      onClick={() => {
+                        setShowReasonForm(false)
+                        setCancelReason('')
+                        setCustomReasonText('')
+                      }}
+                    >
+                      Back
+                    </button>
+                    <button
+                      style={{
+                        ...s.submitReasonBtn,
+                        opacity:
+                          !cancelReason ||
+                          (cancelReason === 'Other' && !customReasonText.trim())
+                            ? 0.5
+                            : 1,
+                        cursor:
+                          !cancelReason ||
+                          (cancelReason === 'Other' && !customReasonText.trim())
+                            ? 'not-allowed'
+                            : 'pointer',
+                      }}
+                      disabled={
+                        !cancelReason ||
+                        (cancelReason === 'Other' && !customReasonText.trim())
+                      }
+                      onClick={handleSubmitRequest}
+                    >
+                      {submitting ? 'Submitting...' : 'Submit request'}
+                    </button>
+                  </div>
+                </div>
+              )
+            })()}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -548,7 +771,7 @@ const s = {
     display: 'flex',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
-    marginBottom: '24px',
+    marginBottom: '20px',
   },
   title: {
     fontFamily: 'Syne, sans-serif',
@@ -557,90 +780,196 @@ const s = {
     margin: 0,
   },
   subtitle: { fontSize: '13px', color: '#9499b0', marginTop: '4px' },
-  statsRow: { display: 'flex', gap: '16px' },
-  stat: {
-    background: '#161820',
-    border: '1px solid rgba(255,255,255,0.07)',
-    borderRadius: '10px',
-    padding: '12px 20px',
-    textAlign: 'center',
+  viewToggle: {
+    display: 'flex',
+    background: '#1d1f2b',
+    border: '1px solid rgba(255,255,255,0.08)',
+    borderRadius: '8px',
+    padding: '3px',
+    gap: '2px',
   },
-  statVal: {
-    fontSize: '22px',
+  toggleBtn: {
+    border: 'none',
+    borderRadius: '6px',
+    padding: '6px 14px',
+    fontSize: '12px',
+    fontWeight: 500,
+    cursor: 'pointer',
+    fontFamily: 'DM Sans, sans-serif',
+    transition: 'all 0.15s',
+  },
+  weekNav: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    marginBottom: '20px',
+    flexWrap: 'wrap',
+  },
+  monthNav: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    marginBottom: '20px',
+    flexWrap: 'wrap',
+  },
+  navArrow: {
+    background: 'transparent',
+    border: '1px solid rgba(255,255,255,0.1)',
+    borderRadius: '7px',
+    color: '#9499b0',
+    width: '32px',
+    height: '32px',
+    cursor: 'pointer',
+    fontSize: '13px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  weekLabel: {
+    fontSize: '14px',
+    fontWeight: 500,
+    color: '#e8eaf0',
+    minWidth: '180px',
+    textAlign: 'center',
+    fontFamily: 'Syne, sans-serif',
+  },
+  todayBtn: {
+    background: 'transparent',
+    border: '1px solid rgba(255,255,255,0.1)',
+    borderRadius: '7px',
+    color: '#9499b0',
+    padding: '6px 12px',
+    fontSize: '12px',
+    cursor: 'pointer',
+    fontFamily: 'DM Sans, sans-serif',
+  },
+  gridWrap: { overflowX: 'auto' },
+  grid: {
+    display: 'grid',
+    gridTemplateColumns: '120px repeat(7, 1fr)',
+    minWidth: '700px',
+    border: '1px solid rgba(255,255,255,0.07)',
+    borderRadius: '14px',
+    overflow: 'hidden',
+  },
+  colLabel: {
+    background: '#1d1f2b',
+    borderBottom: '1px solid rgba(255,255,255,0.07)',
+    borderRight: '1px solid rgba(255,255,255,0.07)',
+  },
+  dayHeader: {
+    padding: '10px 8px',
+    textAlign: 'center',
+    borderBottom: '1px solid rgba(255,255,255,0.07)',
+    borderRight: '1px solid rgba(255,255,255,0.05)',
+  },
+  dayName: { fontSize: '11px', fontWeight: 500, textTransform: 'uppercase' },
+  dayDate: {
+    fontSize: '16px',
     fontWeight: 600,
     fontFamily: 'Syne, sans-serif',
-    color: '#e8eaf0',
+    marginTop: '2px',
   },
-  statLabel: { fontSize: '11px', color: '#9499b0', marginTop: '2px' },
-  weekGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(7, 1fr)',
-    gap: '10px',
-  },
-  dayCard: {
-    background: '#161820',
-    borderRadius: '12px',
-    padding: '14px',
-    minHeight: '120px',
+  shiftLabel: {
+    padding: '12px 14px',
+    borderRight: '1px solid rgba(255,255,255,0.07)',
+    borderBottom: '1px solid rgba(255,255,255,0.05)',
     display: 'flex',
     flexDirection: 'column',
-    gap: '10px',
-    transition: 'border-color 0.15s',
+    justifyContent: 'center',
+    background: '#1d1f2b',
   },
-  dayTop: { display: 'flex', flexDirection: 'column', gap: '2px' },
-  dayName: {
-    fontSize: '11px',
-    fontWeight: 500,
-    textTransform: 'uppercase',
-    letterSpacing: '0.5px',
-  },
-  dayDate: {
-    fontSize: '15px',
-    fontWeight: 600,
-    fontFamily: 'Syne, sans-serif',
-  },
-  shiftCard: { borderRadius: '8px', padding: '8px', flex: 1 },
-  shiftType: { fontSize: '12px', fontWeight: 600 },
+  shiftName: { fontSize: '12px', fontWeight: 600, color: '#e8eaf0' },
   shiftTime: {
-    fontSize: '11px',
-    color: '#9499b0',
-    marginTop: '3px',
+    fontSize: '10px',
+    color: '#5d6180',
+    marginTop: '2px',
     fontFamily: 'DM Mono, monospace',
   },
+  cell: {
+    padding: '8px',
+    borderRight: '1px solid rgba(255,255,255,0.05)',
+    borderBottom: '1px solid rgba(255,255,255,0.05)',
+    minHeight: '80px',
+  },
+  shiftCard: { borderRadius: '8px', padding: '8px', height: '100%' },
+  shiftType: { fontSize: '12px', fontWeight: 600 },
   shiftHome: { fontSize: '11px', color: '#5d6180', marginTop: '4px' },
-  offDay: { fontSize: '12px', color: '#5d6180', marginTop: 'auto' },
+  offDay: {
+    fontSize: '12px',
+    color: '#5d6180',
+    textAlign: 'center',
+    marginTop: '20px',
+  },
   cancelledTag: {
     fontSize: '11px',
     color: '#e85c3d',
     background: 'rgba(232,92,61,0.1)',
     borderRadius: '6px',
-    padding: '4px 8px',
-    width: 'fit-content',
+    padding: '8px',
+    textAlign: 'center',
   },
-  approvedTag: {
-    fontSize: '11px',
-    color: '#e85c3d',
-    background: 'rgba(232,92,61,0.1)',
-    borderRadius: '6px',
-    padding: '4px 8px',
-    width: 'fit-content',
+  yearWrap: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(3, 1fr)',
+    gap: '20px',
   },
-  rejectedTag: {
-    fontSize: '11px',
-    color: '#9499b0',
-    background: 'rgba(255,255,255,0.05)',
-    borderRadius: '6px',
-    padding: '4px 8px',
-    width: 'fit-content',
+  miniMonth: {
+    borderRadius: '14px',
+    padding: '20px',
+    cursor: 'pointer',
+    transition: 'transform 0.18s ease, box-shadow 0.18s ease',
+    position: 'relative',
   },
-  withdrawnTag: {
-    fontSize: '11px',
-    color: '#2ecc8a',
-    background: 'rgba(46,204,138,0.1)',
-    borderRadius: '6px',
-    padding: '4px 8px',
-    width: 'fit-content',
+  miniMonthHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: '10px',
   },
+  miniMonthTitle: {
+    fontFamily: 'Syne, sans-serif',
+    fontSize: '13px',
+    fontWeight: 600,
+    color: '#e8eaf0',
+  },
+  shiftCountBadge: {
+    fontSize: '10px',
+    fontWeight: 500,
+    padding: '2px 7px',
+    borderRadius: '5px',
+    background: 'rgba(108,143,255,0.15)',
+    color: '#6c8fff',
+  },
+  miniDayHeaders: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(7, 1fr)',
+    marginBottom: '4px',
+  },
+  miniDayHead: {
+    fontSize: '9px',
+    color: '#5d6180',
+    textAlign: 'center',
+    fontWeight: 500,
+  },
+  miniGrid: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(7, 1fr)',
+    gap: '2px',
+  },
+  miniCell: {
+    aspectRatio: '1',
+    borderRadius: '4px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    cursor: 'pointer',
+  },
+  miniDateNum: {
+    fontSize: '9px',
+    fontFamily: 'DM Mono, monospace',
+  },
+  // Modal styles (same as before, compact)
   overlay: {
     position: 'fixed',
     inset: 0,
@@ -668,6 +997,7 @@ const s = {
     justifyContent: 'space-between',
     padding: '20px 24px',
     borderBottom: '1px solid rgba(255,255,255,0.07)',
+    flexShrink: 0,
   },
   modalTitle: {
     fontFamily: 'Syne, sans-serif',
@@ -699,7 +1029,6 @@ const s = {
   },
   detailLabel: { fontSize: '13px', color: '#9499b0' },
   detailVal: { fontSize: '13px', fontWeight: 500, color: '#e8eaf0' },
-
   pendingWarning: {
     padding: '12px 24px',
     background: 'rgba(196,136,58,0.1)',
@@ -710,97 +1039,6 @@ const s = {
     alignItems: 'center',
     gap: '8px',
   },
-
-  reasonForm: {
-    padding: '16px 24px 20px 24px',
-    borderTop: '1px solid rgba(255,255,255,0.07)',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '12px',
-  },
-  reasonLabel: {
-    fontSize: '13px',
-    fontWeight: 500,
-    color: '#9499b0',
-  },
-  reasonSelect: {
-    background: '#1d1f2b',
-    border: '1px solid rgba(255,255,255,0.08)',
-    borderRadius: '8px',
-    padding: '10px 12px',
-    fontSize: '13px',
-    color: '#e8eaf0',
-    fontFamily: 'DM Sans, sans-serif',
-    width: '100%',
-    boxSizing: 'border-box',
-  },
-  reasonTextarea: {
-    background: '#1d1f2b',
-    border: '1px solid rgba(255,255,255,0.08)',
-    borderRadius: '8px',
-    padding: '10px 12px',
-    fontSize: '13px',
-    color: '#e8eaf0',
-    fontFamily: 'DM Sans, sans-serif',
-    width: '100%',
-    resize: 'vertical',
-    minHeight: '70px',
-    maxHeight: '120px',
-    boxSizing: 'border-box',
-  },
-  reasonActions: {
-    display: 'flex',
-    gap: '8px',
-    marginTop: '4px',
-  },
-
-  dividerLight: {
-    height: '1px',
-    background: 'rgba(255,255,255,0.05)',
-    margin: '12px 0',
-  },
-  cancelShiftBtnSecondary: {
-    width: '100%',
-    background: 'rgba(108,143,255,0.08)',
-    border: '1px solid rgba(108,143,255,0.25)',
-    color: '#6c8fff',
-    padding: '12px',
-    fontSize: '13px',
-    fontWeight: 500,
-    cursor: 'pointer',
-    fontFamily: 'DM Sans, sans-serif',
-    borderRadius: '8px',
-    marginBottom: '8px',
-  },
-  approvedNote: {
-    padding: '16px 24px',
-    background: 'rgba(46,204,138,0.08)',
-    borderTop: '1px solid rgba(255,255,255,0.07)',
-    color: '#2ecc8a',
-    fontSize: '13px',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-  },
-  warningNoteInline: {
-    padding: '10px',
-    background: 'rgba(196,136,58,0.08)',
-    border: '1px solid rgba(196,136,58,0.2)',
-    borderRadius: '8px',
-    fontSize: '12px',
-    color: '#c4883a',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    marginBottom: '12px',
-  },
-  buttonGroup: {
-    display: 'flex',
-    gap: '10px',
-    padding: '12px 24px 16px 24px',
-    borderTop: '1px solid rgba(255,255,255,0.05)',
-  },
-
   lastPingInfo: {
     padding: '8px 24px',
     fontSize: '12px',
@@ -810,15 +1048,11 @@ const s = {
     gap: '8px',
     borderBottom: '1px solid rgba(255,255,255,0.05)',
   },
-  pingLimitWarning: {
-    padding: '12px 24px',
-    background: 'rgba(232,92,61,0.08)',
-    borderTop: '1px solid rgba(255,255,255,0.05)',
-    fontSize: '12px',
-    color: '#e85c3d',
+  buttonGroup: {
     display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
+    gap: '10px',
+    padding: '12px 24px 16px 24px',
+    borderTop: '1px solid rgba(255,255,255,0.05)',
   },
   withdrawBtn: {
     flex: 1,
@@ -885,6 +1119,51 @@ const s = {
     gap: '6px',
     marginTop: '8px',
   },
+  reasonForm: {
+    padding: '16px 24px 20px 24px',
+    borderTop: '1px solid rgba(255,255,255,0.07)',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '12px',
+  },
+  reasonLabel: { fontSize: '13px', fontWeight: 500, color: '#9499b0' },
+  reasonSelect: {
+    background: '#1d1f2b',
+    border: '1px solid rgba(255,255,255,0.08)',
+    borderRadius: '8px',
+    padding: '10px 12px',
+    fontSize: '13px',
+    color: '#e8eaf0',
+    fontFamily: 'DM Sans, sans-serif',
+    width: '100%',
+    boxSizing: 'border-box',
+  },
+  reasonTextarea: {
+    background: '#1d1f2b',
+    border: '1px solid rgba(255,255,255,0.08)',
+    borderRadius: '8px',
+    padding: '10px 12px',
+    fontSize: '13px',
+    color: '#e8eaf0',
+    fontFamily: 'DM Sans, sans-serif',
+    width: '100%',
+    resize: 'vertical',
+    minHeight: '70px',
+    maxHeight: '120px',
+    boxSizing: 'border-box',
+  },
+  reasonActions: { display: 'flex', gap: '8px', marginTop: '4px' },
+  cancelReasonBtn: {
+    flex: 1,
+    background: 'transparent',
+    border: '1px solid rgba(255,255,255,0.1)',
+    borderRadius: '8px',
+    color: '#9499b0',
+    padding: '8px 12px',
+    fontSize: '12px',
+    cursor: 'pointer',
+    fontFamily: 'DM Sans, sans-serif',
+  },
   submitReasonBtn: {
     flex: 1,
     background: '#6c8fff',
@@ -897,16 +1176,17 @@ const s = {
     cursor: 'pointer',
     fontFamily: 'DM Sans, sans-serif',
   },
-  cancelReasonBtn: {
-    flex: 1,
-    background: 'transparent',
-    border: '1px solid rgba(255,255,255,0.1)',
+  warningNoteInline: {
+    padding: '10px',
+    background: 'rgba(196,136,58,0.08)',
+    border: '1px solid rgba(196,136,58,0.2)',
     borderRadius: '8px',
-    color: '#9499b0',
-    padding: '8px 12px',
     fontSize: '12px',
-    cursor: 'pointer',
-    fontFamily: 'DM Sans, sans-serif',
+    color: '#c4883a',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    marginBottom: '4px',
   },
 }
 

@@ -46,9 +46,7 @@ export function getMonthDates(year, month) {
   const firstDay = new Date(year, month, 1)
   const lastDay = new Date(year, month + 1, 0)
 
-  // Start from Monday of the first week
   const start = getMondayOfWeek(firstDay)
-  // End on Sunday of the last week
   const end = new Date(lastDay)
   const endDay = end.getDay()
   if (endDay !== 0) end.setDate(end.getDate() + (7 - endDay))
@@ -74,7 +72,10 @@ export function dateKey(date) {
   if (!date || !(date instanceof Date) || isNaN(date)) {
     return ''
   }
-  return date.toISOString().split('T')[0]
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const d = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
 }
 
 // Returns array of 12 month descriptors for a given year
@@ -90,17 +91,12 @@ export function getYearMonths(year) {
 }
 
 // Returns array of Monday dates for all weeks that touch a given month.
-// A week "belongs" to the month if its Monday falls in that month,
-// or if any day of that week falls in that month (we use: Monday of each
-// calendar row in getMonthDates that has at least one day in the month).
 export function getMonthWeeks(year, month) {
   const mondays = []
   const seen = new Set()
 
   const allDates = getMonthDates(year, month)
   allDates.forEach((date) => {
-    // Only include weeks anchored by days that actually belong to the month
-    // so we don't generate rota for overflow padding days
     if (date.getMonth() !== month) return
     const mon = getMondayOfWeek(date)
     const key = dateKey(mon)
@@ -111,4 +107,17 @@ export function getMonthWeeks(year, month) {
   })
 
   return mondays
+}
+
+// NEW: Get the Monday key that matches the generator's format
+// The generator saves weeks with keys like "2026-04-05" (actual Monday dates)
+// This ensures we look up the correct key in monthRota
+export function getGeneratorMondayKey(date) {
+  const d = new Date(date)
+  const day = d.getDay()
+  // Get the Monday of this week (0 = Sunday, so Monday is day 1)
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1)
+  d.setDate(diff)
+  d.setHours(0, 0, 0, 0)
+  return dateKey(d)
 }
