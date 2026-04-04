@@ -6,6 +6,7 @@ import Dashboard from './pages/Dashboard'
 import Rota from './pages/Rota'
 import Calendar from './pages/Calendar'
 import Staff from './pages/Staff'
+import YearCalendar from './pages/YearCalendar'
 import NotFound from './pages/NotFound'
 
 const MANAGER_ROLES = [
@@ -57,6 +58,22 @@ function App() {
           element={
             <ProtectedRoute allowedRoles={['superadmin', 'manager']}>
               <Staff />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path='/year-calendar'
+          element={
+            <ProtectedRoute
+              allowedRoles={[
+                'manager',
+                'deputy',
+                'senior',
+                'operationallead',
+                'superadmin',
+              ]}
+            >
+              <YearCalendar />
             </ProtectedRoute>
           }
         />

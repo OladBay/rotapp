@@ -29,6 +29,7 @@ function Navbar() {
     { path: '/rota', label: 'Rota', show: canSeeRota },
     { path: '/staff', label: 'Staff', show: canSeeStaff },
     { path: '/calendar', label: 'My shifts', show: true },
+    { path: '/year-calendar', label: 'Year Calendar', show: canSeeRota }, // Only managers see this
   ].filter((l) => l.show)
 
   return (
