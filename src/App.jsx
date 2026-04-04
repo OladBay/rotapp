@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import ProtectedRoute from './components/layout/ProtectedRoute'
+import StickyNote from './components/StickyNote'
 import Login from './pages/Login'
 import Signup from './pages/Signup'
 import Dashboard from './pages/Dashboard'
@@ -21,6 +22,7 @@ const CARER_ROLES = ['rcw', 'relief']
 function App() {
   return (
     <BrowserRouter>
+      <StickyNote />
       <Routes>
         <Route path='/' element={<Navigate to='/login' />} />
         <Route path='/login' element={<Login />} />

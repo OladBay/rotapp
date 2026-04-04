@@ -1,3 +1,4 @@
+// src/utils/icons.js
 import { library } from '@fortawesome/fontawesome-svg-core'
 import {
   faCircleInfo,
@@ -29,6 +30,15 @@ import {
   faEyeSlash,
   faUmbrellaBeach,
   faCalendarPlus,
+  faMicrophone,
+  faStop,
+  faTrash,
+  faBold,
+  faItalic,
+  faListCheck,
+  faGripVertical,
+  faPenToSquare,
+  faSun,
 } from '@fortawesome/free-solid-svg-icons'
 
 library.add(
@@ -61,5 +71,13 @@ library.add(
   faEyeSlash,
   faUmbrellaBeach,
   faCalendarPlus,
-  faCircleCheck
+  faMicrophone,
+  faStop,
+  faTrash,
+  faBold,
+  faItalic,
+  faListCheck,
+  faGripVertical,
+  faPenToSquare,
+  faSun
 )

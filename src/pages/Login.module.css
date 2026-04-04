@@ -1,45 +1,49 @@
 .page {
   min-height: 100vh;
-  background: #0f1117;
+  background: var(--bg-base);
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 24px;
+  transition: background 0.25s ease;
 }
 
 .card {
-  background: #161820;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--bg-raised);
+  border: 1px solid var(--border-subtle);
   border-radius: 20px;
   padding: 40px;
   width: 100%;
   max-width: 420px;
+  transition:
+    background 0.25s ease,
+    border-color 0.25s ease;
 }
 
 .logo {
   font-family: 'Syne', sans-serif;
   font-size: 24px;
   font-weight: 700;
-  color: #e8eaf0;
+  color: var(--text-primary);
   margin-bottom: 28px;
   letter-spacing: -0.5px;
 }
 
 .logo span {
-  color: #6c8fff;
+  color: var(--accent);
 }
 
 .title {
   font-size: 22px;
   font-weight: 600;
-  color: #e8eaf0;
+  color: var(--text-primary);
   margin-bottom: 6px;
   letter-spacing: -0.3px;
 }
 
 .subtitle {
   font-size: 14px;
-  color: #9499b0;
+  color: var(--text-secondary);
   margin-bottom: 32px;
 }
 
@@ -58,42 +62,44 @@
 .label {
   font-size: 13px;
   font-weight: 500;
-  color: #9499b0;
+  color: var(--text-secondary);
 }
 
 .input {
-  background: #1d1f2b;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
   border-radius: 10px;
   padding: 11px 14px;
   font-size: 14px;
-  color: #e8eaf0;
+  color: var(--text-primary);
   outline: none;
-  transition: border-color 0.15s;
+  transition:
+    border-color 0.15s,
+    background 0.25s ease;
   font-family: 'DM Sans', sans-serif;
   width: 100%;
 }
 
 .input:focus {
-  border-color: #6c8fff;
+  border-color: var(--accent);
 }
 
 .input::placeholder {
-  color: #5d6180;
+  color: var(--text-muted);
 }
 
 .error {
-  background: rgba(232, 92, 61, 0.12);
-  border: 1px solid rgba(232, 92, 61, 0.3);
+  background: var(--color-danger-bg);
+  border: 1px solid var(--color-danger-border);
   border-radius: 8px;
   padding: 10px 14px;
   font-size: 13px;
-  color: #e85c3d;
+  color: var(--color-danger);
 }
 
 .btn {
-  background: #6c8fff;
-  color: #fff;
+  background: var(--accent);
+  color: var(--text-inverse);
   border: none;
   border-radius: 10px;
   padding: 12px;
@@ -101,12 +107,12 @@
   font-weight: 500;
   cursor: pointer;
   font-family: 'DM Sans', sans-serif;
-  transition: background 0.15s;
+  transition: opacity 0.15s;
   margin-top: 4px;
 }
 
 .btn:hover {
-  background: #3d5ce8;
+  opacity: 0.88;
 }
 
 .btn:disabled {
@@ -117,12 +123,12 @@
 .footer {
   text-align: center;
   font-size: 13px;
-  color: #9499b0;
+  color: var(--text-secondary);
   margin-top: 24px;
 }
 
 .footer a {
-  color: #6c8fff;
+  color: var(--accent);
   text-decoration: none;
 }
 
@@ -133,14 +139,14 @@
 .testAccounts {
   margin-top: 28px;
   padding-top: 20px;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-top: 1px solid var(--border-subtle);
 }
 
 .testTitle {
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 1px;
-  color: #5d6180;
+  color: var(--text-muted);
   margin-bottom: 10px;
 }
 
@@ -150,5 +156,5 @@
   gap: 4px 16px;
   font-size: 12px;
   font-family: 'DM Mono', monospace;
-  color: #9499b0;
+  color: var(--text-secondary);
 }
