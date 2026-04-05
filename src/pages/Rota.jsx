@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import Navbar from '../components/layout/Navbar'
 import GenerateModal from '../components/layout/GenerateModal'
+import BatchGenerateModal from '../components/layout/BatchGenerateModal'
 import JumpCalendar from '../components/shared/JumpCalendar'
 import CellEditModal from '../components/layout/CellEditModal'
 import { mockStaff } from '../data/mockRota'
@@ -15,6 +16,7 @@ import {
   getMondayOfWeek,
   addWeeks,
   getMonthDates,
+  getMonthWeeks,
   getYearMonths,
   isSameDay,
   dateKey,
@@ -82,8 +84,8 @@ function Rota() {
   const [leaveData] = useLocalStorage('rotapp_leave', {})
   const { user } = useAuth()
   const navigate = useNavigate()
-  const [summaryExpanded, setSummaryExpanded] = useState(false) // collapsed by default
-  const [hideZeroHours, setHideZeroHours] = useState(false) // show all staff by default
+  const [summaryExpanded, setSummaryExpanded] = useState(false)
+  const [hideZeroHours, setHideZeroHours] = useState(false)
 
   useEffect(() => {
     const jumpDate = sessionStorage.getItem('rota_jump_date')
@@ -97,15 +99,13 @@ function Rota() {
       sessionStorage.removeItem('rota_jump_date')
     }
   }, [])
-  // Default view is now month
+
   const [viewMode, setViewMode] = useState('month')
   const [currentMonday, setMonday] = useState(getMondayOfWeek(TODAY))
   const [currentYear, setCurrentYear] = useState(TODAY.getFullYear())
   const [hoveredMonth, setHoveredMonth] = useState(null)
 
-  // Overwrite warning state
   const [overwriteTarget, setOverwriteTarget] = useState(null)
-  // { year, month, label } — set when a month with existing rota is clicked
 
   const [weekRota, setWeekRota] = useLocalStorage('rotapp_week_rota', {
     early: Array(7).fill([]),
@@ -115,7 +115,7 @@ function Rota() {
   const [monthRota, setMonthRota] = useLocalStorage('rotapp_month_rota', {})
 
   const [generateTarget, setGenerateTarget] = useState(null)
-  // { year, month, label } — passed to GenerateModal
+  const [showBatchModal, setShowBatchModal] = useState(false)
   const [editCell, setEditCell] = useState(null)
   const [showJump, setShowJump] = useState(false)
 
@@ -167,6 +167,10 @@ function Rota() {
     setMonthRota((prev) => ({ ...prev, ...weekRotas }))
   }
 
+  const handleApplyBatch = (newWeekRotas) => {
+    setMonthRota((prev) => ({ ...prev, ...newWeekRotas }))
+  }
+
   const getRotaForDate = (date) => {
     const monday = getMondayOfWeek(date)
     const key = dateKey(monday)
@@ -175,14 +179,12 @@ function Rota() {
     )
   }
 
-  // Check if a month has any existing rota data
+  // Uses Monday-ownership rule — a week belongs to the month its Monday
+  // falls in. Prevents boundary weeks from making the next month appear
+  // as already having a rota.
   const monthHasRota = (year, month) => {
-    const monthDates = getMonthDates(year, month)
-    return monthDates.some((date) => {
-      if (date.getMonth() !== month) return false
-      const key = dateKey(getMondayOfWeek(date))
-      return !!monthRota[key]
-    })
+    const weeks = getMonthWeeks(year, month)
+    return weeks.some((monday) => !!monthRota[dateKey(monday)])
   }
 
   const handleGenerateClick = (year, month, label, e) => {
@@ -365,6 +367,17 @@ function Rota() {
               >
                 Today
               </button>
+
+              {/* Batch generate button — month view only, managers/deputies only */}
+              {canEdit && (
+                <button
+                  style={s.batchBtn}
+                  onClick={() => setShowBatchModal(true)}
+                >
+                  <FontAwesomeIcon icon='bolt' /> Batch generate
+                </button>
+              )}
+
               <div style={s.legend}>
                 <span style={{ ...s.legendItem, color: HEALTH_COLOURS.ok }}>
                   ■ Compliant
@@ -798,7 +811,6 @@ function Rota() {
 
             {/* Staff Hours Summary Table - Collapsible */}
             <div style={s.summarySection}>
-              {/* Clickable Header Bar */}
               <div
                 style={s.summaryHeaderBar}
                 onClick={() => setSummaryExpanded(!summaryExpanded)}
@@ -814,7 +826,6 @@ function Rota() {
                 </div>
               </div>
 
-              {/* Expandable Content */}
               {summaryExpanded && (
                 <>
                   <div style={s.summaryControls}>
@@ -845,13 +856,10 @@ function Rota() {
                       </thead>
                       <tbody>
                         {(() => {
-                          // Get permanent staff (RCW and Senior only)
                           const permanentStaff = mockStaff.filter(
                             (staff) =>
                               staff.role === 'rcw' || staff.role === 'senior'
                           )
-
-                          // Calculate hours for each staff member
 
                           let staffHours = permanentStaff.map((staff) => {
                             const weekHours = calculateStaffHoursForWeek(
@@ -861,22 +869,15 @@ function Rota() {
                               leaveData
                             )
                             const weekVariance = weekHours - 37
-
-                            return {
-                              ...staff,
-                              weekHours,
-                              weekVariance,
-                            }
+                            return { ...staff, weekHours, weekVariance }
                           })
 
-                          // Apply hide zero hours filter
                           if (hideZeroHours) {
                             staffHours = staffHours.filter(
                               (staff) => staff.weekHours > 0
                             )
                           }
 
-                          // Sort by weekly hours (highest to lowest)
                           const sortedStaff = [...staffHours].sort(
                             (a, b) => b.weekHours - a.weekHours
                           )
@@ -894,7 +895,6 @@ function Rota() {
                           return sortedStaff.map((staff) => {
                             const isUnderWeek = staff.weekVariance < 0
                             const isOverWeek = staff.weekVariance > 0
-
                             return (
                               <tr key={staff.id} style={s.tableRow}>
                                 <td style={s.tableCell}>
@@ -927,17 +927,14 @@ function Rota() {
                                     </div>
                                   </div>
                                 </td>
-
                                 <td style={s.tableCell}>
                                   <span style={s.hoursValue}>
                                     {staff.weekHours.toFixed(1)}h
                                   </span>
                                 </td>
-
                                 <td style={s.tableCell}>
                                   <span style={s.contractedValue}>37h</span>
                                 </td>
-
                                 <td style={s.tableCell}>
                                   <span
                                     style={{
@@ -1017,7 +1014,7 @@ function Rota() {
         </div>
       )}
 
-      {/* Generate modal */}
+      {/* Single month generate modal */}
       {generateTarget && (
         <GenerateModal
           onClose={() => setGenerateTarget(null)}
@@ -1026,6 +1023,15 @@ function Rota() {
           scopeMonth={generateTarget.month}
           monthLabel={generateTarget.label}
           leaveData={leaveData}
+        />
+      )}
+
+      {/* Batch generate modal */}
+      {showBatchModal && (
+        <BatchGenerateModal
+          onClose={() => setShowBatchModal(false)}
+          onApplyBatch={handleApplyBatch}
+          monthRota={monthRota}
         />
       )}
 
@@ -1123,6 +1129,20 @@ const s = {
     cursor: 'pointer',
     fontFamily: 'DM Sans, sans-serif',
   },
+  batchBtn: {
+    background: 'rgba(108,143,255,0.1)',
+    color: '#6c8fff',
+    border: '1px solid rgba(108,143,255,0.25)',
+    borderRadius: '7px',
+    padding: '6px 12px',
+    fontSize: '12px',
+    fontWeight: 500,
+    cursor: 'pointer',
+    fontFamily: 'DM Sans, sans-serif',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+  },
   compStrip: {
     display: 'flex',
     gap: '8px',
@@ -1190,7 +1210,6 @@ const s = {
     cursor: 'pointer',
     fontFamily: 'DM Sans, sans-serif',
   },
-
   legend: { display: 'flex', gap: '12px', marginLeft: 'auto' },
   legendItem: { fontSize: '11px' },
   yearWrap: {
@@ -1398,7 +1417,6 @@ const s = {
     marginTop: 'auto',
     cursor: 'pointer',
   },
-  // Overwrite warning modal
   overlayWarn: {
     position: 'fixed',
     inset: 0,
@@ -1487,127 +1505,9 @@ const s = {
     marginBottom: '16px',
   },
   summarySection: {
-    marginTop: '32px',
-    paddingTop: '24px',
-    borderTop: '1px solid rgba(255,255,255,0.07)',
-  },
-
-  summaryHeader: {
-    marginBottom: '16px',
-  },
-
-  summaryTitle: {
-    fontFamily: 'Syne, sans-serif',
-    fontSize: '16px',
-    fontWeight: 600,
-    color: '#e8eaf0',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-  },
-
-  summarySubtitle: {
-    fontSize: '11px',
-    color: '#5d6180',
-    marginTop: '4px',
-  },
-
-  tableWrap: {
-    overflowX: 'auto',
-    borderRadius: '12px',
-    border: '1px solid rgba(255,255,255,0.07)',
-    background: '#161820',
-  },
-
-  summaryTable: {
-    width: '100%',
-    borderCollapse: 'collapse',
-    fontSize: '13px',
-    minWidth: '700px',
-  },
-
-  tableHeaderRow: {
-    borderBottom: '1px solid rgba(255,255,255,0.07)',
-    background: '#1d1f2b',
-  },
-
-  tableHeader: {
-    textAlign: 'left',
-    padding: '14px 16px',
-    color: '#9499b0',
-    fontWeight: 500,
-    fontSize: '11px',
-    textTransform: 'uppercase',
-    letterSpacing: '0.5px',
-  },
-
-  tableRow: {
-    borderBottom: '1px solid rgba(255,255,255,0.05)',
-    '&:hover': {
-      background: 'rgba(255,255,255,0.02)',
-    },
-  },
-
-  tableCell: {
-    padding: '12px 16px',
-    color: '#e8eaf0',
-  },
-
-  staffCell: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '10px',
-  },
-
-  staffAvatar: {
-    width: '32px',
-    height: '32px',
-    borderRadius: '50%',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: '11px',
-    fontWeight: 600,
-    fontFamily: 'Syne, sans-serif',
-    flexShrink: 0,
-  },
-
-  staffCellName: {
-    fontSize: '13px',
-    fontWeight: 500,
-    color: '#e8eaf0',
-  },
-
-  staffCellRole: {
-    fontSize: '10px',
-    color: '#9499b0',
-    fontFamily: 'DM Mono, monospace',
-    marginTop: '2px',
-  },
-
-  hoursValue: {
-    fontWeight: 500,
-    color: '#e8eaf0',
-    fontFamily: 'DM Mono, monospace',
-  },
-
-  contractedValue: {
-    color: '#5d6180',
-    fontFamily: 'DM Mono, monospace',
-  },
-
-  varianceValue: {
-    fontWeight: 500,
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: '4px',
-    fontFamily: 'DM Mono, monospace',
-  },
-  summarySection: {
     marginTop: '24px',
     borderTop: '1px solid rgba(255,255,255,0.07)',
   },
-
   summaryHeaderBar: {
     display: 'flex',
     alignItems: 'center',
@@ -1617,11 +1517,7 @@ const s = {
     borderRadius: '10px',
     cursor: 'pointer',
     transition: 'background 0.15s',
-    '&:hover': {
-      background: '#222433',
-    },
   },
-
   summaryTitle: {
     fontFamily: 'Syne, sans-serif',
     fontSize: '14px',
@@ -1631,12 +1527,10 @@ const s = {
     alignItems: 'center',
     gap: '10px',
   },
-
   summaryHint: {
     fontSize: '11px',
     color: '#5d6180',
   },
-
   summaryControls: {
     display: 'flex',
     alignItems: 'center',
@@ -1644,12 +1538,10 @@ const s = {
     marginTop: '12px',
     marginBottom: '16px',
   },
-
   summarySubtitle: {
     fontSize: '11px',
     color: '#5d6180',
   },
-
   toggleZeroBtn: {
     background: 'rgba(108,143,255,0.1)',
     border: '1px solid rgba(108,143,255,0.2)',
@@ -1662,30 +1554,23 @@ const s = {
     display: 'flex',
     alignItems: 'center',
     gap: '6px',
-    '&:hover': {
-      background: 'rgba(108,143,255,0.15)',
-    },
   },
-
   tableWrap: {
     overflowX: 'auto',
     borderRadius: '12px',
     border: '1px solid rgba(255,255,255,0.07)',
     background: '#161820',
   },
-
   summaryTable: {
     width: '100%',
     borderCollapse: 'collapse',
     fontSize: '13px',
     minWidth: '700px',
   },
-
   tableHeaderRow: {
     borderBottom: '1px solid rgba(255,255,255,0.07)',
     background: '#1d1f2b',
   },
-
   tableHeader: {
     textAlign: 'left',
     padding: '12px 16px',
@@ -1695,25 +1580,18 @@ const s = {
     textTransform: 'uppercase',
     letterSpacing: '0.5px',
   },
-
   tableRow: {
     borderBottom: '1px solid rgba(255,255,255,0.05)',
-    '&:hover': {
-      background: 'rgba(255,255,255,0.02)',
-    },
   },
-
   tableCell: {
     padding: '10px 16px',
     color: '#e8eaf0',
   },
-
   staffCell: {
     display: 'flex',
     alignItems: 'center',
     gap: '10px',
   },
-
   staffAvatar: {
     width: '30px',
     height: '30px',
@@ -1726,31 +1604,26 @@ const s = {
     fontFamily: 'Syne, sans-serif',
     flexShrink: 0,
   },
-
   staffCellName: {
     fontSize: '13px',
     fontWeight: 500,
     color: '#e8eaf0',
   },
-
   staffCellRole: {
     fontSize: '10px',
     color: '#9499b0',
     fontFamily: 'DM Mono, monospace',
     marginTop: '2px',
   },
-
   hoursValue: {
     fontWeight: 500,
     color: '#e8eaf0',
     fontFamily: 'DM Mono, monospace',
   },
-
   contractedValue: {
     color: '#5d6180',
     fontFamily: 'DM Mono, monospace',
   },
-
   varianceValue: {
     fontWeight: 500,
     display: 'inline-flex',
@@ -1758,7 +1631,6 @@ const s = {
     gap: '4px',
     fontFamily: 'DM Mono, monospace',
   },
-
   emptyTableMessage: {
     textAlign: 'center',
     padding: '32px',

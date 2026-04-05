@@ -78,7 +78,6 @@ export function dateKey(date) {
   return `${y}-${m}-${d}`
 }
 
-// Returns array of 12 month descriptors for a given year
 export function getYearMonths(year) {
   return Array.from({ length: 12 }, (_, i) => ({
     year,
@@ -90,7 +89,6 @@ export function getYearMonths(year) {
   }))
 }
 
-// Returns array of Monday dates for all weeks that touch a given month.
 export function getMonthWeeks(year, month) {
   const mondays = []
   const seen = new Set()
@@ -109,20 +107,15 @@ export function getMonthWeeks(year, month) {
   return mondays
 }
 
-// NEW: Get the Monday key that matches the generator's format
-// The generator saves weeks with keys like "2026-04-05" (actual Monday dates)
-// This ensures we look up the correct key in monthRota
 export function getGeneratorMondayKey(date) {
   const d = new Date(date)
   const day = d.getDay()
-  // Get the Monday of this week (0 = Sunday, so Monday is day 1)
   const diff = d.getDate() - day + (day === 0 ? -6 : 1)
   d.setDate(diff)
   d.setHours(0, 0, 0, 0)
   return dateKey(d)
 }
-// Returns YYYY-MM-DD from a date object using local date components
-// This is the ONLY function that should convert Date to string for storage/comparison
+
 export function toLocalDateString(date) {
   const year = date.getFullYear()
   const month = String(date.getMonth() + 1).padStart(2, '0')
@@ -130,8 +123,46 @@ export function toLocalDateString(date) {
   return `${year}-${month}-${day}`
 }
 
-// Parse YYYY-MM-DD to a Date object at local midnight (not UTC)
 export function fromLocalDateString(dateStr) {
   const [year, month, day] = dateStr.split('-').map(Number)
   return new Date(year, month - 1, day)
+}
+
+// Returns all unique Monday-owned weeks across a month range.
+// Each entry: { monday: Date, year: number, month: number, monthLabel: string }
+// A week is owned by the month its Monday falls in — this is the
+// single source of truth for both batch generation and skip logic.
+export function getWeeksForRange(startYear, startMonth, endYear, endMonth) {
+  const weeks = []
+  const seen = new Set()
+
+  let y = startYear
+  let m = startMonth
+
+  while (y < endYear || (y === endYear && m <= endMonth)) {
+    const mondays = getMonthWeeks(y, m)
+    mondays.forEach((monday) => {
+      const key = dateKey(monday)
+      if (!seen.has(key)) {
+        seen.add(key)
+        weeks.push({
+          monday,
+          year: y,
+          month: m,
+          monthLabel: new Date(y, m, 1).toLocaleDateString('en-GB', {
+            month: 'long',
+            year: 'numeric',
+          }),
+        })
+      }
+    })
+
+    m++
+    if (m > 11) {
+      m = 0
+      y++
+    }
+  }
+
+  return weeks
 }
