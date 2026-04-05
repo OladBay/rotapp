@@ -13,6 +13,13 @@ import {
   getAllRequests,
 } from '../utils/cancelRequests'
 import {
+  getPendingManagerSwaps,
+  getSwapRequests,
+  approveSwapRequest,
+  rejectSwapRequest,
+  applySwapToRota,
+} from '../utils/swapRequests'
+import {
   getTimeOffForStaff,
   addTimeOff,
   removeTimeOff,
@@ -85,6 +92,13 @@ function Staff() {
   const [rejectionReason, setRejectionReason] = useState('')
   const [managerNotes, setManagerNotes] = useState('')
   const [showRejectModal, setShowRejectModal] = useState(false)
+
+  // Swap states
+  const [swapRefresh, setSwapRefresh] = useState(0)
+  const [selectedSwap, setSelectedSwap] = useState(null)
+  const [swapRejectNote, setSwapRejectNote] = useState('')
+  const [showSwapRejectModal, setShowSwapRejectModal] = useState(false)
+  const [monthRota, setMonthRota] = useLocalStorage('rotapp_month_rota', {})
 
   const homeStaff = mockUsers
     .filter(
@@ -187,6 +201,28 @@ function Staff() {
     setShowRejectModal(false)
   }
 
+  // Swap handlers
+  const pendingSwaps = getPendingManagerSwaps()
+  const allSwaps = getSwapRequests()
+
+  const refreshSwaps = () => setSwapRefresh((n) => n + 1)
+
+  const handleApproveSwap = (swap) => {
+    const updatedRota = applySwapToRota(swap, monthRota)
+    setMonthRota(updatedRota)
+    approveSwapRequest(swap.id, user?.name)
+    refreshSwaps()
+    setSelectedSwap(null)
+  }
+
+  const handleRejectSwap = (swap) => {
+    rejectSwapRequest(swap.id, user?.name, swapRejectNote)
+    refreshSwaps()
+    setSelectedSwap(null)
+    setSwapRejectNote('')
+    setShowSwapRejectModal(false)
+  }
+
   return (
     <div style={s.page}>
       <Navbar />
@@ -261,6 +297,12 @@ function Staff() {
               key: 'requests',
               label: `Requests ${getPendingRequests().length > 0 ? `(${getPendingRequests().length})` : ''}`,
               hasBadge: getPendingRequests().length > 0,
+            },
+            {
+              key: 'swaps',
+              label: `Swaps ${pendingSwaps.length > 0 ? `(${pendingSwaps.length})` : ''}`,
+              hasBadge: pendingSwaps.length > 0,
+              badgeCount: pendingSwaps.length,
             },
           ].map((t) => (
             <button
@@ -738,6 +780,262 @@ function Staff() {
                                 ` · Reviewed: ${new Date(request.reviewedAt).toLocaleString()}`}
                               {request.withdrawnAt &&
                                 ` · Withdrawn: ${new Date(request.withdrawnAt).toLocaleString()}`}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                  </>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Swaps tab */}
+        {tab === 'swaps' && (
+          <div style={s.requestsWrap}>
+            {pendingSwaps.length === 0 &&
+            allSwaps.filter((r) => r.status !== 'awaiting_manager').length ===
+              0 ? (
+              <div style={s.empty}>No swap requests</div>
+            ) : (
+              <>
+                {/* Pending swaps — awaiting manager decision */}
+                {pendingSwaps.length > 0 && (
+                  <>
+                    <div style={s.sectionLabel}>Awaiting your decision</div>
+                    {pendingSwaps.map((swap) => {
+                      const isSameDay = swap.targetShift?.sameDay
+                      return (
+                        <div key={swap.id} style={s.requestCard}>
+                          <div style={s.requestHeader}>
+                            <div style={s.requestStaff}>
+                              {swap.initiatorName}
+                              <span
+                                style={{
+                                  color: '#5d6180',
+                                  fontWeight: 400,
+                                  fontSize: '12px',
+                                  marginLeft: '6px',
+                                }}
+                              >
+                                with {swap.targetName}
+                              </span>
+                            </div>
+                            <div style={s.requestStatus}>awaiting approval</div>
+                          </div>
+
+                          <div style={s.requestDetails}>
+                            {/* Initiator's shift */}
+                            <div style={s.swapShiftRow}>
+                              <div
+                                style={{
+                                  ...s.swapShiftPill,
+                                  background:
+                                    swap.initiatorShift.type === 'early'
+                                      ? 'rgba(42,127,98,0.1)'
+                                      : 'rgba(122,79,168,0.1)',
+                                  color:
+                                    swap.initiatorShift.type === 'early'
+                                      ? '#2a7f62'
+                                      : '#7a4fa8',
+                                  border: `1px solid ${
+                                    swap.initiatorShift.type === 'early'
+                                      ? 'rgba(42,127,98,0.3)'
+                                      : 'rgba(122,79,168,0.3)'
+                                  }`,
+                                }}
+                              >
+                                {swap.initiatorName.split(' ')[0]} ·{' '}
+                                {swap.initiatorShift.type === 'early'
+                                  ? 'Early'
+                                  : 'Late'}{' '}
+                                · {swap.initiatorShift.date}
+                                {swap.initiatorShift.sleepIn && ' · Sleep-in'}
+                              </div>
+                              <FontAwesomeIcon
+                                icon='right-left'
+                                style={{ color: '#5d6180', fontSize: '11px' }}
+                              />
+                              <div
+                                style={{
+                                  ...s.swapShiftPill,
+                                  background:
+                                    swap.targetShift.type === 'early'
+                                      ? 'rgba(42,127,98,0.1)'
+                                      : 'rgba(122,79,168,0.1)',
+                                  color:
+                                    swap.targetShift.type === 'early'
+                                      ? '#2a7f62'
+                                      : '#7a4fa8',
+                                  border: `1px solid ${
+                                    swap.targetShift.type === 'early'
+                                      ? 'rgba(42,127,98,0.3)'
+                                      : 'rgba(122,79,168,0.3)'
+                                  }`,
+                                }}
+                              >
+                                {swap.targetName.split(' ')[0]} ·{' '}
+                                {swap.targetShift.type === 'early'
+                                  ? 'Early'
+                                  : 'Late'}{' '}
+                                · {swap.targetShift.date}
+                                {swap.targetShift.sleepIn && ' · Sleep-in'}
+                                {isSameDay && (
+                                  <span style={s.sameDayPill}>same day</span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Sleep-in warning */}
+                            {(swap.initiatorShift.sleepIn ||
+                              swap.targetShift.sleepIn) && (
+                              <div style={s.swapWarnRow}>
+                                <FontAwesomeIcon
+                                  icon='triangle-exclamation'
+                                  style={{ fontSize: '11px' }}
+                                />
+                                Sleep-in changes hands — verify compliance after
+                                approving
+                              </div>
+                            )}
+
+                            {/* Note */}
+                            {swap.note && (
+                              <div
+                                style={{
+                                  fontSize: '12px',
+                                  color: '#9499b0',
+                                  marginTop: '4px',
+                                }}
+                              >
+                                Note: {swap.note}
+                              </div>
+                            )}
+
+                            <div style={s.requestTime}>
+                              Requested:{' '}
+                              {new Date(swap.createdAt).toLocaleString()}
+                              {swap.targetRespondedAt &&
+                                ` · Accepted by ${swap.targetName}: ${new Date(swap.targetRespondedAt).toLocaleString()}`}
+                            </div>
+                          </div>
+
+                          <div style={s.requestActions}>
+                            <button
+                              style={s.approveRequestBtn}
+                              onClick={() => setSelectedSwap(swap)}
+                            >
+                              <FontAwesomeIcon icon='check' /> Approve
+                            </button>
+                            <button
+                              style={s.rejectRequestBtn}
+                              onClick={() => {
+                                setSelectedSwap(swap)
+                                setShowSwapRejectModal(true)
+                              }}
+                            >
+                              <FontAwesomeIcon icon='xmark' /> Reject
+                            </button>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </>
+                )}
+
+                {/* History */}
+                {allSwaps.filter(
+                  (r) =>
+                    r.status !== 'awaiting_manager' && r.status !== 'pending'
+                ).length > 0 && (
+                  <>
+                    <div style={{ ...s.sectionLabel, marginTop: '24px' }}>
+                      History
+                    </div>
+                    {allSwaps
+                      .filter(
+                        (r) =>
+                          r.status !== 'awaiting_manager' &&
+                          r.status !== 'pending'
+                      )
+                      .sort(
+                        (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
+                      )
+                      .map((swap) => (
+                        <div key={swap.id} style={s.requestCardHistory}>
+                          <div style={s.requestHeader}>
+                            <div style={s.requestStaff}>
+                              {swap.initiatorName}
+                              <span
+                                style={{
+                                  color: '#5d6180',
+                                  fontWeight: 400,
+                                  fontSize: '12px',
+                                  marginLeft: '6px',
+                                }}
+                              >
+                                with {swap.targetName}
+                              </span>
+                            </div>
+                            <div
+                              style={{
+                                ...s.requestStatus,
+                                background:
+                                  swap.status === 'approved'
+                                    ? 'rgba(46,204,138,0.12)'
+                                    : swap.status === 'rejected'
+                                      ? 'rgba(232,92,61,0.12)'
+                                      : 'rgba(148,153,176,0.12)',
+                                color:
+                                  swap.status === 'approved'
+                                    ? '#2ecc8a'
+                                    : swap.status === 'rejected'
+                                      ? '#e85c3d'
+                                      : '#9499b0',
+                              }}
+                            >
+                              {swap.status}
+                            </div>
+                          </div>
+                          <div style={s.requestDetails}>
+                            <div style={s.swapShiftRow}>
+                              <span
+                                style={{ fontSize: '12px', color: '#9499b0' }}
+                              >
+                                {swap.initiatorShift.type === 'early'
+                                  ? 'Early'
+                                  : 'Late'}{' '}
+                                · {swap.initiatorShift.date}
+                              </span>
+                              <FontAwesomeIcon
+                                icon='right-left'
+                                style={{ color: '#5d6180', fontSize: '10px' }}
+                              />
+                              <span
+                                style={{ fontSize: '12px', color: '#9499b0' }}
+                              >
+                                {swap.targetShift.type === 'early'
+                                  ? 'Early'
+                                  : 'Late'}{' '}
+                                · {swap.targetShift.date}
+                              </span>
+                            </div>
+                            {swap.managerNote && (
+                              <div
+                                style={{
+                                  fontSize: '12px',
+                                  color: '#5d6180',
+                                  marginTop: '4px',
+                                }}
+                              >
+                                Manager note: {swap.managerNote}
+                              </div>
+                            )}
+                            <div style={s.requestTime}>
+                              {new Date(swap.createdAt).toLocaleDateString()}
+                              {swap.resolvedBy &&
+                                ` · ${swap.status} by ${swap.resolvedBy}`}
                             </div>
                           </div>
                         </div>
@@ -1264,6 +1562,172 @@ function Staff() {
                   onClick={() => handleRejectRequest(selectedRequest)}
                 >
                   <FontAwesomeIcon icon='xmark' /> Reject Request
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Swap approve modal */}
+      {selectedSwap && !showSwapRejectModal && (
+        <div style={s.overlay} onClick={() => setSelectedSwap(null)}>
+          <div style={s.modal} onClick={(e) => e.stopPropagation()}>
+            <div style={s.modalHeader}>
+              <div style={s.modalTitle}>
+                <FontAwesomeIcon
+                  icon='right-left'
+                  style={{ marginRight: '8px', color: '#6c8fff' }}
+                />
+                Approve Shift Swap
+              </div>
+              <button style={s.closeBtn} onClick={() => setSelectedSwap(null)}>
+                <FontAwesomeIcon icon='xmark' />
+              </button>
+            </div>
+            <div style={s.modalBody}>
+              <div style={s.detailRow}>
+                <span style={s.detailLabel}>Initiator</span>
+                <span style={s.detailVal}>{selectedSwap.initiatorName}</span>
+              </div>
+              <div style={s.detailRow}>
+                <span style={s.detailLabel}>Their shift</span>
+                <span
+                  style={{
+                    ...s.detailVal,
+                    color:
+                      selectedSwap.initiatorShift.type === 'early'
+                        ? '#2a7f62'
+                        : '#7a4fa8',
+                  }}
+                >
+                  {selectedSwap.initiatorShift.type === 'early'
+                    ? 'Early'
+                    : 'Late'}{' '}
+                  · {selectedSwap.initiatorShift.date}
+                  {selectedSwap.initiatorShift.sleepIn ? ' · Sleep-in' : ''}
+                </span>
+              </div>
+              <div style={s.detailRow}>
+                <span style={s.detailLabel}>Swapping with</span>
+                <span style={s.detailVal}>{selectedSwap.targetName}</span>
+              </div>
+              <div style={s.detailRow}>
+                <span style={s.detailLabel}>Their shift</span>
+                <span
+                  style={{
+                    ...s.detailVal,
+                    color:
+                      selectedSwap.targetShift.type === 'early'
+                        ? '#2a7f62'
+                        : '#7a4fa8',
+                  }}
+                >
+                  {selectedSwap.targetShift.type === 'early' ? 'Early' : 'Late'}{' '}
+                  · {selectedSwap.targetShift.date}
+                  {selectedSwap.targetShift.sleepIn ? ' · Sleep-in' : ''}
+                  {selectedSwap.targetShift.sameDay ? ' · Same day' : ''}
+                </span>
+              </div>
+              {(selectedSwap.initiatorShift.sleepIn ||
+                selectedSwap.targetShift.sleepIn) && (
+                <div style={s.warningNote}>
+                  <FontAwesomeIcon icon='triangle-exclamation' /> Sleep-in
+                  changes hands. Verify shift compliance after approving.
+                </div>
+              )}
+              <div style={s.warningNote}>
+                <FontAwesomeIcon icon='triangle-exclamation' /> Approving will
+                update the rota immediately.
+              </div>
+            </div>
+            <div style={s.modalFooter}>
+              <div style={s.modalButtonGroup}>
+                <button
+                  style={s.cancelModalBtn}
+                  onClick={() => setSelectedSwap(null)}
+                >
+                  Cancel
+                </button>
+                <button
+                  style={s.approveModalBtn}
+                  onClick={() => handleApproveSwap(selectedSwap)}
+                >
+                  <FontAwesomeIcon icon='check' /> Approve swap
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Swap reject modal */}
+      {showSwapRejectModal && selectedSwap && (
+        <div
+          style={s.overlay}
+          onClick={() => {
+            setShowSwapRejectModal(false)
+            setSelectedSwap(null)
+            setSwapRejectNote('')
+          }}
+        >
+          <div style={s.modal} onClick={(e) => e.stopPropagation()}>
+            <div style={s.modalHeader}>
+              <div style={s.modalTitle}>Reject Swap Request</div>
+              <button
+                style={s.closeBtn}
+                onClick={() => {
+                  setShowSwapRejectModal(false)
+                  setSelectedSwap(null)
+                  setSwapRejectNote('')
+                }}
+              >
+                <FontAwesomeIcon icon='xmark' />
+              </button>
+            </div>
+            <div style={s.modalBody}>
+              <div style={s.detailRow}>
+                <span style={s.detailLabel}>Swap</span>
+                <span style={s.detailVal}>
+                  {selectedSwap.initiatorName} ↔ {selectedSwap.targetName}
+                </span>
+              </div>
+              <div style={s.detailRow}>
+                <span style={s.detailLabel}>Shifts</span>
+                <span style={s.detailVal}>
+                  {selectedSwap.initiatorShift.date} ↔{' '}
+                  {selectedSwap.targetShift.date}
+                </span>
+              </div>
+              <div style={s.field}>
+                <label style={s.detailLabel}>
+                  Reason for rejection (optional)
+                </label>
+                <textarea
+                  style={s.textarea}
+                  placeholder='Why is this swap being rejected? Both staff will see this note.'
+                  value={swapRejectNote}
+                  onChange={(e) => setSwapRejectNote(e.target.value)}
+                  rows='3'
+                />
+              </div>
+            </div>
+            <div style={s.modalFooter}>
+              <div style={s.modalButtonGroup}>
+                <button
+                  style={s.cancelModalBtn}
+                  onClick={() => {
+                    setShowSwapRejectModal(false)
+                    setSelectedSwap(null)
+                    setSwapRejectNote('')
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  style={s.rejectModalBtn}
+                  onClick={() => handleRejectSwap(selectedSwap)}
+                >
+                  <FontAwesomeIcon icon='xmark' /> Reject swap
                 </button>
               </div>
             </div>
@@ -1870,6 +2334,38 @@ const s = {
     display: 'flex',
     gap: '8px',
     justifyContent: 'flex-end',
+  },
+  swapShiftRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    flexWrap: 'wrap',
+    marginBottom: '6px',
+  },
+  swapShiftPill: {
+    fontSize: '12px',
+    fontWeight: 500,
+    padding: '4px 10px',
+    borderRadius: '6px',
+    fontFamily: 'DM Mono, monospace',
+  },
+  sameDayPill: {
+    fontSize: '10px',
+    color: '#6c8fff',
+    background: 'rgba(108,143,255,0.12)',
+    border: '1px solid rgba(108,143,255,0.25)',
+    borderRadius: '4px',
+    padding: '1px 5px',
+    marginLeft: '4px',
+    fontFamily: 'DM Sans, sans-serif',
+  },
+  swapWarnRow: {
+    fontSize: '12px',
+    color: '#c4883a',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    marginTop: '4px',
   },
 }
 

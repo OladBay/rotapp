@@ -1,4 +1,3 @@
-// src/utils/icons.js
 import { library } from '@fortawesome/fontawesome-svg-core'
 import {
   faCircleInfo,
@@ -40,6 +39,8 @@ import {
   faPenToSquare,
   faSun,
   faThumbTack,
+  faRightLeft,
+  faHourglass,
 } from '@fortawesome/free-solid-svg-icons'
 
 library.add(
@@ -81,5 +82,7 @@ library.add(
   faGripVertical,
   faPenToSquare,
   faSun,
-  faThumbTack
+  faThumbTack,
+  faRightLeft,
+  faHourglass
 )

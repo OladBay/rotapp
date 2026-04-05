@@ -5,6 +5,7 @@ import { useTheme } from '../../context/ThemeContext'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { getPendingRequests } from '../../utils/cancelRequests'
 import { getPendingTimeOffCount } from '../../utils/timeOffStorage'
+import { getPendingSwapCount } from '../../utils/swapRequests'
 
 function Navbar() {
   const { user, logout } = useAuth()
@@ -19,7 +20,8 @@ function Navbar() {
 
   const pendingRequests = getPendingRequests().length
   const pendingTimeOff = getPendingTimeOffCount()
-  const totalPending = pendingRequests + pendingTimeOff
+  const pendingSwaps = getPendingSwapCount()
+  const totalPending = pendingRequests + pendingTimeOff + pendingSwaps
   const hasStaffAction = totalPending > 0
 
   const canSeeStaff = ['manager', 'superadmin'].includes(user?.activeRole)

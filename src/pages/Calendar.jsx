@@ -1,6 +1,7 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useMemo, useCallback } from 'react'
 import { useAuth } from '../context/AuthContext'
 import Navbar from '../components/layout/Navbar'
+import ShiftPickerCalendar from '../components/shared/ShiftPickerCalendar'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { useLocalStorage } from '../hooks/useLocalStorage'
 import {
@@ -18,7 +19,6 @@ import {
 import {
   addRequest,
   updateRequest,
-  getShiftRequest,
   loadRequests,
   getRecentRequestWarning,
   pingRequest,
@@ -29,15 +29,26 @@ import {
   addTimeOff,
   generateTimeOffId,
 } from '../utils/timeOffStorage'
+import {
+  getSwapsForStaff,
+  createSwapRequest,
+  withdrawSwapRequest,
+  acceptSwapRequest,
+  declineSwapRequest,
+} from '../utils/swapRequests'
+import { mockStaff } from '../data/mockRota'
 import LeaveCalendar from '../components/shared/LeaveCalendar'
 
 const TODAY = new Date()
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
+// Roles eligible for swapping — no managers or OL
+const SWAPPABLE_ROLES = ['senior', 'rcw', 'relief']
+
 function Calendar() {
   const { user } = useAuth()
   const [monthRota] = useLocalStorage('rotapp_month_rota', {})
-  const [weekRotaState, setWeekRota] = useLocalStorage('rotapp_week_rota', {
+  const [weekRotaState] = useLocalStorage('rotapp_week_rota', {
     early: Array(7).fill([]),
     late: Array(7).fill([]),
     onCall: Array(7).fill([]),
@@ -49,14 +60,14 @@ function Calendar() {
   const [currentYear, setCurrentYear] = useState(TODAY.getFullYear())
   const [hoveredMonth, setHoveredMonth] = useState(null)
 
-  // Shift cancel modal states
+  // Shift detail / cancel modal
   const [selectedShift, setSelectedShift] = useState(null)
   const [cancelReason, setCancelReason] = useState('')
   const [customReasonText, setCustomReasonText] = useState('')
   const [showReasonForm, setShowReasonForm] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
-  // Time-off request modal
+  // Time-off modal
   const [showTimeOffModal, setShowTimeOffModal] = useState(false)
   const [timeOffType, setTimeOffType] = useState('annual_leave')
   const [timeOffSelectedDates, setTimeOffSelectedDates] = useState([])
@@ -64,12 +75,83 @@ function Calendar() {
   const [timeOffRefresh, setTimeOffRefresh] = useState(0)
   const [timeOffSubmitted, setTimeOffSubmitted] = useState(false)
 
+  // Swap modal — initiator (Staff A)
+  const [showSwapModal, setShowSwapModal] = useState(false)
+  const [swapShift, setSwapShift] = useState(null) // shift Staff A wants to swap
+  const [swapTargetId, setSwapTargetId] = useState('') // selected staff member
+  const [swapTargetShiftKey, setSwapTargetShiftKey] = useState('') // "date|type" of target's shift
+  const [swapNote, setSwapNote] = useState('')
+  const [staffSearch, setStaffSearch] = useState('')
+  const [swapSubmitted, setSwapSubmitted] = useState(false)
+  const [swapRefresh, setSwapRefresh] = useState(0)
+
+  // Swap respond modal — target (Staff C)
+  const [respondSwap, setRespondSwap] = useState(null) // the swap request object
+
   const staffId = user?.id
   const staffName = user?.name
 
   const currentWeekKey = getGeneratorMondayKey(currentMonday)
   const currentWeekRota = monthRota[currentWeekKey] || weekRotaState
 
+  // All staff eligible to swap with (excluding self and non-swappable roles)
+  const swappableStaff = useMemo(
+    () =>
+      mockStaff.filter(
+        (s) => s.id !== staffId && SWAPPABLE_ROLES.includes(s.role)
+      ),
+    [staffId]
+  )
+
+  // Build a map of target staff's rostered shifts across all stored weeks
+  const getShiftsForStaff = useCallback(
+    (targetStaffId) => {
+      const shifts = []
+      Object.entries(monthRota).forEach(([mondayKey, rota]) => {
+        const [y, m, d] = mondayKey.split('-').map(Number)
+        const monday = new Date(y, m - 1, d)
+        for (let dayIdx = 0; dayIdx < 7; dayIdx++) {
+          const date = new Date(monday)
+          date.setDate(monday.getDate() + dayIdx)
+          const yr = date.getFullYear()
+          const mo = String(date.getMonth() + 1).padStart(2, '0')
+          const dy = String(date.getDate()).padStart(2, '0')
+          const dateStr = `${yr}-${mo}-${dy}`
+          const earlyEntry = (rota.early?.[dayIdx] || []).find(
+            (s) => s.id === targetStaffId
+          )
+          if (earlyEntry) {
+            shifts.push({ date: dateStr, type: 'early', sleepIn: false })
+          }
+          const lateEntry = (rota.late?.[dayIdx] || []).find(
+            (s) => s.id === targetStaffId
+          )
+          if (lateEntry) {
+            shifts.push({
+              date: dateStr,
+              type: 'late',
+              sleepIn: lateEntry.sleepIn || false,
+            })
+          }
+        }
+      })
+      return shifts
+    },
+    [monthRota]
+  )
+
+  const targetShifts = useMemo(
+    () => (swapTargetId ? getShiftsForStaff(swapTargetId) : []),
+    [swapTargetId, getShiftsForStaff]
+  )
+
+  const selectedTargetShift = useMemo(() => {
+    if (!swapTargetShiftKey) return null
+    const [date, type, sameDayFlag] = swapTargetShiftKey.split('|')
+    return { date, type, sleepIn: false, sameDay: sameDayFlag === 'sameday' }
+  }, [swapTargetShiftKey])
+
+  // My shifts for the current week
   const myShiftsForWeek = useMemo(() => {
     const shifts = []
     for (let dayIdx = 0; dayIdx < 7; dayIdx++) {
@@ -79,7 +161,6 @@ function Calendar() {
       const m = String(date.getMonth() + 1).padStart(2, '0')
       const d = String(date.getDate()).padStart(2, '0')
       const dateStr = `${y}-${m}-${d}`
-
       const earlyStaff = currentWeekRota.early?.[dayIdx] || []
       const myEarly = earlyStaff.find((s) => s.id === staffId)
       if (myEarly) {
@@ -92,7 +173,6 @@ function Calendar() {
           home: user?.home || 'Meadowview House',
         })
       }
-
       const lateStaff = currentWeekRota.late?.[dayIdx] || []
       const myLate = lateStaff.find((s) => s.id === staffId)
       if (myLate) {
@@ -122,7 +202,59 @@ function Calendar() {
     )
   }
 
-  // Time-off helpers — re-reads on timeOffRefresh
+  // Swap helpers — re-reads on swapRefresh
+  const mySwaps = useMemo(
+    () => getSwapsForStaff(staffId || ''),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [staffId, swapRefresh]
+  )
+
+  // Get the active swap for a specific shift (pending or awaiting_manager)
+  const getActiveSwapForShift = (shift) => {
+    if (!shift) return null
+    return (
+      mySwaps.find(
+        (r) =>
+          (r.initiatorId === staffId &&
+            r.initiatorShift.date === shift.date &&
+            r.initiatorShift.type === shift.type &&
+            ['pending', 'awaiting_manager'].includes(r.status)) ||
+          (r.targetId === staffId &&
+            r.targetShift.date === shift.date &&
+            r.targetShift.type === shift.type &&
+            r.status === 'pending')
+      ) || null
+    )
+  }
+
+  // Get the most recent resolved swap for a shift (approved/rejected/declined)
+  const getResolvedSwapForShift = (shift) => {
+    if (!shift) return null
+    return (
+      mySwaps
+        .filter(
+          (r) =>
+            ((r.initiatorId === staffId &&
+              r.initiatorShift.date === shift.date &&
+              r.initiatorShift.type === shift.type) ||
+              (r.targetId === staffId &&
+                r.targetShift.date === shift.date &&
+                r.targetShift.type === shift.type)) &&
+            ['approved', 'rejected', 'declined', 'withdrawn'].includes(r.status)
+        )
+        .sort((a, b) => new Date(b.resolvedAt) - new Date(a.resolvedAt))[0] ||
+      null
+    )
+  }
+
+  // Incoming swap requests where I am the target and status is pending
+  const incomingSwaps = useMemo(
+    () =>
+      mySwaps.filter((r) => r.targetId === staffId && r.status === 'pending'),
+    [mySwaps, staffId]
+  )
+
+  // Time-off helpers
   const myTimeOff = useMemo(
     () => getTimeOffForStaff(staffId || ''),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -137,6 +269,32 @@ function Calendar() {
   const weekDates = getWeekDates(currentMonday)
   const startLabel = formatDate(weekDates[0])
   const endLabel = formatDate(weekDates[6])
+  const yearMonths = useMemo(() => getYearMonths(currentYear), [currentYear])
+
+  const getRotaForDate = (date) => {
+    const monday = getMondayOfWeek(date)
+    const key = dateKey(monday)
+    return monthRota[key] || null
+  }
+
+  const hasShiftOnDate = (date, sid) => {
+    const rota = getRotaForDate(date)
+    if (!rota) return false
+    const dayOfWeek = (date.getDay() + 6) % 7
+    return (
+      (rota.early?.[dayOfWeek] || []).some((s) => s.id === sid) ||
+      (rota.late?.[dayOfWeek] || []).some((s) => s.id === sid)
+    )
+  }
+
+  const handleMonthClick = (year, month) => {
+    const firstOfMonth = new Date(year, month, 1)
+    setMonday(getMondayOfWeek(firstOfMonth))
+    setCurrentYear(year)
+    setViewMode('week')
+  }
+
+  // ── Cancel request handlers ────────────────────────────────────────────
 
   const handleWithdraw = (requestId) => {
     updateRequest(requestId, {
@@ -167,6 +325,8 @@ function Calendar() {
     }, 500)
   }
 
+  // ── Time-off handlers ──────────────────────────────────────────────────
+
   const handleSubmitTimeOff = () => {
     if (timeOffSelectedDates.length === 0) return
     timeOffSelectedDates.forEach((dateStr) => {
@@ -193,31 +353,129 @@ function Calendar() {
     setTimeOffSubmitted(false)
   }
 
-  const getRotaForDate = (date) => {
-    const monday = getMondayOfWeek(date)
-    const key = dateKey(monday)
-    return monthRota[key] || null
+  // ── Swap handlers ──────────────────────────────────────────────────────
+
+  const openSwapModal = (shift) => {
+    setSwapShift(shift)
+    setSwapTargetId('')
+    setSwapTargetShiftKey('')
+    setSwapNote('')
+    setStaffSearch('')
+    setSwapSubmitted(false)
+    setShowSwapModal(true)
   }
 
-  const hasShiftOnDate = (date, staffId) => {
-    const rota = getRotaForDate(date)
-    if (!rota) return false
-    const dayOfWeek = (date.getDay() + 6) % 7
-    const earlyHas = (rota.early?.[dayOfWeek] || []).some(
-      (s) => s.id === staffId
-    )
-    const lateHas = (rota.late?.[dayOfWeek] || []).some((s) => s.id === staffId)
-    return earlyHas || lateHas
+  const closeSwapModal = () => {
+    setShowSwapModal(false)
+    setSwapShift(null)
+    setSwapTargetId('')
+    setSwapTargetShiftKey('')
+    setSwapNote('')
+    setSwapSubmitted(false)
   }
 
-  const yearMonths = useMemo(() => getYearMonths(currentYear), [currentYear])
-
-  const handleMonthClick = (year, month) => {
-    const firstOfMonth = new Date(year, month, 1)
-    setMonday(getMondayOfWeek(firstOfMonth))
-    setCurrentYear(year)
-    setViewMode('week')
+  const handleSubmitSwap = () => {
+    if (!swapShift || !swapTargetId || !selectedTargetShift) return
+    const target = mockStaff.find((s) => s.id === swapTargetId)
+    createSwapRequest({
+      initiatorId: staffId,
+      initiatorName: staffName,
+      initiatorShift: {
+        date: swapShift.date,
+        type: swapShift.type,
+        sleepIn: swapShift.sleepIn,
+      },
+      targetId: swapTargetId,
+      targetName: target?.name || swapTargetId,
+      targetShift: {
+        date: selectedTargetShift.date,
+        type: selectedTargetShift.type,
+        sleepIn: selectedTargetShift.sleepIn,
+        sameDay: selectedTargetShift.sameDay || false,
+      },
+      note: swapNote,
+    })
+    setSwapRefresh((n) => n + 1)
+    setSwapSubmitted(true)
   }
+
+  const handleWithdrawSwap = (swapId) => {
+    withdrawSwapRequest(swapId, staffId)
+    setSwapRefresh((n) => n + 1)
+    setSelectedShift(null)
+  }
+
+  const handleAcceptSwap = (swapId) => {
+    acceptSwapRequest(swapId, staffId)
+    setSwapRefresh((n) => n + 1)
+    setRespondSwap(null)
+  }
+
+  const handleDeclineSwap = (swapId) => {
+    declineSwapRequest(swapId, staffId)
+    setSwapRefresh((n) => n + 1)
+    setRespondSwap(null)
+  }
+
+  // Swap badge for a shift cell
+  const getSwapBadge = (shift) => {
+    const active = getActiveSwapForShift(shift)
+    if (active) {
+      if (active.status === 'pending' && active.initiatorId === staffId) {
+        return {
+          label: 'Swap pending',
+          color: '#c4883a',
+          bg: 'rgba(196,136,58,0.15)',
+          border: 'rgba(196,136,58,0.3)',
+        }
+      }
+      if (active.status === 'pending' && active.targetId === staffId) {
+        return {
+          label: 'Swap request',
+          color: '#c4883a',
+          bg: 'rgba(196,136,58,0.15)',
+          border: 'rgba(196,136,58,0.3)',
+        }
+      }
+      if (active.status === 'awaiting_manager') {
+        return {
+          label: 'With manager',
+          color: '#6c8fff',
+          bg: 'rgba(108,143,255,0.12)',
+          border: 'rgba(108,143,255,0.25)',
+        }
+      }
+    }
+    const resolved = getResolvedSwapForShift(shift)
+    if (resolved?.status === 'approved') {
+      return {
+        label: 'Swapped',
+        color: '#2ecc8a',
+        bg: 'rgba(46,204,138,0.12)',
+        border: 'rgba(46,204,138,0.25)',
+      }
+    }
+    if (resolved?.status === 'rejected' || resolved?.status === 'declined') {
+      return {
+        label: 'Swap rejected',
+        color: '#e85c3d',
+        bg: 'rgba(232,92,61,0.1)',
+        border: 'rgba(232,92,61,0.25)',
+      }
+    }
+    return null
+  }
+
+  // Can Staff A initiate a new swap on this shift?
+  const canInitiateSwap = (shift) => {
+    if (!shift) return false
+    if (!SWAPPABLE_ROLES.includes(user?.activeRole)) return false
+    // Block if there's already an active swap for this shift
+    const active = getActiveSwapForShift(shift)
+    return !active
+  }
+
+  const isSwappableRole = SWAPPABLE_ROLES.includes(user?.activeRole)
 
   return (
     <div style={s.page}>
@@ -243,7 +501,36 @@ function Calendar() {
                 <FontAwesomeIcon icon='calendar-plus' /> Request time off
               </button>
             )}
-            <div style={s.viewToggle}>{/* ... */}</div>
+            {/* Incoming swap requests badge */}
+            {incomingSwaps.length > 0 && (
+              <button
+                style={s.incomingSwapBtn}
+                onClick={() => setRespondSwap(incomingSwaps[0])}
+              >
+                <FontAwesomeIcon icon='right-left' />
+                {incomingSwaps.length} swap request
+                {incomingSwaps.length > 1 ? 's' : ''}
+              </button>
+            )}
+            <div style={s.viewToggle}>
+              {[
+                { value: 'week', label: 'Week' },
+                { value: 'month', label: 'Month' },
+              ].map((v) => (
+                <button
+                  key={v.value}
+                  style={{
+                    ...s.toggleBtn,
+                    background:
+                      viewMode === v.value ? '#6c8fff' : 'transparent',
+                    color: viewMode === v.value ? '#fff' : '#9499b0',
+                  }}
+                  onClick={() => setViewMode(v.value)}
+                >
+                  {v.label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -321,6 +608,14 @@ function Calendar() {
                   const isPending = shiftRequest?.status === 'pending'
                   const isApproved = shiftRequest?.status === 'approved'
                   const timeOffEntries = getTimeOffForDateStr(dateStr)
+                  const swapBadge = shift ? getSwapBadge(shift) : null
+                  const hasIncomingForThisShift = shift
+                    ? incomingSwaps.some(
+                        (r) =>
+                          r.targetShift.date === shift.date &&
+                          r.targetShift.type === shift.type
+                      )
+                    : false
 
                   return (
                     <div
@@ -329,9 +624,24 @@ function Calendar() {
                         ...s.cell,
                         cursor: shift ? 'pointer' : 'default',
                       }}
-                      onClick={() => shift && setSelectedShift(shift)}
+                      onClick={() => {
+                        if (!shift) return
+                        // If Staff C has an incoming swap on this cell, open respond modal
+                        if (hasIncomingForThisShift) {
+                          const incoming = incomingSwaps.find(
+                            (r) =>
+                              r.targetShift.date === shift.date &&
+                              r.targetShift.type === shift.type
+                          )
+                          if (incoming) {
+                            setRespondSwap(incoming)
+                            return
+                          }
+                        }
+                        setSelectedShift(shift)
+                      }}
                     >
-                      {/* Leave badges — always shown when present, regardless of shift */}
+                      {/* Leave badges */}
                       {timeOffEntries.map((e) => (
                         <div
                           key={e.id}
@@ -359,7 +669,25 @@ function Calendar() {
                         </div>
                       ))}
 
-                      {/* Shift or off-day content */}
+                      {/* Swap badge */}
+                      {swapBadge && (
+                        <div
+                          style={{
+                            ...s.timeOffBadge,
+                            background: swapBadge.bg,
+                            color: swapBadge.color,
+                            border: `1px solid ${swapBadge.border}`,
+                          }}
+                        >
+                          <FontAwesomeIcon
+                            icon='right-left'
+                            style={{ marginRight: '4px', fontSize: '9px' }}
+                          />
+                          {swapBadge.label}
+                        </div>
+                      )}
+
+                      {/* Shift or off-day */}
                       {isApproved ? (
                         <div style={s.cancelledTag}>Cancelled</div>
                       ) : shift ? (
@@ -389,8 +717,8 @@ function Calendar() {
                             }}
                           >
                             {shift.type === 'early' ? 'Early' : 'Late'}
-                            {shift.sleepIn && ' · 💤 Sleep-in'}
-                            {isPending && ' · ⏳ Pending'}
+                            {shift.sleepIn && ' · Sleep-in'}
+                            {isPending && ' · Pending'}
                           </div>
                           <div style={s.shiftTime}>
                             {shift.type === 'early'
@@ -453,7 +781,6 @@ function Calendar() {
                     shiftCount++
                   }
                 })
-
                 return (
                   <div
                     key={`${year}-${month}`}
@@ -484,7 +811,6 @@ function Calendar() {
                         </span>
                       )}
                     </div>
-
                     <div style={s.miniDayHeaders}>
                       {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d, i) => (
                         <div key={i} style={s.miniDayHead}>
@@ -492,7 +818,6 @@ function Calendar() {
                         </div>
                       ))}
                     </div>
-
                     <div style={s.miniGrid}>
                       {monthDates.map((date, i) => {
                         const inMonth = date.getMonth() === month
@@ -549,7 +874,7 @@ function Calendar() {
         )}
       </div>
 
-      {/* Shift detail modal */}
+      {/* ── Shift detail modal ─────────────────────────────────────────── */}
       {selectedShift && (
         <div
           style={s.overlay}
@@ -611,9 +936,7 @@ function Calendar() {
               {selectedShift.sleepIn && (
                 <div style={s.detailRow}>
                   <span style={s.detailLabel}>Sleep-in</span>
-                  <span style={{ ...s.detailVal, color: '#c4883a' }}>
-                    💤 Yes
-                  </span>
+                  <span style={{ ...s.detailVal, color: '#c4883a' }}>Yes</span>
                 </div>
               )}
               <div style={s.detailRow}>
@@ -623,13 +946,13 @@ function Calendar() {
                   if (request?.status === 'pending')
                     return (
                       <span style={{ ...s.detailVal, color: '#c4883a' }}>
-                        ⏳ Cancellation requested
+                        Cancellation requested
                       </span>
                     )
                   if (request?.status === 'approved')
                     return (
                       <span style={{ ...s.detailVal, color: '#e85c3d' }}>
-                        ✗ Cancelled (approved)
+                        Cancelled
                       </span>
                     )
                   if (request?.status === 'rejected')
@@ -641,38 +964,114 @@ function Calendar() {
                   if (request?.status === 'withdrawn')
                     return (
                       <span style={{ ...s.detailVal, color: '#2ecc8a' }}>
-                        ✓ Confirmed (request withdrawn)
+                        Confirmed
                       </span>
                     )
                   return (
                     <span style={{ ...s.detailVal, color: '#2ecc8a' }}>
-                      ✓ Confirmed
+                      Confirmed
                     </span>
                   )
                 })()}
               </div>
-              {(() => {
-                const request = getShiftRequestStatus(selectedShift)
-                if (request?.status === 'rejected' && request.rejectionReason) {
-                  return (
-                    <div style={s.detailRow}>
-                      <span style={s.detailLabel}>Rejection reason</span>
-                      <span
-                        style={{
-                          ...s.detailVal,
-                          color: '#e85c3d',
-                          fontSize: '12px',
-                        }}
-                      >
-                        {request.rejectionReason}
-                      </span>
-                    </div>
-                  )
-                }
-                return null
-              })()}
             </div>
 
+            {/* Swap status section */}
+            {(() => {
+              const activeSwap = getActiveSwapForShift(selectedShift)
+              const resolvedSwap = getResolvedSwapForShift(selectedShift)
+
+              if (activeSwap && activeSwap.initiatorId === staffId) {
+                // Staff A — their pending swap
+                const otherName = activeSwap.targetName
+                const statusLabel =
+                  activeSwap.status === 'awaiting_manager'
+                    ? `${otherName} accepted — awaiting manager`
+                    : `Waiting for ${otherName} to respond`
+                return (
+                  <div style={s.swapStatusWrap}>
+                    <div style={s.swapStatusRow}>
+                      <FontAwesomeIcon
+                        icon='right-left'
+                        style={{ color: '#6c8fff', fontSize: '12px' }}
+                      />
+                      <span style={{ fontSize: '12px', color: '#9499b0' }}>
+                        {statusLabel}
+                      </span>
+                    </div>
+                    {activeSwap.status === 'pending' && (
+                      <button
+                        style={s.withdrawBtn}
+                        onClick={() => handleWithdrawSwap(activeSwap.id)}
+                      >
+                        Withdraw swap request
+                      </button>
+                    )}
+                  </div>
+                )
+              }
+
+              if (
+                resolvedSwap?.status === 'rejected' ||
+                resolvedSwap?.status === 'declined'
+              ) {
+                // Allow Staff A to initiate a new swap
+                return (
+                  <div style={s.swapStatusWrap}>
+                    <div
+                      style={{
+                        ...s.swapStatusRow,
+                        color: '#e85c3d',
+                        fontSize: '12px',
+                      }}
+                    >
+                      <FontAwesomeIcon
+                        icon='xmark'
+                        style={{ fontSize: '11px' }}
+                      />
+                      <span>
+                        Previous swap request was {resolvedSwap.status}
+                      </span>
+                    </div>
+                    {isSwappableRole && (
+                      <button
+                        style={s.requestSwapBtn}
+                        onClick={() => {
+                          setSelectedShift(null)
+                          openSwapModal(selectedShift)
+                        }}
+                      >
+                        <FontAwesomeIcon icon='right-left' /> Request new swap
+                      </button>
+                    )}
+                  </div>
+                )
+              }
+
+              if (resolvedSwap?.status === 'approved') {
+                return (
+                  <div style={s.swapStatusWrap}>
+                    <div
+                      style={{
+                        ...s.swapStatusRow,
+                        color: '#2ecc8a',
+                        fontSize: '12px',
+                      }}
+                    >
+                      <FontAwesomeIcon
+                        icon='check'
+                        style={{ fontSize: '11px' }}
+                      />
+                      <span>Swap approved by {resolvedSwap.resolvedBy}</span>
+                    </div>
+                  </div>
+                )
+              }
+
+              return null
+            })()}
+
+            {/* Cancel request section */}
             {(() => {
               const request = getShiftRequestStatus(selectedShift)
               if (request?.status === 'pending') {
@@ -683,12 +1082,6 @@ function Calendar() {
                       <FontAwesomeIcon icon='clock' /> Cancellation request
                       pending manager approval
                     </div>
-                    {pingInfo.lastPingedAt && (
-                      <div style={s.lastPingInfo}>
-                        <FontAwesomeIcon icon='paper-plane' /> Last pinged:{' '}
-                        {new Date(pingInfo.lastPingedAt).toLocaleString()}
-                      </div>
-                    )}
                     <div style={s.buttonGroup}>
                       <button
                         style={s.withdrawBtn}
@@ -701,21 +1094,14 @@ function Calendar() {
                           style={s.pingBtn}
                           onClick={() => {
                             const updated = pingRequest(request.id, staffId)
-                            if (updated) {
-                              setSelectedShift({ ...selectedShift })
-                              alert(
-                                `Ping sent! (${pingInfo.remainingPings - 1} pings remaining)`
-                              )
-                            }
+                            if (updated) setSelectedShift({ ...selectedShift })
                           }}
                         >
-                          <FontAwesomeIcon icon='bell' /> Ping (
-                          {pingInfo.remainingPings})
+                          Ping ({pingInfo.remainingPings})
                         </button>
                       ) : (
                         <button style={s.pingBtnDisabled} disabled>
-                          <FontAwesomeIcon icon='bell-slash' /> Ping limit
-                          reached
+                          Ping limit reached
                         </button>
                       )}
                     </div>
@@ -723,93 +1109,498 @@ function Calendar() {
                 )
               }
               if (request?.status === 'approved') return null
-              if (!showReasonForm) {
+
+              // Show swap + cancel buttons if no active swap
+              const activeSwap = getActiveSwapForShift(selectedShift)
+              if (!activeSwap) {
+                if (!showReasonForm) {
+                  return (
+                    <div
+                      style={{
+                        padding: '0 20px 16px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '8px',
+                      }}
+                    >
+                      {isSwappableRole && canInitiateSwap(selectedShift) && (
+                        <button
+                          style={s.requestSwapBtn}
+                          onClick={() => {
+                            setSelectedShift(null)
+                            openSwapModal(selectedShift)
+                          }}
+                        >
+                          <FontAwesomeIcon icon='right-left' /> Request shift
+                          swap
+                        </button>
+                      )}
+                      <button
+                        style={s.cancelShiftBtn}
+                        onClick={() => setShowReasonForm(true)}
+                      >
+                        Request cancellation
+                      </button>
+                    </div>
+                  )
+                }
+                const { shouldWarn, message } = getRecentRequestWarning(
+                  staffId,
+                  selectedShift.date,
+                  selectedShift.type
+                )
                 return (
-                  <button
-                    style={s.cancelShiftBtn}
-                    onClick={() => setShowReasonForm(true)}
-                  >
-                    Request cancellation
-                  </button>
+                  <div style={s.reasonForm}>
+                    {shouldWarn && (
+                      <div style={s.warningNoteInline}>
+                        <FontAwesomeIcon icon='triangle-exclamation' />{' '}
+                        {message}
+                      </div>
+                    )}
+                    <div style={s.reasonLabel}>Reason for cancellation:</div>
+                    <select
+                      style={s.reasonSelect}
+                      value={cancelReason}
+                      onChange={(e) => setCancelReason(e.target.value)}
+                    >
+                      <option value=''>Select a reason...</option>
+                      <option value='Sick'>Sick</option>
+                      <option value='Family emergency'>Family emergency</option>
+                      <option value='Transport issue'>Transport issue</option>
+                      <option value='Other'>Other (please specify)</option>
+                    </select>
+                    {cancelReason === 'Other' && (
+                      <textarea
+                        style={s.reasonTextarea}
+                        placeholder='Please specify your reason...'
+                        value={customReasonText}
+                        onChange={(e) => setCustomReasonText(e.target.value)}
+                        rows='3'
+                      />
+                    )}
+                    <div style={s.reasonActions}>
+                      <button
+                        style={s.cancelReasonBtn}
+                        onClick={() => {
+                          setShowReasonForm(false)
+                          setCancelReason('')
+                          setCustomReasonText('')
+                        }}
+                      >
+                        Back
+                      </button>
+                      <button
+                        style={{
+                          ...s.submitReasonBtn,
+                          opacity:
+                            !cancelReason ||
+                            (cancelReason === 'Other' &&
+                              !customReasonText.trim())
+                              ? 0.5
+                              : 1,
+                          cursor:
+                            !cancelReason ||
+                            (cancelReason === 'Other' &&
+                              !customReasonText.trim())
+                              ? 'not-allowed'
+                              : 'pointer',
+                        }}
+                        disabled={
+                          !cancelReason ||
+                          (cancelReason === 'Other' && !customReasonText.trim())
+                        }
+                        onClick={handleSubmitRequest}
+                      >
+                        {submitting ? 'Submitting...' : 'Submit request'}
+                      </button>
+                    </div>
+                  </div>
                 )
               }
-              const { shouldWarn, message } = getRecentRequestWarning(
-                staffId,
-                selectedShift.date,
-                selectedShift.type
-              )
-              return (
-                <div style={s.reasonForm}>
-                  {shouldWarn && (
-                    <div style={s.warningNoteInline}>
-                      <FontAwesomeIcon icon='triangle-exclamation' /> {message}
-                    </div>
-                  )}
-                  <div style={s.reasonLabel}>Reason for cancellation:</div>
-                  <select
-                    style={s.reasonSelect}
-                    value={cancelReason}
-                    onChange={(e) => setCancelReason(e.target.value)}
-                  >
-                    <option value=''>Select a reason...</option>
-                    <option value='Sick'>🤒 Sick</option>
-                    <option value='Family emergency'>
-                      🏠 Family emergency
-                    </option>
-                    <option value='Transport issue'>🚗 Transport issue</option>
-                    <option value='Other'>📝 Other (please specify)</option>
-                  </select>
-                  {cancelReason === 'Other' && (
-                    <textarea
-                      style={s.reasonTextarea}
-                      placeholder='Please specify your reason...'
-                      value={customReasonText}
-                      onChange={(e) => setCustomReasonText(e.target.value)}
-                      rows='3'
-                    />
-                  )}
-                  <div style={s.reasonActions}>
-                    <button
-                      style={s.cancelReasonBtn}
-                      onClick={() => {
-                        setShowReasonForm(false)
-                        setCancelReason('')
-                        setCustomReasonText('')
-                      }}
-                    >
-                      Back
-                    </button>
-                    <button
-                      style={{
-                        ...s.submitReasonBtn,
-                        opacity:
-                          !cancelReason ||
-                          (cancelReason === 'Other' && !customReasonText.trim())
-                            ? 0.5
-                            : 1,
-                        cursor:
-                          !cancelReason ||
-                          (cancelReason === 'Other' && !customReasonText.trim())
-                            ? 'not-allowed'
-                            : 'pointer',
-                      }}
-                      disabled={
-                        !cancelReason ||
-                        (cancelReason === 'Other' && !customReasonText.trim())
-                      }
-                      onClick={handleSubmitRequest}
-                    >
-                      {submitting ? 'Submitting...' : 'Submit request'}
-                    </button>
-                  </div>
-                </div>
-              )
+              return null
             })()}
           </div>
         </div>
       )}
 
-      {/* Time-off request modal */}
+      {/* ── Swap initiation modal (Staff A) ───────────────────────────── */}
+      {showSwapModal && (
+        <div style={s.overlay} onClick={closeSwapModal}>
+          <div style={s.modal} onClick={(e) => e.stopPropagation()}>
+            <div style={s.modalHeader}>
+              <div style={s.modalTitle}>
+                <FontAwesomeIcon
+                  icon='right-left'
+                  style={{ marginRight: '8px', color: '#6c8fff' }}
+                />
+                Request shift swap
+              </div>
+              <button style={s.closeBtn} onClick={closeSwapModal}>
+                <FontAwesomeIcon icon='xmark' />
+              </button>
+            </div>
+
+            {swapSubmitted ? (
+              <div style={s.confirmWrap}>
+                <div style={{ fontSize: '36px', color: '#6c8fff' }}>
+                  <FontAwesomeIcon icon='right-left' />
+                </div>
+                <div style={s.confirmTitle}>Swap request sent</div>
+                <div style={s.confirmBody}>
+                  Your request has been sent. Once they respond, it will go to
+                  your manager for approval.
+                </div>
+                <button style={s.submitReasonBtn} onClick={closeSwapModal}>
+                  Done
+                </button>
+              </div>
+            ) : (
+              <>
+                <div style={s.modalBody}>
+                  {/* Your shift */}
+                  <div style={s.swapShiftCard}>
+                    <div style={s.swapCardLabel}>Your shift</div>
+                    <div style={s.swapCardMain}>
+                      {swapShift?.type === 'early' ? 'Early' : 'Late'} ·{' '}
+                      {swapShift?.date}
+                    </div>
+                    <div style={s.swapCardSub}>
+                      {swapShift?.type === 'early'
+                        ? '07:00–14:30'
+                        : '14:00–23:00'}
+                      {swapShift?.sleepIn ? ' · Sleep-in' : ''}
+                    </div>
+                  </div>
+
+                  <div style={s.swapArrow}>
+                    <FontAwesomeIcon
+                      icon='right-left'
+                      style={{
+                        color: '#5d6180',
+                        fontSize: '16px',
+                        transform: 'rotate(90deg)',
+                      }}
+                    />
+                  </div>
+
+                  {/* Pick staff — searchable */}
+                  <div style={{ position: 'relative' }}>
+                    <div style={s.fieldLabel}>Swap with</div>
+                    <input
+                      style={s.reasonSelect}
+                      type='text'
+                      placeholder='Search staff name...'
+                      value={staffSearch}
+                      onChange={(e) => {
+                        setStaffSearch(e.target.value)
+                        setSwapTargetId('')
+                        setSwapTargetShiftKey('')
+                      }}
+                      autoComplete='off'
+                    />
+                    {staffSearch && !swapTargetId && (
+                      <div style={s.staffDropdown}>
+                        {swappableStaff
+                          .filter((st) =>
+                            st.name
+                              .toLowerCase()
+                              .includes(staffSearch.toLowerCase())
+                          )
+                          .map((st) => (
+                            <div
+                              key={st.id}
+                              style={s.staffDropdownItem}
+                              onClick={() => {
+                                setSwapTargetId(st.id)
+                                setStaffSearch(st.name)
+                                setSwapTargetShiftKey('')
+                              }}
+                            >
+                              <span
+                                style={{ fontSize: '13px', color: '#e8eaf0' }}
+                              >
+                                {st.name}
+                              </span>
+                              <span
+                                style={{
+                                  fontSize: '11px',
+                                  color: '#5d6180',
+                                  fontFamily: 'DM Mono, monospace',
+                                }}
+                              >
+                                {st.roleCode}
+                              </span>
+                            </div>
+                          ))}
+                        {swappableStaff.filter((st) =>
+                          st.name
+                            .toLowerCase()
+                            .includes(staffSearch.toLowerCase())
+                        ).length === 0 && (
+                          <div
+                            style={{
+                              padding: '10px 12px',
+                              fontSize: '13px',
+                              color: '#5d6180',
+                            }}
+                          >
+                            No staff found
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Pick their shift — calendar picker */}
+                  {swapTargetId && (
+                    <div>
+                      <div style={s.fieldLabel}>Their shift to swap</div>
+                      <ShiftPickerCalendar
+                        targetStaffId={swapTargetId}
+                        monthRota={monthRota}
+                        initiatorShiftDate={swapShift?.date}
+                        selected={selectedTargetShift}
+                        onSelect={(sh) =>
+                          setSwapTargetShiftKey(
+                            `${sh.date}|${sh.type}|${sh.sameDay ? 'sameday' : ''}`
+                          )
+                        }
+                      />
+                    </div>
+                  )}
+
+                  {/* Their shift preview */}
+                  {selectedTargetShift && (
+                    <div style={s.targetShiftCard}>
+                      <div style={s.targetCardLabel}>
+                        {mockStaff.find((s) => s.id === swapTargetId)?.name}'s
+                        shift
+                      </div>
+                      {selectedTargetShift.availabilityOnly ? (
+                        <>
+                          <div style={s.swapCardMain}>
+                            Availability requested
+                          </div>
+                          <div style={s.swapCardSub}>
+                            {selectedTargetShift.date}
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div style={s.swapCardMain}>
+                            {selectedTargetShift.type === 'early'
+                              ? 'Early'
+                              : 'Late'}{' '}
+                            · {selectedTargetShift.date}
+                          </div>
+                          <div style={s.swapCardSub}>
+                            {selectedTargetShift.type === 'early'
+                              ? '07:00–14:30'
+                              : '14:00–23:00'}
+                            {selectedTargetShift.sleepIn ? ' · Sleep-in' : ''}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Sleep-in warning */}
+                  {selectedTargetShift?.sleepIn && (
+                    <div style={s.swapWarn}>
+                      <FontAwesomeIcon
+                        icon='triangle-exclamation'
+                        style={{ flexShrink: 0 }}
+                      />
+                      <span>
+                        {mockStaff.find((s) => s.id === swapTargetId)?.name}'s
+                        shift has a sleep-in. If approved, you will inherit it.
+                        The manager will be informed.
+                      </span>
+                    </div>
+                  )}
+                  {swapShift?.sleepIn &&
+                    selectedTargetShift &&
+                    !selectedTargetShift.sleepIn && (
+                      <div style={s.swapWarn}>
+                        <FontAwesomeIcon
+                          icon='triangle-exclamation'
+                          style={{ flexShrink: 0 }}
+                        />
+                        <span>
+                          Your shift has a sleep-in. If approved,{' '}
+                          {mockStaff.find((s) => s.id === swapTargetId)?.name}{' '}
+                          will inherit it. The manager will be informed.
+                        </span>
+                      </div>
+                    )}
+
+                  {/* Note */}
+                  <div>
+                    <div style={s.fieldLabel}>Note (optional)</div>
+                    <textarea
+                      style={s.reasonTextarea}
+                      placeholder='Add a note for the other staff member or manager...'
+                      value={swapNote}
+                      onChange={(e) => setSwapNote(e.target.value)}
+                      rows='3'
+                    />
+                  </div>
+                </div>
+
+                <div style={s.reasonActions}>
+                  <button style={s.cancelReasonBtn} onClick={closeSwapModal}>
+                    Cancel
+                  </button>
+                  <button
+                    style={{
+                      ...s.submitReasonBtn,
+                      opacity: !swapTargetId || !swapTargetShiftKey ? 0.5 : 1,
+                      cursor:
+                        !swapTargetId || !swapTargetShiftKey
+                          ? 'not-allowed'
+                          : 'pointer',
+                    }}
+                    disabled={!swapTargetId || !swapTargetShiftKey}
+                    onClick={handleSubmitSwap}
+                  >
+                    Submit swap request
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Swap respond modal (Staff C) ───────────────────────────────── */}
+      {respondSwap && (
+        <div style={s.overlay} onClick={() => setRespondSwap(null)}>
+          <div style={s.modal} onClick={(e) => e.stopPropagation()}>
+            <div style={s.modalHeader}>
+              <div style={s.modalTitle}>
+                <FontAwesomeIcon
+                  icon='right-left'
+                  style={{ marginRight: '8px', color: '#6c8fff' }}
+                />
+                Swap request from {respondSwap.initiatorName}
+              </div>
+              <button style={s.closeBtn} onClick={() => setRespondSwap(null)}>
+                <FontAwesomeIcon icon='xmark' />
+              </button>
+            </div>
+            <div style={s.modalBody}>
+              <div
+                style={{ fontSize: '13px', color: '#9499b0', lineHeight: 1.5 }}
+              >
+                {respondSwap.initiatorName} wants to swap shifts with you.
+                Accept or decline below.
+              </div>
+
+              {/* Their shift */}
+              <div style={s.swapShiftCard}>
+                <div style={s.swapCardLabel}>
+                  {respondSwap.initiatorName} gives up
+                </div>
+                <div style={s.swapCardMain}>
+                  {respondSwap.initiatorShift.type === 'early'
+                    ? 'Early'
+                    : 'Late'}{' '}
+                  · {respondSwap.initiatorShift.date}
+                </div>
+                <div style={s.swapCardSub}>
+                  {respondSwap.initiatorShift.type === 'early'
+                    ? '07:00–14:30'
+                    : '14:00–23:00'}
+                  {respondSwap.initiatorShift.sleepIn ? ' · Sleep-in' : ''}
+                </div>
+              </div>
+
+              <div style={s.swapArrow}>
+                <FontAwesomeIcon
+                  icon='right-left'
+                  style={{
+                    color: '#5d6180',
+                    fontSize: '16px',
+                    transform: 'rotate(90deg)',
+                  }}
+                />
+              </div>
+
+              {/* Your shift */}
+              <div style={s.targetShiftCard}>
+                <div style={s.targetCardLabel}>
+                  {respondSwap.targetShift.sameDay
+                    ? 'Same day — you cover'
+                    : 'You give up'}
+                </div>
+                <div style={s.swapCardMain}>
+                  {respondSwap.targetShift.type === 'early' ? 'Early' : 'Late'}{' '}
+                  · {respondSwap.targetShift.date}
+                </div>
+                <div style={s.swapCardSub}>
+                  {respondSwap.targetShift.type === 'early'
+                    ? '07:00–14:30'
+                    : '14:00–23:00'}
+                  {respondSwap.targetShift.sleepIn ? ' · Sleep-in' : ''}
+                </div>
+              </div>
+
+              {/* Sleep-in warning */}
+              {respondSwap.initiatorShift.sleepIn && (
+                <div style={s.swapWarn}>
+                  <FontAwesomeIcon
+                    icon='triangle-exclamation'
+                    style={{ flexShrink: 0 }}
+                  />
+                  <span>
+                    If you accept, you will inherit {respondSwap.initiatorName}
+                    's sleep-in on {respondSwap.initiatorShift.date}.
+                  </span>
+                </div>
+              )}
+
+              {/* Initiator's note */}
+              {respondSwap.note && (
+                <div style={s.swapNote}>
+                  <div
+                    style={{
+                      fontSize: '11px',
+                      color: '#5d6180',
+                      marginBottom: '4px',
+                    }}
+                  >
+                    Note from {respondSwap.initiatorName}
+                  </div>
+                  <div style={{ fontSize: '13px', color: '#9499b0' }}>
+                    {respondSwap.note}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div style={s.reasonActions}>
+              <button
+                style={{
+                  ...s.cancelReasonBtn,
+                  color: '#e85c3d',
+                  borderColor: 'rgba(232,92,61,0.3)',
+                }}
+                onClick={() => handleDeclineSwap(respondSwap.id)}
+              >
+                Decline
+              </button>
+              <button
+                style={{ ...s.submitReasonBtn, background: '#2ecc8a' }}
+                onClick={() => handleAcceptSwap(respondSwap.id)}
+              >
+                Accept swap
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Time-off modal ─────────────────────────────────────────────── */}
       {showTimeOffModal && (
         <div style={s.overlay} onClick={closeTimeOffModal}>
           <div style={s.modal} onClick={(e) => e.stopPropagation()}>
@@ -819,7 +1610,6 @@ function Calendar() {
                 <FontAwesomeIcon icon='xmark' />
               </button>
             </div>
-
             {timeOffSubmitted ? (
               <div style={s.confirmWrap}>
                 <div style={s.confirmIcon}>
@@ -842,13 +1632,11 @@ function Calendar() {
                     Tap days below to select. Days with existing leave are not
                     available.
                   </p>
-
                   <LeaveCalendar
                     staffId={staffId}
                     selectedDates={timeOffSelectedDates}
                     onSelectionChange={setTimeOffSelectedDates}
                   />
-
                   <div style={s.field}>
                     <label style={s.detailLabel}>Leave type</label>
                     <select
@@ -862,7 +1650,6 @@ function Calendar() {
                       <option value='other'>Other</option>
                     </select>
                   </div>
-
                   <div style={s.field}>
                     <label style={s.detailLabel}>Note (optional)</label>
                     <input
@@ -874,7 +1661,6 @@ function Calendar() {
                     />
                   </div>
                 </div>
-
                 <div style={s.reasonActions}>
                   <button style={s.cancelReasonBtn} onClick={closeTimeOffModal}>
                     Cancel
@@ -932,6 +1718,21 @@ const s = {
     fontSize: '13px',
     fontWeight: 500,
     color: '#6c8fff',
+    cursor: 'pointer',
+    fontFamily: 'DM Sans, sans-serif',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    whiteSpace: 'nowrap',
+  },
+  incomingSwapBtn: {
+    background: 'rgba(196,136,58,0.12)',
+    border: '1px solid rgba(196,136,58,0.3)',
+    borderRadius: '8px',
+    padding: '8px 14px',
+    fontSize: '13px',
+    fontWeight: 500,
+    color: '#c4883a',
     cursor: 'pointer',
     fontFamily: 'DM Sans, sans-serif',
     display: 'flex',
@@ -1133,10 +1934,7 @@ const s = {
     justifyContent: 'center',
     cursor: 'pointer',
   },
-  miniDateNum: {
-    fontSize: '9px',
-    fontFamily: 'DM Mono, monospace',
-  },
+  miniDateNum: { fontSize: '9px', fontFamily: 'DM Mono, monospace' },
   overlay: {
     position: 'fixed',
     inset: 0,
@@ -1158,6 +1956,27 @@ const s = {
     flexDirection: 'column',
     overflow: 'hidden',
   },
+  staffDropdown: {
+    position: 'absolute',
+    top: '68px',
+    left: 0,
+    right: 0,
+    background: '#1d1f2b',
+    border: '1px solid rgba(255,255,255,0.12)',
+    borderRadius: '8px',
+    zIndex: 60,
+    overflow: 'hidden',
+    boxShadow: '0 8px 24px rgba(0,0,0,0.4)',
+  },
+  staffDropdownItem: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: '10px 12px',
+    cursor: 'pointer',
+    borderBottom: '1px solid rgba(255,255,255,0.05)',
+    transition: 'background 0.1s',
+  },
   modalHeader: {
     display: 'flex',
     alignItems: 'center',
@@ -1170,6 +1989,8 @@ const s = {
     fontFamily: 'Syne, sans-serif',
     fontSize: '16px',
     fontWeight: 600,
+    display: 'flex',
+    alignItems: 'center',
   },
   closeBtn: {
     background: 'transparent',
@@ -1180,6 +2001,9 @@ const s = {
     height: '28px',
     cursor: 'pointer',
     fontSize: '14px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   modalBody: {
     padding: '20px 24px',
@@ -1189,15 +2013,8 @@ const s = {
     overflowY: 'auto',
     flex: 1,
   },
-  modalNote: {
-    fontSize: '13px',
-    color: '#9499b0',
-    margin: 0,
-  },
-  field: {
-    display: 'flex',
-    flexDirection: 'column',
-  },
+  modalNote: { fontSize: '13px', color: '#9499b0', margin: 0 },
+  field: { display: 'flex', flexDirection: 'column' },
   detailRow: {
     display: 'flex',
     justifyContent: 'space-between',
@@ -1205,16 +2022,6 @@ const s = {
   },
   detailLabel: { fontSize: '13px', color: '#9499b0' },
   detailVal: { fontSize: '13px', fontWeight: 500, color: '#e8eaf0' },
-  rangeInfo: {
-    fontSize: '12px',
-    color: '#6c8fff',
-    background: 'rgba(108,143,255,0.08)',
-    border: '1px solid rgba(108,143,255,0.15)',
-    borderRadius: '6px',
-    padding: '8px 12px',
-    display: 'flex',
-    alignItems: 'center',
-  },
   pendingWarning: {
     padding: '12px 24px',
     background: 'rgba(196,136,58,0.1)',
@@ -1224,15 +2031,6 @@ const s = {
     display: 'flex',
     alignItems: 'center',
     gap: '8px',
-  },
-  lastPingInfo: {
-    padding: '8px 24px',
-    fontSize: '12px',
-    color: '#9499b0',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    borderBottom: '1px solid rgba(255,255,255,0.05)',
   },
   buttonGroup: {
     display: 'flex',
@@ -1280,7 +2078,6 @@ const s = {
     color: '#5d6180',
     padding: '8px 12px',
     fontSize: '12px',
-    fontWeight: 500,
     cursor: 'not-allowed',
     fontFamily: 'DM Sans, sans-serif',
     display: 'flex',
@@ -1303,7 +2100,22 @@ const s = {
     alignItems: 'center',
     justifyContent: 'center',
     gap: '6px',
-    marginTop: '8px',
+  },
+  requestSwapBtn: {
+    width: '100%',
+    background: 'rgba(108,143,255,0.1)',
+    border: '1px solid rgba(108,143,255,0.25)',
+    borderRadius: '8px',
+    color: '#6c8fff',
+    padding: '10px 12px',
+    fontSize: '12px',
+    fontWeight: 500,
+    cursor: 'pointer',
+    fontFamily: 'DM Sans, sans-serif',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '6px',
   },
   reasonForm: {
     padding: '16px 24px 20px 24px',
@@ -1377,7 +2189,6 @@ const s = {
     display: 'flex',
     alignItems: 'center',
     gap: '8px',
-    marginBottom: '4px',
   },
   confirmWrap: {
     display: 'flex',
@@ -1387,10 +2198,7 @@ const s = {
     padding: '32px 24px',
     gap: '12px',
   },
-  confirmIcon: {
-    fontSize: '40px',
-    color: '#2ecc8a',
-  },
+  confirmIcon: { fontSize: '40px', color: '#2ecc8a' },
   confirmTitle: {
     fontFamily: 'Syne, sans-serif',
     fontSize: '17px',
@@ -1403,6 +2211,75 @@ const s = {
     lineHeight: 1.6,
     maxWidth: '300px',
     marginBottom: '8px',
+  },
+  // Swap-specific styles
+  swapShiftCard: {
+    background: 'rgba(108,143,255,0.07)',
+    border: '1px solid rgba(108,143,255,0.2)',
+    borderRadius: '10px',
+    padding: '12px 14px',
+  },
+  targetShiftCard: {
+    background: 'rgba(46,204,138,0.07)',
+    border: '1px solid rgba(46,204,138,0.2)',
+    borderRadius: '10px',
+    padding: '12px 14px',
+  },
+  swapCardLabel: {
+    fontSize: '11px',
+    color: '#6c8fff',
+    fontWeight: 500,
+    marginBottom: '6px',
+    textTransform: 'uppercase',
+    letterSpacing: '0.06em',
+  },
+  targetCardLabel: {
+    fontSize: '11px',
+    color: '#2ecc8a',
+    fontWeight: 500,
+    marginBottom: '6px',
+    textTransform: 'uppercase',
+    letterSpacing: '0.06em',
+  },
+  swapCardMain: { fontSize: '14px', fontWeight: 500, color: '#e8eaf0' },
+  swapCardSub: { fontSize: '12px', color: '#9499b0', marginTop: '2px' },
+  swapArrow: { textAlign: 'center', margin: '-4px 0' },
+  fieldLabel: {
+    fontSize: '12px',
+    color: '#9499b0',
+    marginBottom: '6px',
+    fontWeight: 500,
+  },
+  swapWarn: {
+    background: 'rgba(196,136,58,0.1)',
+    border: '1px solid rgba(196,136,58,0.25)',
+    borderRadius: '8px',
+    padding: '10px 12px',
+    fontSize: '12px',
+    color: '#c4883a',
+    display: 'flex',
+    alignItems: 'flex-start',
+    gap: '8px',
+  },
+  swapNote: {
+    background: 'rgba(255,255,255,0.03)',
+    border: '1px solid rgba(255,255,255,0.07)',
+    borderRadius: '8px',
+    padding: '10px 12px',
+  },
+  swapStatusWrap: {
+    padding: '12px 24px 16px',
+    borderTop: '1px solid rgba(255,255,255,0.07)',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '10px',
+  },
+  swapStatusRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    color: '#6c8fff',
+    fontSize: '12px',
   },
 }
 
