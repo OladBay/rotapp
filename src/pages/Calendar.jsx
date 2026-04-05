@@ -359,6 +359,35 @@ function Calendar() {
                       }}
                       onClick={() => shift && setSelectedShift(shift)}
                     >
+                      {/* Leave badges — always shown when present, regardless of shift */}
+                      {timeOffEntries.map((e) => (
+                        <div
+                          key={e.id}
+                          style={{
+                            ...s.timeOffBadge,
+                            background:
+                              e.status === 'pending'
+                                ? 'rgba(196,136,58,0.15)'
+                                : 'rgba(108,143,255,0.12)',
+                            color:
+                              e.status === 'pending' ? '#c4883a' : '#6c8fff',
+                            border:
+                              e.status === 'pending'
+                                ? '1px solid rgba(196,136,58,0.3)'
+                                : '1px solid rgba(108,143,255,0.25)',
+                          }}
+                        >
+                          <FontAwesomeIcon
+                            icon='umbrella-beach'
+                            style={{ marginRight: '4px' }}
+                          />
+                          {e.status === 'pending'
+                            ? 'Leave pending'
+                            : 'On leave'}
+                        </div>
+                      ))}
+
+                      {/* Shift or off-day content */}
                       {isApproved ? (
                         <div style={s.cancelledTag}>Cancelled</div>
                       ) : shift ? (
@@ -400,36 +429,7 @@ function Calendar() {
                         </div>
                       ) : (
                         <div style={s.offDay}>
-                          {timeOffEntries.length > 0
-                            ? timeOffEntries.map((e) => (
-                                <div
-                                  key={e.id}
-                                  style={{
-                                    ...s.timeOffBadge,
-                                    background:
-                                      e.status === 'pending'
-                                        ? 'rgba(196,136,58,0.15)'
-                                        : 'rgba(108,143,255,0.12)',
-                                    color:
-                                      e.status === 'pending'
-                                        ? '#c4883a'
-                                        : '#6c8fff',
-                                    border:
-                                      e.status === 'pending'
-                                        ? '1px solid rgba(196,136,58,0.3)'
-                                        : '1px solid rgba(108,143,255,0.25)',
-                                  }}
-                                >
-                                  <FontAwesomeIcon
-                                    icon='umbrella-beach'
-                                    style={{ marginRight: '4px' }}
-                                  />
-                                  {e.status === 'pending'
-                                    ? 'Leave pending'
-                                    : 'On leave'}
-                                </div>
-                              ))
-                            : '—'}
+                          {timeOffEntries.length === 0 && '—'}
                         </div>
                       )}
                     </div>
@@ -1059,7 +1059,7 @@ const s = {
     minWidth: '700px',
     border: '1px solid rgba(255,255,255,0.07)',
     borderRadius: '14px',
-    overflow: 'hidden',
+    overflow: 'visible',
   },
   colLabel: {
     background: '#1d1f2b',
