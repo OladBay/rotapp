@@ -1,30 +1,32 @@
 import { mockStaff } from '../data/mockRota'
-import { getMonthWeeks, dateKey } from './dateUtils'
+import { getMonthWeeks, dateKey, toLocalDateString } from './dateUtils'
+import { getTimeOffRecords } from './timeOffStorage'
 
-// Build a Set of 'staffId_YYYY-MM-DD' absence keys from leave data
-function buildAbsenceSet(leaveData) {
+// Build a Set of 'staffId_YYYY-MM-DD' keys from approved rotapp_time_off records
+function buildAbsenceSet() {
   const absent = new Set()
-  if (!leaveData) return absent
-
-  Object.entries(leaveData).forEach(([staffId, dates]) => {
-    if (!Array.isArray(dates)) return
-    dates.forEach((dateStr) => {
-      absent.add(`${staffId}_${dateStr}`)
+  try {
+    const records = getTimeOffRecords()
+    Object.entries(records).forEach(([dateStr, entries]) => {
+      if (!Array.isArray(entries)) return
+      entries.forEach((entry) => {
+        if (entry.status === 'approved' && entry.staffId) {
+          absent.add(`${entry.staffId}_${dateStr}`)
+        }
+      })
     })
-  })
-
+  } catch (e) {
+    console.warn('rotaGenerator: could not read time-off records', e)
+  }
   return absent
 }
 
 function isAbsent(staffId, date, absenceSet) {
-  const dateStr = date.toISOString().split('T')[0]
+  const dateStr = toLocalDateString(date) // timezone-safe
   return absenceSet.has(`${staffId}_${dateStr}`)
 }
 
 // Generate rota for a single week, date-aware
-// monday: Date object for the Monday of that week
-// absenceSet: Set built from leave data
-// Returns { early, late, onCall } — same shape as before
 function generateWeekRota(monday, absenceSet) {
   const rota = {
     early: [],
@@ -44,16 +46,14 @@ function generateWeekRota(monday, absenceSet) {
     const date = new Date(monday)
     date.setDate(monday.getDate() + dayOffset)
 
-    // Staff available for early on this specific date
     const earlyAvail = shiftEligible.filter((s) => {
       if (isAbsent(s.id, date, absenceSet)) return false
       return true
     })
 
-    // Pick early staff — aim for 3
     const earlyPick = pickStaff(earlyAvail, 3)
-    // Staff available for late — not already on early today
     const earlyIds = new Set(earlyPick.map((s) => s.id))
+
     const lateAvail = shiftEligible.filter((s) => {
       if (earlyIds.has(s.id)) return false
       if (isAbsent(s.id, date, absenceSet)) return false
@@ -61,14 +61,11 @@ function generateWeekRota(monday, absenceSet) {
     })
 
     const latePick = pickStaff(lateAvail, 3)
-
-    // Assign sleep-ins from late pick
     const lateWithSleep = assignSleepIns(latePick)
 
     rota.early.push(earlyPick.map((s) => ({ id: s.id, sleepIn: false })))
     rota.late.push(lateWithSleep)
 
-    // On-call — pick 2 from manager/deputy/senior pool
     const onCallPick = shuffle([...onCallPool.map((s) => s.id)]).slice(0, 2)
     rota.onCall.push(onCallPick)
   }
@@ -77,12 +74,13 @@ function generateWeekRota(monday, absenceSet) {
 }
 
 // Generate rota for every week in a given month
-// Returns { weekRotas, weekViolations, weeks }
 export function generateMonthRota(year, month, staffMap, leaveData) {
   const weeks = getMonthWeeks(year, month)
   const weekRotas = {}
   const weekViolations = {}
-  const absenceSet = buildAbsenceSet(leaveData)
+
+  // Always build from rotapp_time_off — ignore legacy leaveData param
+  const absenceSet = buildAbsenceSet()
 
   weeks.forEach((monday) => {
     const rota = generateWeekRota(monday, absenceSet)
@@ -100,7 +98,6 @@ function pickStaff(pool, target) {
   const shuffled = shuffle([...pool])
   const picked = shuffled.slice(0, Math.min(target, shuffled.length))
 
-  // Soft rule — try to ensure female and driver in the pick
   const hasF = picked.some((s) => s.gender === 'F')
   const hasD = picked.some((s) => s.driver)
 
@@ -127,7 +124,6 @@ function assignSleepIns(staffList) {
     return staffList.map((s, i) => ({ id: s.id, sleepIn: i === 0 }))
   }
 
-  // Prefer permanent staff (rcw/senior) for sleep-in
   const permanent = staffList.filter((s) => ['rcw', 'senior'].includes(s.role))
   const sleepInIds = new Set(
     permanent.length >= 2
