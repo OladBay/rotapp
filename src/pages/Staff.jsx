@@ -312,7 +312,6 @@ function Staff() {
                 color: tab === t.key ? '#6c8fff' : '#9499b0',
                 borderBottom:
                   tab === t.key ? '2px solid #6c8fff' : '2px solid transparent',
-                position: 'relative',
               }}
               onClick={() => setTab(t.key)}
             >
@@ -2212,9 +2211,10 @@ const s = {
     fontFamily: 'DM Mono, monospace',
   },
   tabBadge: {
-    position: 'absolute',
-    top: '6px',
-    right: '-12px',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: '6px',
     background: '#e85c3d',
     color: '#fff',
     fontSize: '9px',
@@ -2222,7 +2222,6 @@ const s = {
     padding: '2px 5px',
     borderRadius: '10px',
     minWidth: '16px',
-    textAlign: 'center',
   },
 
   clickableDate: {
