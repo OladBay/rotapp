@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
+import InviteModal from '../components/shared/InviteModal'
 import { useNavigate } from 'react-router-dom'
 import Navbar from '../components/layout/Navbar'
 import { mockUsers } from '../data/mockUsers'
@@ -75,6 +76,7 @@ const TYPE_STYLES = {
 function Staff() {
   const { user } = useAuth()
   const navigate = useNavigate()
+  const [showInviteModal, setShowInviteModal] = useState(false)
   const [tab, setTab] = useState('all')
   const [leaveStaff, setLeaveStaff] = useState(null)
   const [leaveModalType, setLeaveModalType] = useState('annual_leave')
@@ -242,7 +244,12 @@ function Staff() {
                 {pending.length} pending approval
               </div>
             )}
-            <button style={s.primaryBtn}>+ Invite staff</button>
+            <button
+              style={s.inviteBtn}
+              onClick={() => setShowInviteModal(true)}
+            >
+              <FontAwesomeIcon icon='envelope' /> Onboard staff
+            </button>
           </div>
         </div>
 
@@ -1733,6 +1740,12 @@ function Staff() {
           </div>
         </div>
       )}
+      {showInviteModal && (
+        <InviteModal
+          onClose={() => setShowInviteModal(false)}
+          defaultHomeId={user?.home}
+        />
+      )}
     </div>
   )
 }
@@ -2365,6 +2378,20 @@ const s = {
     alignItems: 'center',
     gap: '6px',
     marginTop: '4px',
+  },
+  inviteBtn: {
+    background: 'var(--accent)',
+    color: '#fff',
+    border: 'none',
+    borderRadius: '8px',
+    padding: '8px 14px',
+    fontSize: '13px',
+    fontWeight: 500,
+    cursor: 'pointer',
+    fontFamily: 'DM Sans, sans-serif',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
   },
 }
 

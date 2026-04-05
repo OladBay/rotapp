@@ -1,11 +1,15 @@
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import Navbar from '../components/layout/Navbar'
 import { mockHomes } from '../data/mockHomes'
+import InviteModal from '../components/shared/InviteModal'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 
 function Dashboard() {
   const { user } = useAuth()
   const navigate = useNavigate()
+  const [showInviteModal, setShowInviteModal] = useState(false)
 
   const isOL = user?.activeRole === 'operationallead'
   const isAdmin = user?.activeRole === 'superadmin'
@@ -39,6 +43,14 @@ function Dashboard() {
           {!isOL && !isAdmin && (
             <button style={styles.primaryBtn} onClick={() => navigate('/rota')}>
               View Rota →
+            </button>
+          )}
+          {(isOL || isAdmin) && (
+            <button
+              style={styles.primaryBtn}
+              onClick={() => setShowInviteModal(true)}
+            >
+              <FontAwesomeIcon icon='envelope' /> Onboard staff
             </button>
           )}
         </div>
@@ -159,6 +171,12 @@ function Dashboard() {
           ))}
         </div>
       </div>
+      {showInviteModal && (
+        <InviteModal
+          onClose={() => setShowInviteModal(false)}
+          defaultHomeId={null}
+        />
+      )}
     </div>
   )
 }

@@ -1,8 +1,14 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+  Navigate,
+  useLocation,
+} from 'react-router-dom'
 import ProtectedRoute from './components/layout/ProtectedRoute'
 import StickyNote from './components/StickyNote'
 import Login from './pages/Login'
-import Signup from './pages/Signup'
+import Invite from './pages/Invite'
 import Dashboard from './pages/Dashboard'
 import Rota from './pages/Rota'
 import Calendar from './pages/Calendar'
@@ -19,14 +25,17 @@ const MANAGER_ROLES = [
 ]
 const CARER_ROLES = ['rcw', 'relief']
 
-function App() {
+function AppContent() {
+  const location = useLocation()
+  const hideSticky = location.pathname.startsWith('/invite')
+
   return (
-    <BrowserRouter>
-      <StickyNote />
+    <>
+      {!hideSticky && <StickyNote />}
       <Routes>
         <Route path='/' element={<Navigate to='/login' />} />
         <Route path='/login' element={<Login />} />
-        <Route path='/signup' element={<Signup />} />
+        <Route path='/invite/:token' element={<Invite />} />
 
         <Route
           path='/dashboard'
@@ -63,6 +72,7 @@ function App() {
             </ProtectedRoute>
           }
         />
+
         <Route
           path='/year-calendar'
           element={
@@ -82,6 +92,14 @@ function App() {
 
         <Route path='*' element={<NotFound />} />
       </Routes>
+    </>
+  )
+}
+
+function App() {
+  return (
+    <BrowserRouter>
+      <AppContent />
     </BrowserRouter>
   )
 }

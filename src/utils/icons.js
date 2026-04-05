@@ -41,10 +41,11 @@ import {
   faThumbTack,
   faRightLeft,
   faHourglass,
+  faCopy,
+  faEnvelope,
 } from '@fortawesome/free-solid-svg-icons'
 
 library.add(
-  faCircleInfo,
   faChevronLeft,
   faChevronRight,
   faPlus,
@@ -84,5 +85,8 @@ library.add(
   faSun,
   faThumbTack,
   faRightLeft,
-  faHourglass
+  faHourglass,
+  faCircleInfo,
+  faCopy,
+  faEnvelope
 )
