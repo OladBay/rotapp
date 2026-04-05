@@ -1,54 +1,99 @@
-import { createContext, useContext, useState } from 'react'
+import { createContext, useContext, useEffect, useState } from 'react'
+import { supabase } from '../lib/supabase'
 
 const AuthContext = createContext(null)
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(() => {
-    try {
-      const stored = localStorage.getItem('rotapp_user')
-      return stored ? JSON.parse(stored) : null
-    } catch {
-      return null
-    }
-  })
+  const [user, setUser] = useState(null)
+  const [loading, setLoading] = useState(true)
 
-  const login = (userData) => {
-    setUser(userData)
-    localStorage.setItem('rotapp_user', JSON.stringify(userData))
+  // Build our app user object from Supabase session + profile row
+  const buildUser = async (supabaseUser) => {
+    if (!supabaseUser) {
+      setUser(null)
+      setLoading(false)
+      return
+    }
+
+    const { data: profile, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', supabaseUser.id)
+      .single()
+
+    if (error || !profile) {
+      console.error('Failed to fetch profile:', error)
+      setUser(null)
+      setLoading(false)
+      return
+    }
+
+    setUser({
+      id: profile.id,
+      name: profile.name,
+      email: profile.email,
+      role: profile.role,
+      activeRole: profile.active_role,
+      home: profile.home,
+      status: profile.status,
+      gender: profile.gender,
+      driver: profile.driver,
+    })
+    setLoading(false)
   }
 
-  const logout = () => {
+  useEffect(() => {
+    // Check for existing session on app load
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      buildUser(session?.user ?? null)
+    })
+
+    // Listen for auth state changes (login, logout, token refresh)
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      buildUser(session?.user ?? null)
+    })
+
+    return () => subscription.unsubscribe()
+  }, [])
+
+  const login = async (email, password) => {
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    })
+    if (error) throw error
+  }
+
+  const logout = async () => {
+    await supabase.auth.signOut()
     setUser(null)
-    localStorage.removeItem('rotapp_user')
   }
 
-  const switchRole = (role, home) => {
-    const updated = {
-      ...user,
-      activeRole: role,
-      activeHome: home,
-      originalRole: user.role,
-    }
-    setUser(updated)
-    localStorage.setItem('rotapp_user', JSON.stringify(updated))
+  // OL step-in — switches active role for the session only
+  const switchRole = (newRole) => {
+    setUser((prev) => ({
+      ...prev,
+      activeRole: newRole,
+      previousRole: prev.activeRole,
+    }))
   }
 
+  // Reverts OL back to their real role
   const revertRole = () => {
-    const updated = {
-      ...user,
-      activeRole: user.originalRole,
-      activeHome: null,
-      originalRole: null,
-    }
-    setUser(updated)
-    localStorage.setItem('rotapp_user', JSON.stringify(updated))
+    setUser((prev) => ({
+      ...prev,
+      activeRole: prev.role,
+      previousRole: null,
+    }))
   }
 
   return (
     <AuthContext.Provider
-      value={{ user, login, logout, switchRole, revertRole }}
+      value={{ user, loading, login, logout, switchRole, revertRole }}
     >
-      {children}
+      {!loading && children}
     </AuthContext.Provider>
   )
 }

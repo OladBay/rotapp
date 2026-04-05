@@ -1,7 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { mockUsers } from '../data/mockUsers'
 import styles from './Login.module.css'
 
 function Login() {
@@ -10,35 +9,34 @@ function Login() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
-  const { login } = useAuth()
+  const { login, user } = useAuth()
   const navigate = useNavigate()
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
     setError('')
     setLoading(true)
 
-    setTimeout(() => {
-      const user = mockUsers.find(
-        (u) => u.email === email && u.password === password
-      )
+    try {
+      await login(email, password)
+      // Navigation handled by useEffect watching user
+    } catch (err) {
+      setError(err.message || 'Invalid email or password')
+      setLoading(false)
+    }
+  }
 
-      if (!user) {
-        setError('Invalid email or password')
-        setLoading(false)
-        return
-      }
-
-      login(user)
-
+  // Redirect once user is set in AuthContext after login
+  useEffect(() => {
+    if (user) {
       const role = user.activeRole
       if (role === 'rcw' || role === 'relief') {
         navigate('/calendar')
       } else {
         navigate('/dashboard')
       }
-    }, 600)
-  }
+    }
+  }, [user])
 
   return (
     <div className={styles.page}>
