@@ -24,7 +24,9 @@ function Navbar() {
   const totalPending = pendingRequests + pendingTimeOff + pendingSwaps
   const hasStaffAction = totalPending > 0
 
-  const canSeeStaff = ['manager', 'superadmin'].includes(user?.activeRole)
+  const canSeeStaff = ['manager', 'superadmin', 'operationallead'].includes(
+    user?.activeRole
+  )
   const canSeeRota = [
     'manager',
     'deputy',

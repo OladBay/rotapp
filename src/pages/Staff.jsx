@@ -1,12 +1,11 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
-import InviteModal from '../components/shared/InviteModal'
 import { useNavigate } from 'react-router-dom'
 import Navbar from '../components/layout/Navbar'
-import { mockUsers } from '../data/mockUsers'
-import { mockStaff } from '../data/mockRota'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { useLocalStorage } from '../hooks/useLocalStorage'
+import { supabase } from '../lib/supabase'
+import InviteModal from '../components/shared/InviteModal'
 import {
   loadRequests,
   updateRequest,
@@ -76,76 +75,141 @@ const TYPE_STYLES = {
 function Staff() {
   const { user } = useAuth()
   const navigate = useNavigate()
+
+  const isOLorAdmin = ['operationallead', 'superadmin'].includes(
+    user?.activeRole
+  )
+
+  // ── Supabase staff state ──
+  const [allStaff, setAllStaff] = useState([])
+  const [staffLoading, setStaffLoading] = useState(true)
+  const [staffError, setStaffError] = useState('')
+  const [staffRefresh, setStaffRefresh] = useState(0)
+
+  // ── OL home filter ──
+  const [homeFilter, setHomeFilter] = useState('all')
+
+  // ── UI state ──
   const [showInviteModal, setShowInviteModal] = useState(false)
   const [tab, setTab] = useState('all')
+  const [selectedStaff, setSelectedStaff] = useState(null)
+
+  // ── Leave state ──
   const [leaveStaff, setLeaveStaff] = useState(null)
   const [leaveModalType, setLeaveModalType] = useState('annual_leave')
   const [leaveSelectedDates, setLeaveSelectedDates] = useState([])
   const [leaveNotes, setLeaveNotes] = useState('')
   const [leaveRefresh, setLeaveRefresh] = useState(0)
   const [selectedLeaveEntry, setSelectedLeaveEntry] = useState(null)
-  const [selectedStaff, setSelectedStaff] = useState(null)
-  const [approvedIds, setApprovedIds] = useLocalStorage('rotapp_approved', [])
-  const [declinedIds, setDeclinedIds] = useLocalStorage('rotapp_declined', [])
 
-  // Request states
+  // ── Request state ──
   const [requests, setRequests] = useState(() => loadRequests())
   const [selectedRequest, setSelectedRequest] = useState(null)
   const [rejectionReason, setRejectionReason] = useState('')
   const [managerNotes, setManagerNotes] = useState('')
   const [showRejectModal, setShowRejectModal] = useState(false)
 
-  // Swap states
+  // ── Swap state ──
   const [swapRefresh, setSwapRefresh] = useState(0)
   const [selectedSwap, setSelectedSwap] = useState(null)
   const [swapRejectNote, setSwapRejectNote] = useState('')
   const [showSwapRejectModal, setShowSwapRejectModal] = useState(false)
   const [monthRota, setMonthRota] = useLocalStorage('rotapp_month_rota', {})
 
-  const homeStaff = mockUsers
-    .filter(
-      (u) =>
-        u.home === user?.home &&
-        !['manager', 'deputy', 'superadmin', 'operationallead'].includes(
-          u.role
-        ) &&
-        !declinedIds.includes(u.id)
-    )
-    .map((u) => (approvedIds.includes(u.id) ? { ...u, status: 'active' } : u))
+  // ── Fetch staff from Supabase ──
+  useEffect(() => {
+    async function fetchStaff() {
+      setStaffLoading(true)
+      setStaffError('')
+      try {
+        let query = supabase
+          .from('profiles')
+          .select('*')
+          .order('name', { ascending: true })
 
-  const reliefPool = mockUsers.filter((u) => u.role === 'relief')
+        // Manager sees only their home + relief pool
+        if (!isOLorAdmin) {
+          query = query.or(`home.eq.${user?.home},role.eq.relief`)
+        }
 
-  const pending = homeStaff.filter((u) => u.status === 'pending')
-  const active = homeStaff.filter((u) => u.status === 'active')
-  const off = homeStaff.filter((u) => u.status === 'off')
+        const { data, error } = await query
+        if (error) throw error
+        setAllStaff(data || [])
+      } catch (err) {
+        setStaffError('Failed to load staff. Please refresh.')
+        console.error(err)
+      } finally {
+        setStaffLoading(false)
+      }
+    }
+    fetchStaff()
+  }, [staffRefresh, user?.home, isOLorAdmin])
+
+  // ── Approve staff — instant status flip ──
+  const handleApprove = async (staffMember) => {
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ status: 'active' })
+        .eq('id', staffMember.id)
+      if (error) throw error
+
+      // Sync role and home into auth metadata so RLS works on next login
+      await supabase.rpc('sync_auth_metadata', { user_id: staffMember.id })
+
+      setStaffRefresh((n) => n + 1)
+      setSelectedStaff(null)
+    } catch (err) {
+      console.error('Approve failed:', err)
+    }
+  }
+
+  // ── Decline staff — sets status to declined ──
+  const handleDecline = async (staffMember) => {
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ status: 'declined' })
+        .eq('id', staffMember.id)
+      if (error) throw error
+      setStaffRefresh((n) => n + 1)
+      setSelectedStaff(null)
+    } catch (err) {
+      console.error('Decline failed:', err)
+    }
+  }
+
+  // ── Derived staff lists ──
+  const visibleStaff =
+    isOLorAdmin && homeFilter !== 'all'
+      ? allStaff.filter((s) => s.home === homeFilter || s.role === 'relief')
+      : allStaff
+
+  const activeStaff = visibleStaff.filter(
+    (s) => s.status === 'active' && s.role !== 'relief'
+  )
+  const pendingStaff = visibleStaff.filter((s) => s.status === 'pending')
+  const offStaff = visibleStaff.filter((s) => s.status === 'off')
+  const reliefStaff = allStaff.filter((s) => s.role === 'relief')
 
   const displayed =
     tab === 'all'
-      ? homeStaff
+      ? visibleStaff.filter(
+          (s) => s.role !== 'relief' && s.status !== 'declined'
+        )
       : tab === 'active'
-        ? active
+        ? activeStaff
         : tab === 'off'
-          ? off
+          ? offStaff
           : tab === 'pending'
-            ? pending
-            : reliefPool
+            ? pendingStaff
+            : tab === 'relief'
+              ? reliefStaff
+              : visibleStaff
 
-  const handleApprove = (id) => {
-    setApprovedIds((prev) => [...prev, id])
-    setSelectedStaff(null)
-  }
+  // ── Request handlers ──
+  const refreshRequests = () => setRequests(loadRequests())
 
-  const handleDecline = (id) => {
-    setDeclinedIds((prev) => [...prev, id])
-    setSelectedStaff(null)
-  }
-
-  // Refresh requests list
-  const refreshRequests = () => {
-    setRequests(loadRequests())
-  }
-
-  // Handle approve request
   const handleApproveRequest = (request) => {
     updateRequest(request.id, {
       status: 'approved',
@@ -153,26 +217,11 @@ function Staff() {
       reviewedBy: user?.name,
       managerNotes: managerNotes || null,
     })
-
-    // Simulated notifications
-    console.log(
-      `[SIMULATED] Shift removed from rota: ${request.staffName} - ${request.shiftDate} ${request.shiftType}`
-    )
-    console.log(`[SIMULATED] Gap notification sent to manager`)
-    console.log(
-      `[SIMULATED] Staff ${request.staffName} notified: Your cancellation request has been APPROVED`
-    )
-
-    if (managerNotes) {
-      console.log(`[SIMULATED] Manager notes sent to staff: ${managerNotes}`)
-    }
-
     refreshRequests()
     setSelectedRequest(null)
     setManagerNotes('')
   }
 
-  // Handle reject request
   const handleRejectRequest = (request) => {
     updateRequest(request.id, {
       status: 'rejected',
@@ -181,21 +230,6 @@ function Staff() {
       rejectionReason: rejectionReason || null,
       managerNotes: managerNotes || null,
     })
-
-    // Simulated notifications
-    console.log(
-      `[SIMULATED] Shift remains in rota: ${request.staffName} - ${request.shiftDate} ${request.shiftType}`
-    )
-    console.log(
-      `[SIMULATED] Staff ${request.staffName} notified: Your cancellation request has been REJECTED`
-    )
-    if (rejectionReason) {
-      console.log(`[SIMULATED] Rejection reason: ${rejectionReason}`)
-    }
-    if (managerNotes) {
-      console.log(`[SIMULATED] Manager notes: ${managerNotes}`)
-    }
-
     refreshRequests()
     setSelectedRequest(null)
     setRejectionReason('')
@@ -203,45 +237,47 @@ function Staff() {
     setShowRejectModal(false)
   }
 
-  // Swap handlers
+  // ── Swap handlers ──
   const pendingSwaps = getPendingManagerSwaps()
   const allSwaps = getSwapRequests()
-
-  const refreshSwaps = () => setSwapRefresh((n) => n + 1)
 
   const handleApproveSwap = (swap) => {
     const updatedRota = applySwapToRota(swap, monthRota)
     setMonthRota(updatedRota)
     approveSwapRequest(swap.id, user?.name)
-    refreshSwaps()
+    setSwapRefresh((n) => n + 1)
     setSelectedSwap(null)
   }
 
   const handleRejectSwap = (swap) => {
     rejectSwapRequest(swap.id, user?.name, swapRejectNote)
-    refreshSwaps()
+    setSwapRefresh((n) => n + 1)
     setSelectedSwap(null)
     setSwapRejectNote('')
     setShowSwapRejectModal(false)
   }
 
+  // ── Unique homes for OL filter ──
+  const uniqueHomes = [...new Set(allStaff.map((s) => s.home).filter(Boolean))]
+
   return (
     <div style={s.page}>
       <Navbar />
-
       <div style={s.body}>
         {/* Header */}
         <div style={s.header}>
           <div>
             <h1 style={s.title}>Staff</h1>
             <p style={s.subtitle}>
-              Meadowview House · {homeStaff.length} staff members
+              {isOLorAdmin
+                ? `All homes · ${allStaff.length} staff members`
+                : `${user?.home ? user.home.charAt(0).toUpperCase() + user.home.slice(1) : ''} · ${visibleStaff.filter((s) => s.status !== 'declined').length} staff members`}
             </p>
           </div>
           <div style={s.headerActions}>
-            {pending.length > 0 && (
+            {pendingStaff.length > 0 && (
               <div style={s.pendingBadge}>
-                {pending.length} pending approval
+                {pendingStaff.length} pending approval
               </div>
             )}
             <button
@@ -253,178 +289,230 @@ function Staff() {
           </div>
         </div>
 
-        {/* Summary stats */}
+        {/* OL home filter */}
+        {isOLorAdmin && (
+          <div style={s.homeFilterRow}>
+            <button
+              style={{
+                ...s.homeFilterBtn,
+                ...(homeFilter === 'all' ? s.homeFilterActive : {}),
+              }}
+              onClick={() => setHomeFilter('all')}
+            >
+              All homes
+            </button>
+            {uniqueHomes.map((h) => (
+              <button
+                key={h}
+                style={{
+                  ...s.homeFilterBtn,
+                  ...(homeFilter === h ? s.homeFilterActive : {}),
+                }}
+                onClick={() => setHomeFilter(h)}
+              >
+                {h.charAt(0).toUpperCase() + h.slice(1)}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Stats */}
         <div style={s.statsRow}>
           <div style={s.statCard}>
-            <div style={s.statVal}>{homeStaff.length}</div>
+            <div style={s.statVal}>
+              {visibleStaff.filter((s) => s.status !== 'declined').length}
+            </div>
             <div style={s.statLabel}>Total staff</div>
           </div>
           <div style={s.statCard}>
             <div style={{ ...s.statVal, color: '#2ecc8a' }}>
-              {active.length}
+              {activeStaff.length}
             </div>
-            <div style={s.statLabel}>Active today</div>
+            <div style={s.statLabel}>Active</div>
           </div>
           <div style={s.statCard}>
-            <div style={{ ...s.statVal, color: '#6c8fff' }}>{off.length}</div>
+            <div style={{ ...s.statVal, color: '#6c8fff' }}>
+              {offStaff.length}
+            </div>
             <div style={s.statLabel}>Off today</div>
           </div>
           <div style={s.statCard}>
             <div
               style={{
                 ...s.statVal,
-                color: pending.length > 0 ? '#c4883a' : '#e8eaf0',
+                color: pendingStaff.length > 0 ? '#c4883a' : '#e8eaf0',
               }}
             >
-              {pending.length}
+              {pendingStaff.length}
             </div>
             <div style={s.statLabel}>Pending</div>
           </div>
           <div style={s.statCard}>
-            <div style={s.statVal}>{reliefPool.length}</div>
+            <div style={s.statVal}>{reliefStaff.length}</div>
             <div style={s.statLabel}>Relief pool</div>
           </div>
         </div>
 
+        {/* Loading / error state */}
+        {staffLoading && <div style={s.empty}>Loading staff…</div>}
+        {staffError && <div style={s.errorBanner}>{staffError}</div>}
+
         {/* Tabs */}
-        <div style={s.tabs}>
-          {[
-            { key: 'all', label: `All (${homeStaff.length})` },
-            { key: 'active', label: `Active (${active.length})` },
-            { key: 'off', label: `Off (${off.length})` },
-            { key: 'pending', label: `Pending (${pending.length})` },
-            { key: 'relief', label: `Relief pool (${reliefPool.length})` },
-            {
-              key: 'leave',
-              label: 'Leave & Absence',
-              hasBadge: getPendingTimeOffCount() > 0,
-              badgeCount: getPendingTimeOffCount(),
-            },
-            {
-              key: 'requests',
-              label: `Requests ${getPendingRequests().length > 0 ? `(${getPendingRequests().length})` : ''}`,
-              hasBadge: getPendingRequests().length > 0,
-            },
-            {
-              key: 'swaps',
-              label: `Swaps ${pendingSwaps.length > 0 ? `(${pendingSwaps.length})` : ''}`,
-              hasBadge: pendingSwaps.length > 0,
-              badgeCount: pendingSwaps.length,
-            },
-          ].map((t) => (
-            <button
-              key={t.key}
-              style={{
-                ...s.tabBtn,
-                color: tab === t.key ? '#6c8fff' : '#9499b0',
-                borderBottom:
-                  tab === t.key ? '2px solid #6c8fff' : '2px solid transparent',
-              }}
-              onClick={() => setTab(t.key)}
-            >
-              {t.label}
-              {t.hasBadge && (
-                <span style={s.tabBadge}>
-                  {t.badgeCount ?? getPendingRequests().length}
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
-
-        {/* Staff list */}
-        {tab !== 'leave' && tab !== 'requests' && (
-          <div style={s.list}>
-            {displayed.length === 0 && (
-              <div style={s.empty}>No staff in this category</div>
-            )}
-            {displayed.map((member) => (
-              <div
-                key={member.id}
+        {!staffLoading && (
+          <div
+            style={s.tabs}
+            key={`tabs-${allStaff.length}-${pendingStaff.length}`}
+          >
+            {[
+              {
+                key: 'all',
+                label: `All (${visibleStaff.filter((s) => s.status !== 'declined').length})`,
+              },
+              { key: 'active', label: `Active (${activeStaff.length})` },
+              { key: 'off', label: `Off (${offStaff.length})` },
+              {
+                key: 'pending',
+                label: `Pending (${pendingStaff.length})`,
+                hasBadge: pendingStaff.length > 0,
+                badgeCount: pendingStaff.length,
+              },
+              { key: 'relief', label: `Relief pool (${reliefStaff.length})` },
+              {
+                key: 'leave',
+                label: 'Leave & Absence',
+                hasBadge: getPendingTimeOffCount() > 0,
+                badgeCount: getPendingTimeOffCount(),
+              },
+              {
+                key: 'requests',
+                label: `Requests${getPendingRequests().length > 0 ? ` (${getPendingRequests().length})` : ''}`,
+                hasBadge: getPendingRequests().length > 0,
+              },
+              {
+                key: 'swaps',
+                label: `Swaps${pendingSwaps.length > 0 ? ` (${pendingSwaps.length})` : ''}`,
+                hasBadge: pendingSwaps.length > 0,
+                badgeCount: pendingSwaps.length,
+              },
+            ].map((t) => (
+              <button
+                key={t.key}
                 style={{
-                  ...s.staffRow,
-                  background:
-                    member.status === 'pending'
-                      ? 'rgba(196,136,58,0.04)'
-                      : '#161820',
-                  border:
-                    member.status === 'pending'
-                      ? '1px solid rgba(196,136,58,0.2)'
-                      : '1px solid rgba(255,255,255,0.07)',
+                  ...s.tabBtn,
+                  color: tab === t.key ? '#6c8fff' : '#9499b0',
+                  borderBottom:
+                    tab === t.key
+                      ? '2px solid #6c8fff'
+                      : '2px solid transparent',
                 }}
-                onClick={() => setSelectedStaff(member)}
+                onClick={() => setTab(t.key)}
               >
-                {/* Avatar */}
-                <div
-                  style={{
-                    ...s.avatar,
-                    background:
-                      member.gender === 'F'
-                        ? 'rgba(122,79,168,0.2)'
-                        : 'rgba(108,143,255,0.15)',
-                    color: member.gender === 'F' ? '#7a4fa8' : '#6c8fff',
-                  }}
-                >
-                  {member.name
-                    .split(' ')
-                    .map((n) => n[0])
-                    .join('')}
-                </div>
-
-                {/* Info */}
-                <div style={s.staffInfo}>
-                  <div style={s.staffName}>{member.name}</div>
-                  <div style={s.staffMeta}>
-                    {ROLE_LABELS[member.role] || member.role}
-                    {member.driver && ' · 🚗 Driver'}
-                    {member.home === null && ' · Relief pool'}
-                  </div>
-                </div>
-
-                {/* Tags */}
-                <div style={s.staffTags}>
-                  {member.gender && (
-                    <span style={s.tag}>
-                      {member.gender === 'F' ? 'Female' : 'Male'}
-                    </span>
-                  )}
-                  <span
-                    style={{
-                      ...s.tag,
-                      background: STATUS_COLORS[member.status]?.bg,
-                      color: STATUS_COLORS[member.status]?.color,
-                    }}
-                  >
-                    {member.status}
-                  </span>
-                </div>
-
-                {/* Pending actions */}
-                {member.status === 'pending' && (
-                  <div
-                    style={s.pendingActions}
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <button
-                      style={s.approveBtn}
-                      onClick={() => handleApprove(member.id)}
-                    >
-                      Approve
-                    </button>
-                    <button
-                      style={s.declineBtn}
-                      onClick={() => handleDecline(member.id)}
-                    >
-                      Decline
-                    </button>
-                  </div>
-                )}
-
-                <div style={s.chevron}>›</div>
-              </div>
+                {t.label}
+                {t.hasBadge && <span style={s.tabBadge}>{t.badgeCount}</span>}
+              </button>
             ))}
           </div>
         )}
+
+        {/* Staff list */}
+        {!staffLoading &&
+          tab !== 'leave' &&
+          tab !== 'requests' &&
+          tab !== 'swaps' && (
+            <div style={s.list}>
+              {displayed.length === 0 && (
+                <div style={s.empty}>No staff in this category</div>
+              )}
+              {displayed.map((member) => (
+                <div
+                  key={member.id}
+                  style={{
+                    ...s.staffRow,
+                    background:
+                      member.status === 'pending'
+                        ? 'rgba(196,136,58,0.04)'
+                        : 'var(--bg-card, #161820)',
+                    border:
+                      member.status === 'pending'
+                        ? '1px solid rgba(196,136,58,0.2)'
+                        : '1px solid rgba(255,255,255,0.07)',
+                  }}
+                  onClick={() => setSelectedStaff(member)}
+                >
+                  <div
+                    style={{
+                      ...s.avatar,
+                      background:
+                        member.gender === 'F'
+                          ? 'rgba(122,79,168,0.2)'
+                          : 'rgba(108,143,255,0.15)',
+                      color: member.gender === 'F' ? '#7a4fa8' : '#6c8fff',
+                    }}
+                  >
+                    {member.name
+                      ? member.name
+                          .split(' ')
+                          .map((n) => n[0])
+                          .join('')
+                      : '?'}
+                  </div>
+                  <div style={s.staffInfo}>
+                    <div style={s.staffName}>{member.name || '—'}</div>
+                    <div style={s.staffMeta}>
+                      {ROLE_LABELS[member.role] || member.role}
+                      {member.driver && ' · Driver'}
+                      {member.home === null && ' · Relief pool'}
+                      {isOLorAdmin &&
+                        member.home &&
+                        ` · ${member.home.charAt(0).toUpperCase() + member.home.slice(1)}`}
+                    </div>
+                  </div>
+                  <div style={s.staffTags}>
+                    {member.gender && (
+                      <span style={s.tag}>
+                        {member.gender === 'F'
+                          ? 'Female'
+                          : member.gender === 'M'
+                            ? 'Male'
+                            : 'Other'}
+                      </span>
+                    )}
+                    <span
+                      style={{
+                        ...s.tag,
+                        background:
+                          STATUS_COLORS[member.status]?.bg ||
+                          'rgba(255,255,255,0.06)',
+                        color: STATUS_COLORS[member.status]?.color || '#9499b0',
+                      }}
+                    >
+                      {member.status}
+                    </span>
+                  </div>
+                  {member.status === 'pending' && (
+                    <div
+                      style={s.pendingActions}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <button
+                        style={s.approveBtn}
+                        onClick={() => handleApprove(member)}
+                      >
+                        Approve
+                      </button>
+                      <button
+                        style={s.declineBtn}
+                        onClick={() => handleDecline(member)}
+                      >
+                        Decline
+                      </button>
+                    </div>
+                  )}
+                  <div style={s.chevron}>›</div>
+                </div>
+              ))}
+            </div>
+          )}
 
         {/* Leave tab */}
         {tab === 'leave' && (
@@ -433,27 +521,24 @@ function Staff() {
               Add and manage staff absences. Approved leave is automatically
               excluded from rota generation.
             </div>
-
-            {mockStaff
+            {allStaff
               .filter(
-                (st) => !['relief', 'manager', 'deputy'].includes(st.role)
+                (st) =>
+                  !['relief', 'manager', 'deputy'].includes(st.role) &&
+                  st.status === 'active'
               )
               .map((st) => {
                 const entries = getTimeOffForStaff(st.id)
                 const approved = entries.filter((e) => e.status === 'approved')
                 const pending = entries.filter((e) => e.status === 'pending')
-
                 return (
                   <div key={st.id} style={s.leaveRow}>
-                    {/* Staff info */}
                     <div style={s.leaveStaffInfo}>
                       <div style={s.staffName}>{st.name}</div>
                       <div style={s.staffRole}>
                         {ROLE_LABELS[st.role] || st.role}
                       </div>
                     </div>
-
-                    {/* Leave entries */}
                     <div style={s.leaveDates}>
                       {approved.length === 0 && pending.length === 0 ? (
                         <span style={s.noLeave}>No absences recorded</span>
@@ -488,13 +573,11 @@ function Staff() {
                                   removeTimeOff(new Date(y, m - 1, d), entry.id)
                                   setLeaveRefresh((n) => n + 1)
                                 }}
-                                title='Remove'
                               >
                                 <FontAwesomeIcon icon='xmark' />
                               </button>
                             </span>
                           ))}
-
                           {pending.map((entry) => (
                             <span
                               key={entry.id}
@@ -520,7 +603,6 @@ function Staff() {
                                 style={s.approveLeaveBtn}
                                 onClick={(e) => {
                                   e.stopPropagation()
-                                  // 1. Approve the time-off record
                                   const records = JSON.parse(
                                     localStorage.getItem('rotapp_time_off') ||
                                       '{}'
@@ -544,45 +626,37 @@ function Staff() {
                                       JSON.stringify(records)
                                     )
                                   }
-
-                                  // 2. Remove staff from any existing rota on this date
                                   const [y, m, d] = entry.date
                                     .split('-')
                                     .map(Number)
                                   const date = new Date(y, m - 1, d)
-                                  const dayOfWeek = (date.getDay() + 6) % 7 // Mon=0
+                                  const dayOfWeek = (date.getDay() + 6) % 7
                                   const monday = new Date(date)
                                   monday.setDate(date.getDate() - dayOfWeek)
                                   const mondayKey = `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, '0')}-${String(monday.getDate()).padStart(2, '0')}`
-
                                   const monthRota = JSON.parse(
                                     localStorage.getItem('rotapp_month_rota') ||
                                       '{}'
                                   )
                                   if (monthRota[mondayKey]) {
-                                    const staffIdToRemove = entry.staffId
                                     const weekRota = monthRota[mondayKey]
-                                    if (weekRota.early?.[dayOfWeek]) {
+                                    if (weekRota.early?.[dayOfWeek])
                                       weekRota.early[dayOfWeek] =
                                         weekRota.early[dayOfWeek].filter(
-                                          (s) => s.id !== staffIdToRemove
+                                          (s) => s.id !== entry.staffId
                                         )
-                                    }
-                                    if (weekRota.late?.[dayOfWeek]) {
+                                    if (weekRota.late?.[dayOfWeek])
                                       weekRota.late[dayOfWeek] = weekRota.late[
                                         dayOfWeek
-                                      ].filter((s) => s.id !== staffIdToRemove)
-                                    }
+                                      ].filter((s) => s.id !== entry.staffId)
                                     monthRota[mondayKey] = weekRota
                                     localStorage.setItem(
                                       'rotapp_month_rota',
                                       JSON.stringify(monthRota)
                                     )
                                   }
-
                                   setLeaveRefresh((n) => n + 1)
                                 }}
-                                title='Approve'
                               >
                                 <FontAwesomeIcon icon='check' />
                               </button>
@@ -596,7 +670,6 @@ function Staff() {
                                   removeTimeOff(new Date(y, m - 1, d), entry.id)
                                   setLeaveRefresh((n) => n + 1)
                                 }}
-                                title='Decline'
                               >
                                 <FontAwesomeIcon icon='xmark' />
                               </button>
@@ -605,8 +678,6 @@ function Staff() {
                         </>
                       )}
                     </div>
-
-                    {/* Add leave button */}
                     <button
                       style={s.addLeaveBtn}
                       onClick={() => setLeaveStaff(st)}
@@ -627,7 +698,6 @@ function Staff() {
               <div style={s.empty}>No cancellation requests</div>
             ) : (
               <>
-                {/* Pending requests section */}
                 {getPendingRequests().length > 0 && (
                   <>
                     <div style={s.sectionLabel}>Pending Requests</div>
@@ -652,7 +722,6 @@ function Staff() {
                             <span
                               style={s.clickableDate}
                               onClick={() => {
-                                const targetDate = new Date(request.shiftDate)
                                 navigate('/rota')
                                 sessionStorage.setItem(
                                   'rota_jump_date',
@@ -699,8 +768,6 @@ function Staff() {
                     ))}
                   </>
                 )}
-
-                {/* History section (approved/rejected/withdrawn) */}
                 {getAllRequests().filter((r) => r.status !== 'pending').length >
                   0 && (
                   <>
@@ -744,7 +811,6 @@ function Staff() {
                               <span
                                 style={s.clickableDate}
                                 onClick={() => {
-                                  const targetDate = new Date(request.shiftDate)
                                   navigate('/rota')
                                   sessionStorage.setItem(
                                     'rota_jump_date',
@@ -784,8 +850,6 @@ function Staff() {
                               {new Date(request.requestedAt).toLocaleString()}
                               {request.reviewedAt &&
                                 ` · Reviewed: ${new Date(request.reviewedAt).toLocaleString()}`}
-                              {request.withdrawnAt &&
-                                ` · Withdrawn: ${new Date(request.withdrawnAt).toLocaleString()}`}
                             </div>
                           </div>
                         </div>
@@ -806,7 +870,6 @@ function Staff() {
               <div style={s.empty}>No swap requests</div>
             ) : (
               <>
-                {/* Pending swaps — awaiting manager decision */}
                 {pendingSwaps.length > 0 && (
                   <>
                     <div style={s.sectionLabel}>Awaiting your decision</div>
@@ -830,9 +893,7 @@ function Staff() {
                             </div>
                             <div style={s.requestStatus}>awaiting approval</div>
                           </div>
-
                           <div style={s.requestDetails}>
-                            {/* Initiator's shift */}
                             <div style={s.swapShiftRow}>
                               <div
                                 style={{
@@ -845,11 +906,7 @@ function Staff() {
                                     swap.initiatorShift.type === 'early'
                                       ? '#2a7f62'
                                       : '#7a4fa8',
-                                  border: `1px solid ${
-                                    swap.initiatorShift.type === 'early'
-                                      ? 'rgba(42,127,98,0.3)'
-                                      : 'rgba(122,79,168,0.3)'
-                                  }`,
+                                  border: `1px solid ${swap.initiatorShift.type === 'early' ? 'rgba(42,127,98,0.3)' : 'rgba(122,79,168,0.3)'}`,
                                 }}
                               >
                                 {swap.initiatorName.split(' ')[0]} ·{' '}
@@ -874,11 +931,7 @@ function Staff() {
                                     swap.targetShift.type === 'early'
                                       ? '#2a7f62'
                                       : '#7a4fa8',
-                                  border: `1px solid ${
-                                    swap.targetShift.type === 'early'
-                                      ? 'rgba(42,127,98,0.3)'
-                                      : 'rgba(122,79,168,0.3)'
-                                  }`,
+                                  border: `1px solid ${swap.targetShift.type === 'early' ? 'rgba(42,127,98,0.3)' : 'rgba(122,79,168,0.3)'}`,
                                 }}
                               >
                                 {swap.targetName.split(' ')[0]} ·{' '}
@@ -892,8 +945,6 @@ function Staff() {
                                 )}
                               </div>
                             </div>
-
-                            {/* Sleep-in warning */}
                             {(swap.initiatorShift.sleepIn ||
                               swap.targetShift.sleepIn) && (
                               <div style={s.swapWarnRow}>
@@ -905,8 +956,6 @@ function Staff() {
                                 approving
                               </div>
                             )}
-
-                            {/* Note */}
                             {swap.note && (
                               <div
                                 style={{
@@ -918,7 +967,6 @@ function Staff() {
                                 Note: {swap.note}
                               </div>
                             )}
-
                             <div style={s.requestTime}>
                               Requested:{' '}
                               {new Date(swap.createdAt).toLocaleString()}
@@ -926,7 +974,6 @@ function Staff() {
                                 ` · Accepted by ${swap.targetName}: ${new Date(swap.targetRespondedAt).toLocaleString()}`}
                             </div>
                           </div>
-
                           <div style={s.requestActions}>
                             <button
                               style={s.approveRequestBtn}
@@ -949,8 +996,6 @@ function Staff() {
                     })}
                   </>
                 )}
-
-                {/* History */}
                 {allSwaps.filter(
                   (r) =>
                     r.status !== 'awaiting_manager' && r.status !== 'pending'
@@ -1064,9 +1109,7 @@ function Staff() {
                 <FontAwesomeIcon icon='xmark' />
               </button>
             </div>
-
             <div style={s.modalBody}>
-              {/* Avatar + name */}
               <div style={s.profileTop}>
                 <div
                   style={{
@@ -1079,21 +1122,20 @@ function Staff() {
                   }}
                 >
                   {selectedStaff.name
-                    .split(' ')
-                    .map((n) => n[0])
-                    .join('')}
+                    ? selectedStaff.name
+                        .split(' ')
+                        .map((n) => n[0])
+                        .join('')
+                    : '?'}
                 </div>
                 <div>
                   <div style={s.profileName}>{selectedStaff.name}</div>
                   <div style={s.profileRole}>
-                    {ROLE_LABELS[selectedStaff.role]}
+                    {ROLE_LABELS[selectedStaff.role] || selectedStaff.role}
                   </div>
                 </div>
               </div>
-
               <div style={s.divider} />
-
-              {/* Details */}
               {[
                 { label: 'Email', val: selectedStaff.email },
                 {
@@ -1111,6 +1153,7 @@ function Staff() {
                 },
                 { label: 'Home', val: selectedStaff.home || 'Relief pool' },
                 { label: 'Status', val: selectedStaff.status },
+                { label: 'Org', val: selectedStaff.org_id || '—' },
               ].map((row) => (
                 <div key={row.label} style={s.detailRow}>
                   <span style={s.detailLabel}>{row.label}</span>
@@ -1118,32 +1161,27 @@ function Staff() {
                 </div>
               ))}
             </div>
-
-            {/* Pending actions inside modal */}
             {selectedStaff.status === 'pending' && (
               <div style={s.modalFooter}>
                 <p style={s.modalNote}>
-                  Approving will grant this staff member access and send them a
-                  confirmation email.
+                  Approving will grant this staff member access immediately.
                 </p>
                 <div style={s.modalActions}>
                   <button
                     style={s.declineBtn}
-                    onClick={() => handleDecline(selectedStaff.id)}
+                    onClick={() => handleDecline(selectedStaff)}
                   >
                     Decline
                   </button>
                   <button
                     style={s.approveBtn}
-                    onClick={() => handleApprove(selectedStaff.id)}
+                    onClick={() => handleApprove(selectedStaff)}
                   >
-                    Approve & notify
+                    Approve
                   </button>
                 </div>
               </div>
             )}
-
-            {/* Move staff action */}
             {selectedStaff.status === 'active' && (
               <div style={s.modalFooter}>
                 <button style={s.moveBtn}>Move to another home →</button>
@@ -1154,7 +1192,6 @@ function Staff() {
       )}
 
       {/* Add leave modal */}
-
       {leaveStaff && (
         <div
           style={s.overlay}
@@ -1189,7 +1226,6 @@ function Staff() {
                 selectedDates={leaveSelectedDates}
                 onSelectionChange={setLeaveSelectedDates}
               />
-
               <div style={s.field}>
                 <label style={s.detailLabel}>Leave type</label>
                 <select
@@ -1203,7 +1239,6 @@ function Staff() {
                   <option value='other'>Other</option>
                 </select>
               </div>
-
               <div style={s.field}>
                 <label style={s.detailLabel}>Note (optional)</label>
                 <input
@@ -1215,7 +1250,6 @@ function Staff() {
                 />
               </div>
             </div>
-
             <div style={s.modalFooterRow}>
               <button
                 style={s.secondaryBtn}
@@ -1263,7 +1297,8 @@ function Staff() {
           </div>
         </div>
       )}
-      {/* Leave entry detail modal */}
+
+      {/* Leave detail modal */}
       {selectedLeaveEntry && (
         <div style={s.overlay} onClick={() => setSelectedLeaveEntry(null)}>
           <div style={s.modal} onClick={(e) => e.stopPropagation()}>
@@ -1277,55 +1312,47 @@ function Staff() {
               </button>
             </div>
             <div style={s.modalBody}>
-              <div style={s.detailRow}>
-                <span style={s.detailLabel}>Staff</span>
-                <span style={s.detailVal}>{selectedLeaveEntry.staffName}</span>
-              </div>
-              <div style={s.detailRow}>
-                <span style={s.detailLabel}>Type</span>
-                <span style={s.detailVal}>
-                  {TYPE_LABELS[selectedLeaveEntry.type] ||
-                    selectedLeaveEntry.type}
-                </span>
-              </div>
-              <div style={s.detailRow}>
-                <span style={s.detailLabel}>Date</span>
-                <span style={s.detailVal}>{selectedLeaveEntry.date}</span>
-              </div>
-              <div style={s.detailRow}>
-                <span style={s.detailLabel}>Status</span>
-                <span style={s.detailVal}>{selectedLeaveEntry.status}</span>
-              </div>
-              {selectedLeaveEntry.notes && (
-                <div style={s.detailRow}>
-                  <span style={s.detailLabel}>Note</span>
-                  <span style={s.detailVal}>{selectedLeaveEntry.notes}</span>
+              {[
+                { label: 'Staff', val: selectedLeaveEntry.staffName },
+                {
+                  label: 'Type',
+                  val:
+                    TYPE_LABELS[selectedLeaveEntry.type] ||
+                    selectedLeaveEntry.type,
+                },
+                { label: 'Date', val: selectedLeaveEntry.date },
+                { label: 'Status', val: selectedLeaveEntry.status },
+                ...(selectedLeaveEntry.notes
+                  ? [{ label: 'Note', val: selectedLeaveEntry.notes }]
+                  : []),
+                ...(selectedLeaveEntry.requestedAt
+                  ? [
+                      {
+                        label: 'Requested',
+                        val: new Date(
+                          selectedLeaveEntry.requestedAt
+                        ).toLocaleDateString('en-GB', {
+                          day: 'numeric',
+                          month: 'short',
+                          year: 'numeric',
+                        }),
+                      },
+                    ]
+                  : []),
+                ...(selectedLeaveEntry.approvedBy
+                  ? [
+                      {
+                        label: 'Approved by',
+                        val: selectedLeaveEntry.approvedBy,
+                      },
+                    ]
+                  : []),
+              ].map((row) => (
+                <div key={row.label} style={s.detailRow}>
+                  <span style={s.detailLabel}>{row.label}</span>
+                  <span style={s.detailVal}>{row.val}</span>
                 </div>
-              )}
-              {selectedLeaveEntry.requestedAt && (
-                <div style={s.detailRow}>
-                  <span style={s.detailLabel}>Requested</span>
-                  <span style={s.detailVal}>
-                    {new Date(
-                      selectedLeaveEntry.requestedAt
-                    ).toLocaleDateString('en-GB', {
-                      day: 'numeric',
-                      month: 'short',
-                      year: 'numeric',
-                    })}
-                  </span>
-                </div>
-              )}
-              {selectedLeaveEntry.approvedBy && (
-                <div style={s.detailRow}>
-                  <span style={s.detailLabel}>Approved by</span>
-                  <span style={s.detailVal}>
-                    {selectedLeaveEntry.approvedBy}
-                  </span>
-                </div>
-              )}
-
-              {/* Approve/Decline actions — only shown for pending entries */}
+              ))}
               {selectedLeaveEntry.status === 'pending' && (
                 <div style={{ ...s.modalActions, marginTop: '20px' }}>
                   <button
@@ -1347,7 +1374,6 @@ function Staff() {
                   <button
                     style={s.approveBtn}
                     onClick={() => {
-                      // 1. Approve the time-off record
                       const records = JSON.parse(
                         localStorage.getItem('rotapp_time_off') || '{}'
                       )
@@ -1369,8 +1395,6 @@ function Staff() {
                           JSON.stringify(records)
                         )
                       }
-
-                      // 2. Remove from rota on that date
                       const monthRota = JSON.parse(
                         localStorage.getItem('rotapp_month_rota') || '{}'
                       )
@@ -1381,23 +1405,20 @@ function Staff() {
                       const dayOfWeek = (targetDate.getDay() + 6) % 7
                       Object.keys(monthRota).forEach((mondayKey) => {
                         const weekRota = monthRota[mondayKey]
-                        if (weekRota.early?.[dayOfWeek]) {
+                        if (weekRota.early?.[dayOfWeek])
                           weekRota.early[dayOfWeek] = weekRota.early[
                             dayOfWeek
                           ].filter((s) => s.id !== staffIdToRemove)
-                        }
-                        if (weekRota.late?.[dayOfWeek]) {
+                        if (weekRota.late?.[dayOfWeek])
                           weekRota.late[dayOfWeek] = weekRota.late[
                             dayOfWeek
                           ].filter((s) => s.id !== staffIdToRemove)
-                        }
                         monthRota[mondayKey] = weekRota
                       })
                       localStorage.setItem(
                         'rotapp_month_rota',
                         JSON.stringify(monthRota)
                       )
-
                       setLeaveRefresh((n) => n + 1)
                       setSelectedLeaveEntry(null)
                     }}
@@ -1515,19 +1536,11 @@ function Staff() {
                   {selectedRequest.shiftDate} · {selectedRequest.shiftType}
                 </span>
               </div>
-              <div style={s.detailRow}>
-                <span style={s.detailLabel}>Reason</span>
-                <span style={s.detailVal}>
-                  {selectedRequest.reason === 'Other'
-                    ? selectedRequest.customReason
-                    : selectedRequest.reason}
-                </span>
-              </div>
               <div style={s.field}>
                 <label style={s.detailLabel}>Rejection reason (optional)</label>
                 <textarea
                   style={s.textarea}
-                  placeholder='Why is this cancellation being rejected? (optional but recommended)'
+                  placeholder='Why is this cancellation being rejected?'
                   value={rejectionReason}
                   onChange={(e) => setRejectionReason(e.target.value)}
                   rows='2'
@@ -1545,11 +1558,9 @@ function Staff() {
               </div>
               <div style={s.warningNote}>
                 <FontAwesomeIcon icon='triangle-exclamation' /> Rejecting means
-                the shift remains in the rota. The staff member will be
-                notified.
+                the shift remains in the rota.
               </div>
             </div>
-
             <div style={s.modalFooter}>
               <div style={s.modalButtonGroup}>
                 <button
@@ -1574,6 +1585,7 @@ function Staff() {
           </div>
         </div>
       )}
+
       {/* Swap approve modal */}
       {selectedSwap && !showSwapRejectModal && (
         <div style={s.overlay} onClick={() => setSelectedSwap(null)}>
@@ -1631,7 +1643,6 @@ function Staff() {
                   {selectedSwap.targetShift.type === 'early' ? 'Early' : 'Late'}{' '}
                   · {selectedSwap.targetShift.date}
                   {selectedSwap.targetShift.sleepIn ? ' · Sleep-in' : ''}
-                  {selectedSwap.targetShift.sameDay ? ' · Same day' : ''}
                 </span>
               </div>
               {(selectedSwap.initiatorShift.sleepIn ||
@@ -1740,6 +1751,8 @@ function Staff() {
           </div>
         </div>
       )}
+
+      {/* Onboard modal */}
       {showInviteModal && (
         <InviteModal
           onClose={() => setShowInviteModal(false)}
@@ -1781,7 +1794,7 @@ const s = {
     fontSize: '12px',
     fontWeight: 500,
   },
-  primaryBtn: {
+  inviteBtn: {
     background: '#6c8fff',
     color: '#fff',
     border: 'none',
@@ -1791,6 +1804,30 @@ const s = {
     fontWeight: 500,
     cursor: 'pointer',
     fontFamily: 'DM Sans, sans-serif',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+  },
+  homeFilterRow: {
+    display: 'flex',
+    gap: '8px',
+    flexWrap: 'wrap',
+    marginBottom: '16px',
+  },
+  homeFilterBtn: {
+    background: 'transparent',
+    border: '1px solid rgba(255,255,255,0.1)',
+    borderRadius: '20px',
+    color: '#9499b0',
+    padding: '5px 14px',
+    fontSize: '12px',
+    cursor: 'pointer',
+    fontFamily: 'DM Sans, sans-serif',
+  },
+  homeFilterActive: {
+    background: 'rgba(108,143,255,0.12)',
+    border: '1px solid rgba(108,143,255,0.3)',
+    color: '#6c8fff',
   },
   statsRow: {
     display: 'grid',
@@ -1811,6 +1848,15 @@ const s = {
     color: '#e8eaf0',
   },
   statLabel: { fontSize: '11px', color: '#9499b0', marginTop: '3px' },
+  errorBanner: {
+    background: 'rgba(232,92,61,0.08)',
+    border: '1px solid rgba(232,92,61,0.2)',
+    borderRadius: '8px',
+    padding: '12px',
+    fontSize: '13px',
+    color: '#e85c3d',
+    marginBottom: '16px',
+  },
   tabs: {
     display: 'flex',
     gap: '0',
@@ -1827,6 +1873,19 @@ const s = {
     fontFamily: 'DM Sans, sans-serif',
     marginBottom: '-1px',
   },
+  tabBadge: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: '6px',
+    background: '#e85c3d',
+    color: '#fff',
+    fontSize: '9px',
+    fontWeight: 600,
+    padding: '2px 5px',
+    borderRadius: '10px',
+    minWidth: '16px',
+  },
   list: { display: 'flex', flexDirection: 'column', gap: '8px' },
   empty: {
     textAlign: 'center',
@@ -1841,7 +1900,6 @@ const s = {
     borderRadius: '12px',
     padding: '14px 16px',
     cursor: 'pointer',
-    transition: 'border-color 0.15s',
   },
   avatar: {
     width: '38px',
@@ -1858,6 +1916,11 @@ const s = {
   staffInfo: { flex: 1, minWidth: 0 },
   staffName: { fontSize: '14px', fontWeight: 500, color: '#e8eaf0' },
   staffMeta: { fontSize: '12px', color: '#9499b0', marginTop: '2px' },
+  staffRole: {
+    fontSize: '11px',
+    color: '#9499b0',
+    fontFamily: 'DM Mono, monospace',
+  },
   staffTags: { display: 'flex', gap: '6px', flexShrink: 0 },
   tag: {
     fontSize: '11px',
@@ -1894,12 +1957,13 @@ const s = {
   overlay: {
     position: 'fixed',
     inset: 0,
-    background: 'rgba(0,0,0,0.7)',
+    background: 'rgba(0,0,0,0.75)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 100,
     padding: '20px',
+    backdropFilter: 'blur(2px)',
   },
   modal: {
     background: '#161820',
@@ -1911,6 +1975,7 @@ const s = {
     display: 'flex',
     flexDirection: 'column',
     overflow: 'hidden',
+    boxShadow: '0 24px 64px rgba(0,0,0,0.5)',
   },
   modalHeader: {
     display: 'flex',
@@ -1982,6 +2047,14 @@ const s = {
     lineHeight: 1.6,
   },
   modalActions: { display: 'flex', gap: '8px' },
+  modalFooterRow: {
+    padding: '16px 24px',
+    borderTop: '1px solid rgba(255,255,255,0.07)',
+    display: 'flex',
+    gap: '8px',
+    justifyContent: 'flex-end',
+  },
+  modalButtonGroup: { display: 'flex', gap: '10px', width: '100%' },
   moveBtn: {
     width: '100%',
     background: 'transparent',
@@ -1992,6 +2065,71 @@ const s = {
     fontSize: '13px',
     cursor: 'pointer',
     fontFamily: 'DM Sans, sans-serif',
+  },
+  primaryBtn: {
+    background: '#6c8fff',
+    color: '#fff',
+    border: 'none',
+    borderRadius: '8px',
+    padding: '9px 16px',
+    fontSize: '13px',
+    fontWeight: 500,
+    cursor: 'pointer',
+    fontFamily: 'DM Sans, sans-serif',
+  },
+  secondaryBtn: {
+    background: 'transparent',
+    color: '#9499b0',
+    border: '1px solid rgba(255,255,255,0.1)',
+    borderRadius: '8px',
+    padding: '8px 14px',
+    fontSize: '13px',
+    cursor: 'pointer',
+    fontFamily: 'DM Sans, sans-serif',
+  },
+  cancelModalBtn: {
+    flex: 1,
+    background: 'transparent',
+    border: '1px solid rgba(255,255,255,0.15)',
+    borderRadius: '8px',
+    color: '#9499b0',
+    padding: '10px 12px',
+    fontSize: '12px',
+    fontWeight: 500,
+    cursor: 'pointer',
+    fontFamily: 'DM Sans, sans-serif',
+  },
+  approveModalBtn: {
+    flex: 1,
+    background: '#2ecc8a',
+    border: 'none',
+    borderRadius: '8px',
+    color: '#fff',
+    padding: '10px 12px',
+    fontSize: '12px',
+    fontWeight: 500,
+    cursor: 'pointer',
+    fontFamily: 'DM Sans, sans-serif',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '6px',
+  },
+  rejectModalBtn: {
+    flex: 1,
+    background: 'rgba(232,92,61,0.15)',
+    border: '1px solid rgba(232,92,61,0.4)',
+    borderRadius: '8px',
+    color: '#e85c3d',
+    padding: '10px 12px',
+    fontSize: '12px',
+    fontWeight: 500,
+    cursor: 'pointer',
+    fontFamily: 'DM Sans, sans-serif',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '6px',
   },
   leaveWrap: { display: 'flex', flexDirection: 'column', gap: '10px' },
   leaveNote: {
@@ -2020,12 +2158,16 @@ const s = {
     display: 'inline-flex',
     alignItems: 'center',
     gap: '6px',
-    background: 'rgba(232,92,61,0.1)',
-    border: '1px solid rgba(232,92,61,0.25)',
-    color: '#e85c3d',
     borderRadius: '6px',
     padding: '3px 8px',
     fontSize: '12px',
+  },
+  leaveTagLabel: { fontWeight: 500, fontSize: '11px' },
+  leaveTagDate: {
+    fontSize: '11px',
+    fontFamily: 'DM Mono, monospace',
+    opacity: 0.8,
+    marginLeft: '4px',
   },
   removeLeave: {
     background: 'transparent',
@@ -2035,6 +2177,15 @@ const s = {
     fontSize: '11px',
     padding: '0',
     lineHeight: 1,
+  },
+  approveLeaveBtn: {
+    background: 'none',
+    border: 'none',
+    cursor: 'pointer',
+    color: '#2ecc8a',
+    padding: '0 2px',
+    fontSize: '11px',
+    marginLeft: '4px',
   },
   addLeaveBtn: {
     background: 'transparent',
@@ -2059,21 +2210,22 @@ const s = {
     width: '100%',
   },
   field: { display: 'flex', flexDirection: 'column' },
-  secondaryBtn: {
-    background: 'transparent',
-    color: '#9499b0',
-    border: '1px solid rgba(255,255,255,0.1)',
+  textarea: {
+    background: '#1d1f2b',
+    border: '1px solid rgba(255,255,255,0.08)',
     borderRadius: '8px',
-    padding: '8px 14px',
+    padding: '10px 12px',
     fontSize: '13px',
-    cursor: 'pointer',
+    color: '#e8eaf0',
+    outline: 'none',
     fontFamily: 'DM Sans, sans-serif',
+    width: '100%',
+    resize: 'vertical',
+    minHeight: '60px',
+    maxHeight: '100px',
+    boxSizing: 'border-box',
   },
-  requestsWrap: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '16px',
-  },
+  requestsWrap: { display: 'flex', flexDirection: 'column', gap: '16px' },
   sectionLabel: {
     fontSize: '11px',
     textTransform: 'uppercase',
@@ -2100,11 +2252,8 @@ const s = {
     justifyContent: 'space-between',
     marginBottom: '10px',
   },
-  requestStaff: {
-    fontSize: '14px',
-    fontWeight: 600,
-    color: '#e8eaf0',
-  },
+  requestHeaderRight: { display: 'flex', alignItems: 'center', gap: '10px' },
+  requestStaff: { fontSize: '14px', fontWeight: 600, color: '#e8eaf0' },
   requestStatus: {
     fontSize: '11px',
     fontWeight: 500,
@@ -2122,15 +2271,8 @@ const s = {
     gap: '4px',
     marginBottom: '12px',
   },
-  requestTime: {
-    fontSize: '11px',
-    color: '#5d6180',
-    marginTop: '4px',
-  },
-  requestActions: {
-    display: 'flex',
-    gap: '8px',
-  },
+  requestTime: { fontSize: '11px', color: '#5d6180', marginTop: '4px' },
+  requestActions: { display: 'flex', gap: '8px' },
   approveRequestBtn: {
     flex: 1,
     background: 'rgba(46,204,138,0.12)',
@@ -2163,34 +2305,6 @@ const s = {
     justifyContent: 'center',
     gap: '6px',
   },
-  approveBtnLarge: {
-    background: '#2ecc8a',
-    color: '#fff',
-    border: 'none',
-    borderRadius: '8px',
-    padding: '9px 16px',
-    fontSize: '13px',
-    fontWeight: 500,
-    cursor: 'pointer',
-    fontFamily: 'DM Sans, sans-serif',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '6px',
-  },
-  rejectBtn: {
-    background: 'rgba(232,92,61,0.15)',
-    border: '1px solid rgba(232,92,61,0.3)',
-    borderRadius: '8px',
-    color: '#e85c3d',
-    padding: '9px 16px',
-    fontSize: '13px',
-    fontWeight: 500,
-    cursor: 'pointer',
-    fontFamily: 'DM Sans, sans-serif',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '6px',
-  },
   warningNote: {
     marginTop: '8px',
     padding: '8px 10px',
@@ -2203,40 +2317,6 @@ const s = {
     alignItems: 'center',
     gap: '6px',
   },
-  textarea: {
-    background: '#1d1f2b',
-    border: '1px solid rgba(255,255,255,0.08)',
-    borderRadius: '8px',
-    padding: '10px 12px',
-    fontSize: '13px',
-    color: '#e8eaf0',
-    outline: 'none',
-    fontFamily: 'DM Sans, sans-serif',
-    width: '100%',
-    resize: 'vertical',
-    minHeight: '60px',
-    maxHeight: '100px',
-    boxSizing: 'border-box',
-  },
-  staffRole: {
-    fontSize: '11px',
-    color: '#9499b0',
-    fontFamily: 'DM Mono, monospace',
-  },
-  tabBadge: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: '6px',
-    background: '#e85c3d',
-    color: '#fff',
-    fontSize: '9px',
-    fontWeight: 600,
-    padding: '2px 5px',
-    borderRadius: '10px',
-    minWidth: '16px',
-  },
-
   clickableDate: {
     color: '#6c8fff',
     cursor: 'pointer',
@@ -2244,108 +2324,15 @@ const s = {
     textDecorationStyle: 'dotted',
     textUnderlineOffset: '2px',
   },
-
-  modalButtonGroup: {
-    display: 'flex',
-    gap: '10px',
-    width: '100%',
-  },
-
-  cancelModalBtn: {
-    flex: 1,
-    background: 'transparent',
-    border: '1px solid rgba(255,255,255,0.15)',
-    borderRadius: '8px',
-    color: '#9499b0',
-    padding: '10px 12px',
-    fontSize: '12px',
-    fontWeight: 500,
-    cursor: 'pointer',
-    fontFamily: 'DM Sans, sans-serif',
-  },
-
-  approveModalBtn: {
-    flex: 1,
-    background: '#2ecc8a',
-    border: 'none',
-    borderRadius: '8px',
-    color: '#fff',
-    padding: '10px 12px',
-    fontSize: '12px',
-    fontWeight: 500,
-    cursor: 'pointer',
-    fontFamily: 'DM Sans, sans-serif',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: '6px',
-  },
-
-  rejectModalBtn: {
-    flex: 1,
-    background: 'rgba(232,92,61,0.15)',
-    border: '1px solid rgba(232,92,61,0.4)',
-    borderRadius: '8px',
-    color: '#e85c3d',
-    padding: '10px 12px',
-    fontSize: '12px',
-    fontWeight: 500,
-    cursor: 'pointer',
-    fontFamily: 'DM Sans, sans-serif',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: '6px',
-  },
-  requestHeaderRight: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '10px',
-  },
   pingBadge: {
     fontSize: '10px',
     padding: '3px 8px',
     borderRadius: '5px',
-    background: 'rgba(39, 45, 65, 0.12)',
+    background: 'rgba(39,45,65,0.12)',
     color: '#6c8fff',
     display: 'flex',
     alignItems: 'center',
     gap: '5px',
-  },
-  leaveTagLabel: {
-    fontWeight: 500,
-    fontSize: '11px',
-  },
-  leaveTagDate: {
-    fontSize: '11px',
-    fontFamily: 'DM Mono, monospace',
-    opacity: 0.8,
-    marginLeft: '4px',
-  },
-  approveLeaveBtn: {
-    background: 'none',
-    border: 'none',
-    cursor: 'pointer',
-    color: '#2ecc8a',
-    padding: '0 2px',
-    fontSize: '11px',
-    marginLeft: '4px',
-  },
-  leaveRangeInfo: {
-    marginTop: '12px',
-    fontSize: '12px',
-    color: '#6c8fff',
-    background: 'rgba(108,143,255,0.08)',
-    border: '1px solid rgba(108,143,255,0.15)',
-    borderRadius: '6px',
-    padding: '8px 12px',
-  },
-  modalFooterRow: {
-    padding: '16px 24px',
-    borderTop: '1px solid rgba(255,255,255,0.07)',
-    display: 'flex',
-    gap: '8px',
-    justifyContent: 'flex-end',
   },
   swapShiftRow: {
     display: 'flex',
@@ -2378,20 +2365,6 @@ const s = {
     alignItems: 'center',
     gap: '6px',
     marginTop: '4px',
-  },
-  inviteBtn: {
-    background: 'var(--accent)',
-    color: '#fff',
-    border: 'none',
-    borderRadius: '8px',
-    padding: '8px 14px',
-    fontSize: '13px',
-    fontWeight: 500,
-    cursor: 'pointer',
-    fontFamily: 'DM Sans, sans-serif',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '6px',
   },
 }
 

@@ -20,10 +20,17 @@ export function AuthProvider({ children }) {
       .select('*')
       .eq('id', supabaseUser.id)
       .single()
-
     if (error || !profile) {
       console.error('Failed to fetch profile:', error)
       setUser(null)
+      setLoading(false)
+      return
+    }
+
+    // Block pending and suspended accounts
+    if (profile.status === 'pending' || profile.status === 'suspended') {
+      await supabase.auth.signOut()
+      setUser({ blockedStatus: profile.status, email: profile.email })
       setLoading(false)
       return
     }

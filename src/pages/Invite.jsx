@@ -117,7 +117,19 @@ function Invite() {
         throw profileError
       }
 
-      // 4. Mark token as used
+      // 4. Stamp role and home into auth metadata for RLS
+      try {
+        await supabase.auth.updateUser({
+          data: {
+            role: tokenData.role,
+            home: tokenData.home_id || null,
+          },
+        })
+      } catch (metaErr) {
+        console.warn('Metadata stamp failed (non-critical):', metaErr)
+      }
+
+      // 5. Mark token as used
       await markTokenUsed(token, userId)
 
       // 5. Sign out so they don't land on dashboard as pending user
