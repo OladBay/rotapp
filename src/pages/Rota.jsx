@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import Navbar from '../components/layout/Navbar'
 import GenerateModal from '../components/layout/GenerateModal'
+import JumpCalendar from '../components/shared/JumpCalendar'
 import CellEditModal from '../components/layout/CellEditModal'
 import { mockStaff } from '../data/mockRota'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
@@ -116,7 +117,6 @@ function Rota() {
   const [generateTarget, setGenerateTarget] = useState(null)
   // { year, month, label } — passed to GenerateModal
   const [editCell, setEditCell] = useState(null)
-  const [jumpValue, setJumpValue] = useState('')
   const [showJump, setShowJump] = useState(false)
 
   const weekDates = getWeekDates(currentMonday)
@@ -140,14 +140,10 @@ function Rota() {
   const prevWeek = () => setMonday((prev) => addWeeks(prev, -1))
   const nextWeek = () => setMonday((prev) => addWeeks(prev, 1))
 
-  const handleJump = () => {
-    if (!jumpValue) return
-    const picked = new Date(jumpValue)
-    if (isNaN(picked)) return
-    setMonday(getMondayOfWeek(picked))
-    setCurrentYear(picked.getFullYear())
-    setShowJump(false)
-    setJumpValue('')
+  const handleJump = (date) => {
+    if (!date || isNaN(date)) return
+    setMonday(getMondayOfWeek(date))
+    setCurrentYear(date.getFullYear())
     setViewMode('week')
   }
 
@@ -304,22 +300,35 @@ function Rota() {
               <button style={s.navArrow} onClick={nextWeek}>
                 <FontAwesomeIcon icon='chevron-right' />
               </button>
-              <button style={s.jumpBtn} onClick={() => setShowJump(!showJump)}>
-                Jump to date
-              </button>
-              {showJump && (
-                <div style={s.jumpWrap}>
-                  <input
-                    type='date'
-                    value={jumpValue}
-                    onChange={(e) => setJumpValue(e.target.value)}
-                    style={s.jumpInput}
+
+              <div style={{ position: 'relative' }}>
+                <button
+                  style={{
+                    ...s.jumpBtn,
+                    background: showJump
+                      ? 'rgba(108,143,255,0.1)'
+                      : 'transparent',
+                    color: showJump ? '#6c8fff' : '#9499b0',
+                    border: showJump
+                      ? '1px solid rgba(108,143,255,0.3)'
+                      : '1px solid rgba(255,255,255,0.1)',
+                  }}
+                  onClick={() => setShowJump((v) => !v)}
+                >
+                  <FontAwesomeIcon
+                    icon='calendar-days'
+                    style={{ marginRight: '6px' }}
                   />
-                  <button style={s.primaryBtn} onClick={handleJump}>
-                    Go
-                  </button>
-                </div>
-              )}
+                  Jump to date
+                </button>
+                {showJump && (
+                  <JumpCalendar
+                    onJump={handleJump}
+                    onClose={() => setShowJump(false)}
+                    initialDate={new Date(currentMonday)}
+                  />
+                )}
+              </div>
               <div style={s.legend}>
                 <span style={{ ...s.legendItem, color: '#2a7f62' }}>
                   ■ Early
@@ -1181,16 +1190,7 @@ const s = {
     cursor: 'pointer',
     fontFamily: 'DM Sans, sans-serif',
   },
-  jumpWrap: { display: 'flex', gap: '8px', alignItems: 'center' },
-  jumpInput: {
-    background: '#1d1f2b',
-    border: '1px solid rgba(255,255,255,0.1)',
-    borderRadius: '7px',
-    color: '#e8eaf0',
-    padding: '6px 10px',
-    fontSize: '12px',
-    fontFamily: 'DM Mono, monospace',
-  },
+
   legend: { display: 'flex', gap: '12px', marginLeft: 'auto' },
   legendItem: { fontSize: '11px' },
   yearWrap: {

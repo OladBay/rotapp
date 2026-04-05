@@ -29,6 +29,7 @@ import {
   addTimeOff,
   generateTimeOffId,
 } from '../utils/timeOffStorage'
+import LeaveCalendar from '../components/shared/LeaveCalendar'
 
 const TODAY = new Date()
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
@@ -58,8 +59,7 @@ function Calendar() {
   // Time-off request modal
   const [showTimeOffModal, setShowTimeOffModal] = useState(false)
   const [timeOffType, setTimeOffType] = useState('annual_leave')
-  const [timeOffStart, setTimeOffStart] = useState('')
-  const [timeOffEnd, setTimeOffEnd] = useState('')
+  const [timeOffSelectedDates, setTimeOffSelectedDates] = useState([])
   const [timeOffNote, setTimeOffNote] = useState('')
   const [timeOffRefresh, setTimeOffRefresh] = useState(0)
   const [timeOffSubmitted, setTimeOffSubmitted] = useState(false)
@@ -168,12 +168,10 @@ function Calendar() {
   }
 
   const handleSubmitTimeOff = () => {
-    if (!timeOffStart || !timeOffEnd || timeOffEnd < timeOffStart) return
-    const start = new Date(timeOffStart + 'T00:00:00')
-    const end = new Date(timeOffEnd + 'T00:00:00')
-    const current = new Date(start)
-    while (current <= end) {
-      addTimeOff(new Date(current), {
+    if (timeOffSelectedDates.length === 0) return
+    timeOffSelectedDates.forEach((dateStr) => {
+      const [y, m, d] = dateStr.split('-').map(Number)
+      addTimeOff(new Date(y, m - 1, d), {
         id: generateTimeOffId(),
         staffId,
         staffName,
@@ -182,16 +180,14 @@ function Calendar() {
         notes: timeOffNote || null,
         requestedAt: new Date().toISOString(),
       })
-      current.setDate(current.getDate() + 1)
-    }
+    })
     setTimeOffRefresh((n) => n + 1)
     setTimeOffSubmitted(true)
   }
 
   const closeTimeOffModal = () => {
     setShowTimeOffModal(false)
-    setTimeOffStart('')
-    setTimeOffEnd('')
+    setTimeOffSelectedDates([])
     setTimeOffNote('')
     setTimeOffType('annual_leave')
     setTimeOffSubmitted(false)
@@ -222,14 +218,6 @@ function Calendar() {
     setCurrentYear(year)
     setViewMode('week')
   }
-
-  // Days requested count for modal info
-  const timeOffDayCount = (() => {
-    if (!timeOffStart || !timeOffEnd || timeOffEnd < timeOffStart) return 0
-    const a = new Date(timeOffStart + 'T00:00:00')
-    const b = new Date(timeOffEnd + 'T00:00:00')
-    return Math.round((b - a) / 86400000) + 1
-  })()
 
   return (
     <div style={s.page}>
@@ -867,8 +855,15 @@ function Calendar() {
               <>
                 <div style={s.modalBody}>
                   <p style={s.modalNote}>
-                    Your request will be sent to your manager for approval.
+                    Tap days below to select. Days with existing leave are not
+                    available.
                   </p>
+
+                  <LeaveCalendar
+                    staffId={staffId}
+                    selectedDates={timeOffSelectedDates}
+                    onSelectionChange={setTimeOffSelectedDates}
+                  />
 
                   <div style={s.field}>
                     <label style={s.detailLabel}>Leave type</label>
@@ -884,27 +879,6 @@ function Calendar() {
                     </select>
                   </div>
 
-                  <div style={{ display: 'flex', gap: '12px' }}>
-                    <div style={{ flex: 1 }}>
-                      <label style={s.detailLabel}>Start date</label>
-                      <input
-                        style={{ ...s.reasonSelect, marginTop: '6px' }}
-                        type='date'
-                        value={timeOffStart}
-                        onChange={(e) => setTimeOffStart(e.target.value)}
-                      />
-                    </div>
-                    <div style={{ flex: 1 }}>
-                      <label style={s.detailLabel}>End date</label>
-                      <input
-                        style={{ ...s.reasonSelect, marginTop: '6px' }}
-                        type='date'
-                        value={timeOffEnd}
-                        onChange={(e) => setTimeOffEnd(e.target.value)}
-                      />
-                    </div>
-                  </div>
-
                   <div style={s.field}>
                     <label style={s.detailLabel}>Note (optional)</label>
                     <input
@@ -915,17 +889,6 @@ function Calendar() {
                       onChange={(e) => setTimeOffNote(e.target.value)}
                     />
                   </div>
-
-                  {timeOffDayCount > 0 && (
-                    <div style={s.rangeInfo}>
-                      <FontAwesomeIcon
-                        icon='circle-info'
-                        style={{ marginRight: '6px' }}
-                      />
-                      {timeOffDayCount} day{timeOffDayCount > 1 ? 's' : ''}{' '}
-                      requested
-                    </div>
-                  )}
                 </div>
 
                 <div style={s.reasonActions}>
@@ -935,10 +898,13 @@ function Calendar() {
                   <button
                     style={{
                       ...s.submitReasonBtn,
-                      opacity: timeOffDayCount > 0 ? 1 : 0.5,
-                      cursor: timeOffDayCount > 0 ? 'pointer' : 'not-allowed',
+                      opacity: timeOffSelectedDates.length > 0 ? 1 : 0.5,
+                      cursor:
+                        timeOffSelectedDates.length > 0
+                          ? 'pointer'
+                          : 'not-allowed',
                     }}
-                    disabled={timeOffDayCount === 0}
+                    disabled={timeOffSelectedDates.length === 0}
                     onClick={handleSubmitTimeOff}
                   >
                     Submit request
@@ -1202,7 +1168,7 @@ const s = {
     border: '1px solid rgba(255,255,255,0.1)',
     borderRadius: '16px',
     width: '100%',
-    maxWidth: '400px',
+    maxWidth: '460px',
     maxHeight: '90vh',
     display: 'flex',
     flexDirection: 'column',

@@ -19,6 +19,7 @@ import {
   generateTimeOffId,
   getPendingTimeOffCount,
 } from '../utils/timeOffStorage'
+import LeaveCalendar from '../components/shared/LeaveCalendar'
 
 const ROLE_LABELS = {
   manager: 'Manager',
@@ -70,8 +71,7 @@ function Staff() {
   const [tab, setTab] = useState('all')
   const [leaveStaff, setLeaveStaff] = useState(null)
   const [leaveModalType, setLeaveModalType] = useState('annual_leave')
-  const [leaveStartDate, setLeaveStartDate] = useState('')
-  const [leaveEndDate, setLeaveEndDate] = useState('')
+  const [leaveSelectedDates, setLeaveSelectedDates] = useState([])
   const [leaveNotes, setLeaveNotes] = useState('')
   const [leaveRefresh, setLeaveRefresh] = useState(0)
   const [selectedLeaveEntry, setSelectedLeaveEntry] = useState(null)
@@ -850,25 +850,42 @@ function Staff() {
       )}
 
       {/* Add leave modal */}
+
       {leaveStaff && (
         <div
           style={s.overlay}
           onClick={() => {
             setLeaveStaff(null)
-            setLeaveStartDate('')
-            setLeaveEndDate('')
+            setLeaveSelectedDates([])
             setLeaveNotes('')
+            setLeaveModalType('annual_leave')
           }}
         >
-          <div style={s.modal} onClick={(e) => e.stopPropagation()}>
+          <div
+            style={{ ...s.modal, maxWidth: '460px' }}
+            onClick={(e) => e.stopPropagation()}
+          >
             <div style={s.modalHeader}>
               <div style={s.modalTitle}>Add Leave — {leaveStaff.name}</div>
-              <button style={s.closeBtn} onClick={() => setLeaveStaff(null)}>
+              <button
+                style={s.closeBtn}
+                onClick={() => {
+                  setLeaveStaff(null)
+                  setLeaveSelectedDates([])
+                  setLeaveNotes('')
+                  setLeaveModalType('annual_leave')
+                }}
+              >
                 <FontAwesomeIcon icon='xmark' />
               </button>
             </div>
             <div style={s.modalBody}>
-              {/* Leave type */}
+              <LeaveCalendar
+                staffId={leaveStaff.id}
+                selectedDates={leaveSelectedDates}
+                onSelectionChange={setLeaveSelectedDates}
+              />
+
               <div style={s.field}>
                 <label style={s.detailLabel}>Leave type</label>
                 <select
@@ -883,57 +900,16 @@ function Staff() {
                 </select>
               </div>
 
-              {/* Date range */}
-              <div style={{ display: 'flex', gap: '12px', marginTop: '14px' }}>
-                <div style={{ flex: 1 }}>
-                  <label style={s.detailLabel}>Start date</label>
-                  <input
-                    style={{ ...s.input, marginTop: '6px' }}
-                    type='date'
-                    value={leaveStartDate}
-                    onChange={(e) => setLeaveStartDate(e.target.value)}
-                  />
-                </div>
-                <div style={{ flex: 1 }}>
-                  <label style={s.detailLabel}>End date</label>
-                  <input
-                    style={{ ...s.input, marginTop: '6px' }}
-                    type='date'
-                    value={leaveEndDate}
-                    onChange={(e) => setLeaveEndDate(e.target.value)}
-                  />
-                </div>
-              </div>
-
-              {/* Notes */}
-              <div style={{ marginTop: '14px' }}>
-                <label style={s.detailLabel}>Notes (optional)</label>
+              <div style={s.field}>
+                <label style={s.detailLabel}>Note (optional)</label>
                 <input
                   style={{ ...s.input, marginTop: '6px' }}
                   type='text'
-                  placeholder='e.g. Doctor appointment, holiday'
+                  placeholder='e.g. holiday, hospital appointment'
                   value={leaveNotes}
                   onChange={(e) => setLeaveNotes(e.target.value)}
                 />
               </div>
-
-              {/* Date range info */}
-              {leaveStartDate &&
-                leaveEndDate &&
-                leaveEndDate >= leaveStartDate && (
-                  <div style={s.leaveRangeInfo}>
-                    <FontAwesomeIcon
-                      icon='circle-info'
-                      style={{ marginRight: '6px' }}
-                    />
-                    {(() => {
-                      const start = new Date(leaveStartDate + 'T00:00:00')
-                      const end = new Date(leaveEndDate + 'T00:00:00')
-                      const days = Math.round((end - start) / 86400000) + 1
-                      return `${days} day${days > 1 ? 's' : ''} will be recorded`
-                    })()}
-                  </div>
-                )}
             </div>
 
             <div style={s.modalFooterRow}>
@@ -941,26 +917,25 @@ function Staff() {
                 style={s.secondaryBtn}
                 onClick={() => {
                   setLeaveStaff(null)
-                  setLeaveStartDate('')
-                  setLeaveEndDate('')
+                  setLeaveSelectedDates([])
                   setLeaveNotes('')
+                  setLeaveModalType('annual_leave')
                 }}
               >
                 Cancel
               </button>
               <button
-                style={s.primaryBtn}
-                disabled={
-                  !leaveStartDate ||
-                  !leaveEndDate ||
-                  leaveEndDate < leaveStartDate
-                }
+                style={{
+                  ...s.primaryBtn,
+                  opacity: leaveSelectedDates.length > 0 ? 1 : 0.5,
+                  cursor:
+                    leaveSelectedDates.length > 0 ? 'pointer' : 'not-allowed',
+                }}
+                disabled={leaveSelectedDates.length === 0}
                 onClick={() => {
-                  const start = new Date(leaveStartDate + 'T00:00:00')
-                  const end = new Date(leaveEndDate + 'T00:00:00')
-                  const current = new Date(start)
-                  while (current <= end) {
-                    addTimeOff(new Date(current), {
+                  leaveSelectedDates.forEach((dateStr) => {
+                    const [y, m, d] = dateStr.split('-').map(Number)
+                    addTimeOff(new Date(y, m - 1, d), {
                       id: generateTimeOffId(),
                       staffId: leaveStaff.id,
                       staffName: leaveStaff.name,
@@ -970,13 +945,12 @@ function Staff() {
                       approvedAt: new Date().toISOString(),
                       notes: leaveNotes || null,
                     })
-                    current.setDate(current.getDate() + 1)
-                  }
+                  })
                   setLeaveRefresh((n) => n + 1)
                   setLeaveStaff(null)
-                  setLeaveStartDate('')
-                  setLeaveEndDate('')
+                  setLeaveSelectedDates([])
                   setLeaveNotes('')
+                  setLeaveModalType('annual_leave')
                 }}
               >
                 <FontAwesomeIcon icon='check' /> Confirm leave
