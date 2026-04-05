@@ -39,6 +39,7 @@ import {
   faGripVertical,
   faPenToSquare,
   faSun,
+  faThumbTack,
 } from '@fortawesome/free-solid-svg-icons'
 
 library.add(
@@ -79,5 +80,6 @@ library.add(
   faListCheck,
   faGripVertical,
   faPenToSquare,
-  faSun
+  faSun,
+  faThumbTack
 )

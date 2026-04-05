@@ -86,6 +86,14 @@ function Rota() {
   const navigate = useNavigate()
   const [summaryExpanded, setSummaryExpanded] = useState(false)
   const [hideZeroHours, setHideZeroHours] = useState(false)
+  const [isNavPinned, setIsNavPinned] = useState(() => {
+    try {
+      const pinned = localStorage.getItem('rotapp_month_nav_pinned')
+      return pinned === 'true'
+    } catch {
+      return false
+    }
+  })
 
   useEffect(() => {
     const jumpDate = sessionStorage.getItem('rota_jump_date')
@@ -139,6 +147,12 @@ function Rota() {
 
   const prevWeek = () => setMonday((prev) => addWeeks(prev, -1))
   const nextWeek = () => setMonday((prev) => addWeeks(prev, 1))
+
+  const togglePinNav = () => {
+    const newValue = !isNavPinned
+    setIsNavPinned(newValue)
+    localStorage.setItem('rotapp_month_nav_pinned', String(newValue))
+  }
 
   const handleJump = (date) => {
     if (!date || isNaN(date)) return
@@ -292,7 +306,20 @@ function Rota() {
         )}
 
         {/* Navigation bar */}
-        <div style={s.weekNav}>
+        <div
+          style={{
+            ...s.weekNav,
+            position: isNavPinned ? 'sticky' : 'static',
+            top: isNavPinned ? '56px' : 'auto',
+            background: isNavPinned ? '#0f1117' : 'transparent',
+            zIndex: isNavPinned ? 100 : 'auto',
+            padding: isNavPinned ? '10px 24px' : '0',
+            margin: isNavPinned ? '0 -24px' : '0',
+            borderBottom: isNavPinned
+              ? '1px solid rgba(255,255,255,0.07)'
+              : 'none',
+          }}
+        >
           {viewMode === 'week' ? (
             <>
               <button style={s.navArrow} onClick={prevWeek}>
@@ -392,6 +419,34 @@ function Rota() {
                   ■ Not planned
                 </span>
               </div>
+
+              {/* Pin button - only in month view */}
+              <button
+                style={{
+                  ...s.pinBtn,
+                  color: isNavPinned ? '#6c8fff' : '#5d6180',
+                  background: isNavPinned
+                    ? 'rgba(108,143,255,0.1)'
+                    : 'transparent',
+                  border: isNavPinned
+                    ? '1px solid rgba(108,143,255,0.3)'
+                    : '1px solid rgba(255,255,255,0.1)',
+                }}
+                onClick={togglePinNav}
+                title={
+                  isNavPinned
+                    ? 'Unpin navigation bar'
+                    : 'Pin navigation bar (stays while scrolling)'
+                }
+              >
+                <FontAwesomeIcon
+                  icon='thumbtack'
+                  style={{
+                    transform: isNavPinned ? 'rotate(45deg)' : 'none',
+                    transition: 'transform 0.2s',
+                  }}
+                />
+              </button>
             </>
           )}
         </div>
@@ -1178,6 +1233,7 @@ const s = {
     gap: '8px',
     marginBottom: '20px',
     flexWrap: 'wrap',
+    transition: 'all 0.2s ease',
   },
   navArrow: {
     background: 'transparent',
@@ -1212,6 +1268,19 @@ const s = {
   },
   legend: { display: 'flex', gap: '12px', marginLeft: 'auto' },
   legendItem: { fontSize: '11px' },
+  pinBtn: {
+    background: 'transparent',
+    border: '1px solid rgba(255,255,255,0.1)',
+    borderRadius: '7px',
+    width: '32px',
+    height: '32px',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    transition: 'all 0.2s ease',
+    marginLeft: '4px',
+  },
   yearWrap: {
     display: 'grid',
     gridTemplateColumns: 'repeat(3, 1fr)',

@@ -235,31 +235,15 @@ function Calendar() {
             </p>
           </div>
           <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
-            <button
-              style={s.requestTimeOffBtn}
-              onClick={() => setShowTimeOffModal(true)}
-            >
-              <FontAwesomeIcon icon='calendar-plus' /> Request time off
-            </button>
-            <div style={s.viewToggle}>
-              {[
-                { value: 'week', label: 'Week' },
-                { value: 'month', label: 'Month' },
-              ].map((v) => (
-                <button
-                  key={v.value}
-                  style={{
-                    ...s.toggleBtn,
-                    background:
-                      viewMode === v.value ? '#6c8fff' : 'transparent',
-                    color: viewMode === v.value ? '#fff' : '#9499b0',
-                  }}
-                  onClick={() => setViewMode(v.value)}
-                >
-                  {v.label}
-                </button>
-              ))}
-            </div>
+            {user?.activeRole !== 'relief' && (
+              <button
+                style={s.requestTimeOffBtn}
+                onClick={() => setShowTimeOffModal(true)}
+              >
+                <FontAwesomeIcon icon='calendar-plus' /> Request time off
+              </button>
+            )}
+            <div style={s.viewToggle}>{/* ... */}</div>
           </div>
         </div>
 
