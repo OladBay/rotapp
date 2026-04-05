@@ -20,7 +20,6 @@ import {
 } from '../utils/dateUtils'
 import {
   calculateStaffHoursForWeek,
-  calculateStaffHoursForMonth,
   getWeeksInMonth,
 } from '../utils/hoursCalculator'
 
@@ -833,9 +832,6 @@ function Rota() {
                           <th style={s.tableHeader}>This week</th>
                           <th style={s.tableHeader}>Contracted</th>
                           <th style={s.tableHeader}>Variance</th>
-                          <th style={s.tableHeader}>This month</th>
-                          <th style={s.tableHeader}>Contracted</th>
-                          <th style={s.tableHeader}>Variance</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -847,13 +843,6 @@ function Rota() {
                           )
 
                           // Calculate hours for each staff member
-                          const currentMonth = currentMonday.getMonth()
-                          const currentYearNum = currentMonday.getFullYear()
-                          const weeksInMonth = getWeeksInMonth(
-                            currentYearNum,
-                            currentMonth
-                          )
-                          const contractedMonth = weeksInMonth * 37
 
                           let staffHours = permanentStaff.map((staff) => {
                             const weekHours = calculateStaffHoursForWeek(
@@ -863,23 +852,11 @@ function Rota() {
                               leaveData
                             )
                             const weekVariance = weekHours - 37
-                            const monthHours = calculateStaffHoursForMonth(
-                              staff.id,
-                              currentYearNum,
-                              currentMonth,
-                              monthRota,
-                              currentRotaForWeek,
-                              currentMonday,
-                              leaveData
-                            )
-                            const monthVariance = monthHours - contractedMonth
 
                             return {
                               ...staff,
                               weekHours,
                               weekVariance,
-                              monthHours,
-                              monthVariance,
                             }
                           })
 
@@ -898,7 +875,7 @@ function Rota() {
                           if (sortedStaff.length === 0) {
                             return (
                               <tr>
-                                <td colSpan='7' style={s.emptyTableMessage}>
+                                <td colSpan='4' style={s.emptyTableMessage}>
                                   No staff scheduled this week
                                 </td>
                               </tr>
@@ -908,7 +885,6 @@ function Rota() {
                           return sortedStaff.map((staff) => {
                             const isUnderWeek = staff.weekVariance < 0
                             const isOverWeek = staff.weekVariance > 0
-                            const isUnderMonth = staff.monthVariance < 0
 
                             return (
                               <tr key={staff.id} style={s.tableRow}>
@@ -980,34 +956,6 @@ function Rota() {
                                         }}
                                       />
                                     )}
-                                  </span>
-                                </td>
-
-                                <td style={s.tableCell}>
-                                  <span style={s.hoursValue}>
-                                    {staff.monthHours.toFixed(1)}h
-                                  </span>
-                                </td>
-
-                                <td style={s.tableCell}>
-                                  <span style={s.contractedValue}>
-                                    {contractedMonth}h
-                                  </span>
-                                </td>
-
-                                <td style={s.tableCell}>
-                                  <span
-                                    style={{
-                                      ...s.varianceValue,
-                                      color: isUnderMonth
-                                        ? '#c4883a'
-                                        : staff.monthVariance > 0
-                                          ? '#2ecc8a'
-                                          : '#9499b0',
-                                    }}
-                                  >
-                                    {staff.monthVariance > 0 ? '+' : ''}
-                                    {staff.monthVariance.toFixed(1)}h
                                   </span>
                                 </td>
                               </tr>
