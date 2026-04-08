@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react'
-import { mockStaff } from '../../data/mockRota'
 import { generateMonthRota, checkViolations } from '../../utils/rotaGenerator'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { dateKey } from '../../utils/dateUtils'
@@ -13,6 +12,7 @@ function GenerateModal({
   scopeMonth,
   monthLabel,
   leaveData,
+  staffMap,
 }) {
   const [step, setStep] = useState(1) // 1 = generating, 2 = review
   const [monthResult, setMonthResult] = useState(null)
@@ -20,8 +20,6 @@ function GenerateModal({
   const [generating, setGenerating] = useState(false)
   const [logLines, setLogLines] = useState([])
   const [expandedWeek, setExpandedWeek] = useState(null)
-
-  const staffMap = Object.fromEntries(mockStaff.map((s) => [s.id, s]))
 
   const addLog = (msg, type = '') =>
     setLogLines((prev) => [...prev, { msg, type }])
@@ -34,7 +32,7 @@ function GenerateModal({
 
     addLog(`Starting rota generation for ${monthLabel}…`, 'info')
     await sleep(350)
-    addLog(`${mockStaff.length} staff loaded`, '')
+    addLog(`${Object.keys(staffMap).length} staff loaded`, '')
     await sleep(250)
     addLog('Applying hard constraints…', 'info')
     addLog('  Min 3 staff per shift (excl. managers and deputies)', '')

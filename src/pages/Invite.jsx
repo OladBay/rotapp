@@ -6,7 +6,6 @@ import {
   markTokenUsed,
   ROLE_LABELS,
 } from '../utils/inviteTokens'
-import { mockHomes } from '../data/mockHomes'
 
 function Invite() {
   const { token } = useParams()
@@ -45,10 +44,19 @@ function Invite() {
     validate()
   }, [token])
 
-  const homeName = tokenData?.home_id
-    ? mockHomes.find((h) => h.id === tokenData.home_id)?.name ||
-      tokenData.home_id
-    : null
+  const [homeName, setHomeName] = useState(null)
+
+  useEffect(() => {
+    if (!tokenData?.home_id) return
+    supabase
+      .from('homes')
+      .select('name')
+      .eq('id', tokenData.home_id)
+      .single()
+      .then(({ data }) => {
+        if (data) setHomeName(data.name)
+      })
+  }, [tokenData])
 
   const handleStep1 = (e) => {
     e.preventDefault()

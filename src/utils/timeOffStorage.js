@@ -79,16 +79,6 @@ export function generateTimeOffId() {
   return `to_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
 }
 
-// Helper to get staff name (lazy import to avoid circular dependencies)
-let staffMapCache = null
-function getStaffNameById(staffId) {
-  if (!staffMapCache) {
-    const { mockStaff } = require('../data/mockRota')
-    staffMapCache = Object.fromEntries(mockStaff.map((s) => [s.id, s.name]))
-  }
-  return staffMapCache[staffId] || staffId
-}
-
 // Auto-migration from old rotapp_leave to new rotapp_time_off
 export function migrateLeaveDataIfNeeded() {
   // Check if we've already migrated

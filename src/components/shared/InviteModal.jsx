@@ -7,9 +7,8 @@ import {
   OL_INVITE_ROLES,
   ROLE_LABELS,
 } from '../../utils/inviteTokens'
-import { mockHomes } from '../../data/mockHomes'
 
-function InviteModal({ onClose, defaultHomeId }) {
+function InviteModal({ onClose, defaultHomeId, homes = [] }) {
   const { user } = useAuth()
 
   const isOLorAdmin = ['operationallead', 'superadmin'].includes(
@@ -19,8 +18,8 @@ function InviteModal({ onClose, defaultHomeId }) {
 
   // Managers only see their own home
   const availableHomes = isOLorAdmin
-    ? mockHomes
-    : mockHomes.filter((h) => h.id === user?.home)
+    ? homes
+    : homes.filter((h) => h.id === user?.home)
 
   const [selectedRole, setSelectedRole] = useState(availableRoles[0])
   const [selectedHome, setSelectedHome] = useState(
@@ -65,7 +64,7 @@ function InviteModal({ onClose, defaultHomeId }) {
   const handleEmail = () => {
     const homeName = isRelief
       ? 'our organisation'
-      : mockHomes.find((h) => h.id === selectedHome)?.name || 'your home'
+      : homes.find((h) => h.id === selectedHome)?.name || 'your home'
     const subject = encodeURIComponent(`You're invited to join Rotapp`)
     const body = encodeURIComponent(
       `Hi,\n\nYou've been invited to join Rotapp as a ${ROLE_LABELS[selectedRole]} at ${homeName}.\n\nClick the link below to set up your account:\n${generatedLink}\n\nThis link expires in 7 days and can only be used once.\n\nIf you have any questions, please contact your manager.\n\nRegards,\n${user.name}`

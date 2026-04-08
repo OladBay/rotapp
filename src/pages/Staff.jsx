@@ -27,6 +27,7 @@ import {
   getPendingTimeOffCount,
 } from '../utils/timeOffStorage'
 import LeaveCalendar from '../components/shared/LeaveCalendar'
+import { fetchHomes } from '../utils/homesData'
 
 const ROLE_LABELS = {
   manager: 'Manager',
@@ -85,9 +86,15 @@ function Staff() {
   const [staffLoading, setStaffLoading] = useState(true)
   const [staffError, setStaffError] = useState('')
   const [staffRefresh, setStaffRefresh] = useState(0)
+  const [homes, setHomes] = useState([])
 
   // ── OL home filter ──
   const [homeFilter, setHomeFilter] = useState('all')
+
+  useEffect(() => {
+    if (!user) return
+    fetchHomes(user.activeRole, user.home, user.org_id).then(setHomes)
+  }, [user])
 
   // ── UI state ──
   const [showInviteModal, setShowInviteModal] = useState(false)
@@ -1757,6 +1764,7 @@ function Staff() {
         <InviteModal
           onClose={() => setShowInviteModal(false)}
           defaultHomeId={user?.home}
+          homes={homes}
         />
       )}
     </div>

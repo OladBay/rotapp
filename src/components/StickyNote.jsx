@@ -3,13 +3,11 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { useLocalStorage } from '../hooks/useLocalStorage'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { mockUsers } from '../data/mockUsers'
+import { supabase } from '../lib/supabase'
 
 const STICKY_ROLES = ['manager', 'deputy', 'operationallead', 'superadmin']
 const STORAGE_KEY_PREFIX = 'rotapp_sticky_notes_'
 const NUDGE_SESSION_KEY = 'rotapp_sticky_nudge_shown'
-
-const ALL_STAFF = mockUsers.filter((u) => u.email && u.name)
 
 function makeId() {
   return Math.random().toString(36).slice(2, 9)
@@ -89,6 +87,19 @@ export default function StickyNote() {
 function StickyNoteWidget({ user }) {
   const storageKey = `${STORAGE_KEY_PREFIX}${user.id}`
   const firstName = user.name?.split(' ')[0] || 'there'
+  const [allStaff, setAllStaff] = useState([])
+
+  useEffect(() => {
+    supabase
+      .from('profiles')
+      .select('id, name, email, role')
+      .eq('org_id', user.org_id)
+      .neq('status', 'pending')
+      .neq('status', 'declined')
+      .then(({ data }) => {
+        if (data) setAllStaff(data)
+      })
+  }, [user.org_id])
 
   const [saved, setSaved] = useLocalStorage(storageKey, {
     blocks: [textBlock()],
@@ -530,7 +541,7 @@ function StickyNoteWidget({ user }) {
   const isEmpty = isEffectivelyEmpty(blocks)
   const pos = expandedPos || defaultPos()
 
-  const filteredStaff = ALL_STAFF.filter((u) => {
+  const filteredStaff = allStaff.filter((u) => {
     if (!mentionSearch) return true
     const q = mentionSearch.toLowerCase()
     return u.name.toLowerCase().includes(q) || u.role.toLowerCase().includes(q)

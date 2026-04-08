@@ -45,6 +45,7 @@ export function AuthProvider({ children }) {
       status: profile.status,
       gender: profile.gender,
       driver: profile.driver,
+      org_id: profile.org_id,
     })
     setLoading(false)
   }

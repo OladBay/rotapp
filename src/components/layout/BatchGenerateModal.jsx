@@ -1,6 +1,5 @@
 import { useState, useMemo } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { mockStaff } from '../../data/mockRota'
 import { generateMonthRota } from '../../utils/rotaGenerator'
 import { getWeeksForRange } from '../../utils/dateUtils'
 import { dateKey } from '../../utils/dateUtils'
@@ -25,9 +24,7 @@ function buildMonthOptions() {
 
 const MONTH_OPTIONS = buildMonthOptions()
 
-function BatchGenerateModal({ onClose, onApplyBatch, monthRota }) {
-  const staffMap = Object.fromEntries(mockStaff.map((s) => [s.id, s]))
-
+function BatchGenerateModal({ onClose, onApplyBatch, monthRota, staffMap }) {
   // Default from = current month, to = 3 months ahead
   const [fromIdx, setFromIdx] = useState(0)
   const [toIdx, setToIdx] = useState(3)

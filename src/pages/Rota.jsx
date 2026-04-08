@@ -1,12 +1,12 @@
 import { useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { useRota } from '../context/RotaContext'
 import Navbar from '../components/layout/Navbar'
 import GenerateModal from '../components/layout/GenerateModal'
 import BatchGenerateModal from '../components/layout/BatchGenerateModal'
 import JumpCalendar from '../components/shared/JumpCalendar'
 import CellEditModal from '../components/layout/CellEditModal'
-import { mockStaff } from '../data/mockRota'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { useLocalStorage } from '../hooks/useLocalStorage'
 import {
@@ -29,14 +29,13 @@ import {
 const TODAY = new Date()
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
-function getDayHealth(rota, dayOfWeek) {
+function getDayHealth(rota, dayOfWeek, staffMap = {}) {
   if (!rota) return 'unplanned'
   const early = rota.early?.[dayOfWeek] || []
   const late = rota.late?.[dayOfWeek] || []
   if (early.length === 0 && late.length === 0) return 'unplanned'
   const sleepIns = late.filter((e) => e.sleepIn).length
   if (early.length < 3 || late.length < 3 || sleepIns !== 2) return 'gap'
-  const staffMap = Object.fromEntries(mockStaff.map((s) => [s.id, s]))
   const earlyHasF = early.some((e) => staffMap[e.id]?.gender === 'F')
   const lateHasF = late.some((e) => staffMap[e.id]?.gender === 'F')
   const earlyHasD = early.some((e) => staffMap[e.id]?.driver)
@@ -45,7 +44,7 @@ function getDayHealth(rota, dayOfWeek) {
   return 'ok'
 }
 
-function getMonthHealth(monthDates, month, getRotaForDate) {
+function getMonthHealth(monthDates, month, getRotaForDate, staffMap = {}) {
   let hasGap = false
   let hasBreach = false
   let hasPlanned = false
@@ -54,7 +53,7 @@ function getMonthHealth(monthDates, month, getRotaForDate) {
     if (date.getMonth() !== month) return
     const dayOfWeek = (date.getDay() + 6) % 7
     const rota = getRotaForDate(date)
-    const h = getDayHealth(rota, dayOfWeek)
+    const h = getDayHealth(rota, dayOfWeek, staffMap)
     if (h !== 'unplanned') hasPlanned = true
     if (h === 'gap') hasGap = true
     if (h === 'breach') hasBreach = true
@@ -115,12 +114,13 @@ function Rota() {
 
   const [overwriteTarget, setOverwriteTarget] = useState(null)
 
+  const { staff, staffMap, monthRota, setMonthRota } = useRota()
+
   const [weekRota, setWeekRota] = useLocalStorage('rotapp_week_rota', {
     early: Array(7).fill([]),
     late: Array(7).fill([]),
     onCall: Array(7).fill([]),
   })
-  const [monthRota, setMonthRota] = useLocalStorage('rotapp_month_rota', {})
 
   const [generateTarget, setGenerateTarget] = useState(null)
   const [showBatchModal, setShowBatchModal] = useState(false)
@@ -130,8 +130,8 @@ function Rota() {
   const weekDates = getWeekDates(currentMonday)
   const yearMonths = useMemo(() => getYearMonths(currentYear), [currentYear])
 
-  const staffMap = Object.fromEntries(mockStaff.map((s) => [s.id, s]))
   const canEdit = ['manager', 'deputy', 'superadmin'].includes(user?.activeRole)
+
   const canSeeGaps = [
     'manager',
     'deputy',
@@ -462,10 +462,12 @@ function Rota() {
               {yearMonths.map(({ year, month, label }) => {
                 const monthDates = getMonthDates(year, month)
                 const hasRota = monthHasRota(year, month)
+
                 const monthHealth = getMonthHealth(
                   monthDates,
                   month,
-                  getRotaForDate
+                  getRotaForDate,
+                  staffMap
                 )
                 const isHovered = hoveredMonth === `${year}-${month}`
 
@@ -542,8 +544,9 @@ function Rota() {
                         const isToday = isSameDay(date, TODAY)
                         const dayOfWeek = (date.getDay() + 6) % 7
                         const rota = inMonth ? getRotaForDate(date) : null
+
                         const health = inMonth
-                          ? getDayHealth(rota, dayOfWeek)
+                          ? getDayHealth(rota, dayOfWeek, staffMap)
                           : null
                         return (
                           <div
@@ -623,7 +626,7 @@ function Rota() {
                             if (date.getMonth() !== month) return
                             const dayOfWeek = (date.getDay() + 6) % 7
                             const rota = getRotaForDate(date)
-                            const h = getDayHealth(rota, dayOfWeek)
+                            const h = getDayHealth(rota, dayOfWeek, staffMap)
                             counts[h]++
                           })
                           return (
@@ -911,25 +914,24 @@ function Rota() {
                       </thead>
                       <tbody>
                         {(() => {
-                          const permanentStaff = mockStaff.filter(
-                            (staff) =>
-                              staff.role === 'rcw' || staff.role === 'senior'
+                          const permanentStaff = staff.filter(
+                            (s) => s.role === 'rcw' || s.role === 'senior'
                           )
 
-                          let staffHours = permanentStaff.map((staff) => {
+                          let staffHours = permanentStaff.map((member) => {
                             const weekHours = calculateStaffHoursForWeek(
-                              staff.id,
+                              member.id,
                               currentRotaForWeek,
                               currentMonday,
                               leaveData
                             )
                             const weekVariance = weekHours - 37
-                            return { ...staff, weekHours, weekVariance }
+                            return { ...member, weekHours, weekVariance }
                           })
 
                           if (hideZeroHours) {
                             staffHours = staffHours.filter(
-                              (staff) => staff.weekHours > 0
+                              (member) => member.weekHours > 0
                             )
                           }
 
@@ -947,44 +949,44 @@ function Rota() {
                             )
                           }
 
-                          return sortedStaff.map((staff) => {
-                            const isUnderWeek = staff.weekVariance < 0
-                            const isOverWeek = staff.weekVariance > 0
+                          return sortedStaff.map((member) => {
+                            const isUnderWeek = member.weekVariance < 0
+                            const isOverWeek = member.weekVariance > 0
                             return (
-                              <tr key={staff.id} style={s.tableRow}>
+                              <tr key={member.id} style={s.tableRow}>
                                 <td style={s.tableCell}>
                                   <div style={s.staffCell}>
                                     <div
                                       style={{
                                         ...s.staffAvatar,
                                         background:
-                                          staff.gender === 'F'
+                                          member.gender === 'F'
                                             ? 'rgba(122,79,168,0.2)'
                                             : 'rgba(108,143,255,0.15)',
                                         color:
-                                          staff.gender === 'F'
+                                          member.gender === 'F'
                                             ? '#7a4fa8'
                                             : '#6c8fff',
                                       }}
                                     >
-                                      {staff.name
+                                      {member.name
                                         .split(' ')
                                         .map((n) => n[0])
                                         .join('')}
                                     </div>
                                     <div>
                                       <div style={s.staffCellName}>
-                                        {staff.name}
+                                        {member.name}
                                       </div>
                                       <div style={s.staffCellRole}>
-                                        {staff.roleCode}
+                                        {member.role}
                                       </div>
                                     </div>
                                   </div>
                                 </td>
                                 <td style={s.tableCell}>
                                   <span style={s.hoursValue}>
-                                    {staff.weekHours.toFixed(1)}h
+                                    {member.weekHours.toFixed(1)}h
                                   </span>
                                 </td>
                                 <td style={s.tableCell}>
@@ -1006,8 +1008,8 @@ function Rota() {
                                       borderRadius: '4px',
                                     }}
                                   >
-                                    {staff.weekVariance > 0 ? '+' : ''}
-                                    {staff.weekVariance.toFixed(1)}h
+                                    {member.weekVariance > 0 ? '+' : ''}
+                                    {member.weekVariance.toFixed(1)}h
                                     {isUnderWeek && (
                                       <FontAwesomeIcon
                                         icon='triangle-exclamation'
@@ -1070,6 +1072,7 @@ function Rota() {
       )}
 
       {/* Single month generate modal */}
+
       {generateTarget && (
         <GenerateModal
           onClose={() => setGenerateTarget(null)}
@@ -1078,6 +1081,7 @@ function Rota() {
           scopeMonth={generateTarget.month}
           monthLabel={generateTarget.label}
           leaveData={leaveData}
+          staffMap={staffMap}
         />
       )}
 
@@ -1087,6 +1091,7 @@ function Rota() {
           onClose={() => setShowBatchModal(false)}
           onApplyBatch={handleApplyBatch}
           monthRota={monthRota}
+          staffMap={staffMap}
         />
       )}
 
@@ -1100,6 +1105,7 @@ function Rota() {
               : currentRotaForWeek.late[editCell.day] || []
           }
           staffMap={staffMap}
+          staff={staff}
           onClose={() => setEditCell(null)}
           onSave={(updatedList) =>
             handleCellSave(editCell.day, editCell.shift, updatedList)

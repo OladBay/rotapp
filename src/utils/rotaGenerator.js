@@ -1,4 +1,3 @@
-import { mockStaff } from '../data/mockRota'
 import { getMonthWeeks, dateKey, toLocalDateString } from './dateUtils'
 import { getTimeOffRecords } from './timeOffStorage'
 
@@ -27,18 +26,20 @@ function isAbsent(staffId, date, absenceSet) {
 }
 
 // Generate rota for a single week, date-aware
-function generateWeekRota(monday, absenceSet) {
+function generateWeekRota(monday, absenceSet, staffMap) {
   const rota = {
     early: [],
     late: [],
     onCall: [],
   }
 
-  const onCallPool = mockStaff.filter((s) =>
+  const allStaff = Object.values(staffMap)
+
+  const onCallPool = allStaff.filter((s) =>
     ['manager', 'deputy', 'senior'].includes(s.role)
   )
 
-  const shiftEligible = mockStaff.filter(
+  const shiftEligible = allStaff.filter(
     (s) => !['manager', 'deputy', 'relief'].includes(s.role)
   )
 
@@ -83,7 +84,7 @@ export function generateMonthRota(year, month, staffMap, leaveData) {
   const absenceSet = buildAbsenceSet()
 
   weeks.forEach((monday) => {
-    const rota = generateWeekRota(monday, absenceSet)
+    const rota = generateWeekRota(monday, absenceSet, staffMap)
     const violations = checkViolations(rota, staffMap)
     const key = dateKey(monday)
     weekRotas[key] = rota

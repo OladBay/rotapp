@@ -1,9 +1,12 @@
 import { useState, useMemo, useCallback } from 'react'
+
 import { useAuth } from '../context/AuthContext'
+import { useRota } from '../context/RotaContext'
 import Navbar from '../components/layout/Navbar'
 import ShiftPickerCalendar from '../components/shared/ShiftPickerCalendar'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { useLocalStorage } from '../hooks/useLocalStorage'
+
 import {
   getWeekDates,
   formatDate,
@@ -36,7 +39,6 @@ import {
   acceptSwapRequest,
   declineSwapRequest,
 } from '../utils/swapRequests'
-import { mockStaff } from '../data/mockRota'
 import LeaveCalendar from '../components/shared/LeaveCalendar'
 
 const TODAY = new Date()
@@ -87,7 +89,7 @@ function Calendar() {
 
   // Swap respond modal — target (Staff C)
   const [respondSwap, setRespondSwap] = useState(null) // the swap request object
-
+  const { staff } = useRota()
   const staffId = user?.id
   const staffName = user?.name
 
@@ -97,10 +99,8 @@ function Calendar() {
   // All staff eligible to swap with (excluding self and non-swappable roles)
   const swappableStaff = useMemo(
     () =>
-      mockStaff.filter(
-        (s) => s.id !== staffId && SWAPPABLE_ROLES.includes(s.role)
-      ),
-    [staffId]
+      staff.filter((s) => s.id !== staffId && SWAPPABLE_ROLES.includes(s.role)),
+    [staff, staffId]
   )
 
   // Build a map of target staff's rostered shifts across all stored weeks
@@ -376,7 +376,7 @@ function Calendar() {
 
   const handleSubmitSwap = () => {
     if (!swapShift || !swapTargetId || !selectedTargetShift) return
-    const target = mockStaff.find((s) => s.id === swapTargetId)
+    const target = staff.find((s) => s.id === swapTargetId)
     createSwapRequest({
       initiatorId: staffId,
       initiatorName: staffName,
@@ -1373,8 +1373,7 @@ function Calendar() {
                   {selectedTargetShift && (
                     <div style={s.targetShiftCard}>
                       <div style={s.targetCardLabel}>
-                        {mockStaff.find((s) => s.id === swapTargetId)?.name}'s
-                        shift
+                        {staff.find((s) => s.id === swapTargetId)?.name}'s shift
                       </div>
                       {selectedTargetShift.availabilityOnly ? (
                         <>
@@ -1412,9 +1411,9 @@ function Calendar() {
                         style={{ flexShrink: 0 }}
                       />
                       <span>
-                        {mockStaff.find((s) => s.id === swapTargetId)?.name}'s
-                        shift has a sleep-in. If approved, you will inherit it.
-                        The manager will be informed.
+                        {staff.find((s) => s.id === swapTargetId)?.name}'s shift
+                        has a sleep-in. If approved, you will inherit it. The
+                        manager will be informed.
                       </span>
                     </div>
                   )}
@@ -1428,8 +1427,8 @@ function Calendar() {
                         />
                         <span>
                           Your shift has a sleep-in. If approved,{' '}
-                          {mockStaff.find((s) => s.id === swapTargetId)?.name}{' '}
-                          will inherit it. The manager will be informed.
+                          {staff.find((s) => s.id === swapTargetId)?.name} will
+                          inherit it. The manager will be informed.
                         </span>
                       </div>
                     )}

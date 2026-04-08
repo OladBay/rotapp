@@ -1,15 +1,22 @@
 import { useState } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { mockStaff } from '../../data/mockRota'
 
-function CellEditModal({ day, shift, staffList, onClose, onSave, staffMap }) {
+function CellEditModal({
+  day,
+  shift,
+  staffList,
+  onClose,
+  onSave,
+  staffMap,
+  staff = [],
+}) {
   const [current, setCurrent] = useState(staffList.map((e) => ({ ...e })))
   const [search, setSearch] = useState('')
 
   const isLate = shift === 'late'
 
   // Staff not already on this shift
-  const eligible = mockStaff.filter(
+  const eligible = staff.filter(
     (s) =>
       !['manager', 'deputy'].includes(s.role) &&
       !current.find((e) => e.id === s.id)
