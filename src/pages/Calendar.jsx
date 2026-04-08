@@ -1,12 +1,9 @@
 import { useState, useMemo, useCallback } from 'react'
-
 import { useAuth } from '../context/AuthContext'
 import { useRota } from '../context/RotaContext'
 import Navbar from '../components/layout/Navbar'
 import ShiftPickerCalendar from '../components/shared/ShiftPickerCalendar'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { useLocalStorage } from '../hooks/useLocalStorage'
-
 import {
   getWeekDates,
   formatDate,
@@ -22,15 +19,16 @@ import {
 import {
   addRequest,
   updateRequest,
-  loadRequests,
+  getShiftRequest,
   getRecentRequestWarning,
   pingRequest,
   getPingInfo,
 } from '../utils/cancelRequests'
 import {
-  getTimeOffForStaff,
   addTimeOff,
   generateTimeOffId,
+  getTimeOffForStaff,
+  getTimeOffForDateStr,
 } from '../utils/timeOffStorage'
 import {
   getSwapsForStaff,
@@ -43,67 +41,105 @@ import LeaveCalendar from '../components/shared/LeaveCalendar'
 
 const TODAY = new Date()
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-
-// Roles eligible for swapping — no managers or OL
 const SWAPPABLE_ROLES = ['senior', 'rcw', 'relief']
 
 function Calendar() {
   const { user } = useAuth()
-  const [monthRota] = useLocalStorage('rotapp_month_rota', {})
-  const [weekRotaState] = useLocalStorage('rotapp_week_rota', {
+  const {
+    staff,
+    monthRota,
+    timeOff,
+    refreshTimeOff,
+    swapRequests,
+    refreshSwaps,
+    cancelRequests,
+    refreshCancels,
+  } = useRota()
+
+  const [weekRotaState] = useState({
     early: Array(7).fill([]),
     late: Array(7).fill([]),
     onCall: Array(7).fill([]),
   })
 
-  // View state
+  // ── View state ──
   const [viewMode, setViewMode] = useState('week')
   const [currentMonday, setMonday] = useState(getMondayOfWeek(TODAY))
   const [currentYear, setCurrentYear] = useState(TODAY.getFullYear())
   const [hoveredMonth, setHoveredMonth] = useState(null)
 
-  // Shift detail / cancel modal
+  // ── Shift detail / cancel modal ──
   const [selectedShift, setSelectedShift] = useState(null)
   const [cancelReason, setCancelReason] = useState('')
   const [customReasonText, setCustomReasonText] = useState('')
   const [showReasonForm, setShowReasonForm] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
-  // Time-off modal
+  // ── Time-off modal ──
   const [showTimeOffModal, setShowTimeOffModal] = useState(false)
   const [timeOffType, setTimeOffType] = useState('annual_leave')
   const [timeOffSelectedDates, setTimeOffSelectedDates] = useState([])
   const [timeOffNote, setTimeOffNote] = useState('')
-  const [timeOffRefresh, setTimeOffRefresh] = useState(0)
   const [timeOffSubmitted, setTimeOffSubmitted] = useState(false)
 
-  // Swap modal — initiator (Staff A)
+  // ── Swap modal — initiator (Staff A) ──
   const [showSwapModal, setShowSwapModal] = useState(false)
-  const [swapShift, setSwapShift] = useState(null) // shift Staff A wants to swap
-  const [swapTargetId, setSwapTargetId] = useState('') // selected staff member
-  const [swapTargetShiftKey, setSwapTargetShiftKey] = useState('') // "date|type" of target's shift
+  const [swapShift, setSwapShift] = useState(null)
+  const [swapTargetId, setSwapTargetId] = useState('')
+  const [swapTargetShiftKey, setSwapTargetShiftKey] = useState('')
   const [swapNote, setSwapNote] = useState('')
   const [staffSearch, setStaffSearch] = useState('')
   const [swapSubmitted, setSwapSubmitted] = useState(false)
-  const [swapRefresh, setSwapRefresh] = useState(0)
 
-  // Swap respond modal — target (Staff C)
-  const [respondSwap, setRespondSwap] = useState(null) // the swap request object
-  const { staff } = useRota()
+  // ── Swap respond modal — target (Staff C) ──
+  const [respondSwap, setRespondSwap] = useState(null)
+
   const staffId = user?.id
   const staffName = user?.name
 
   const currentWeekKey = getGeneratorMondayKey(currentMonday)
   const currentWeekRota = monthRota[currentWeekKey] || weekRotaState
 
-  // All staff eligible to swap with (excluding self and non-swappable roles)
+  // ── Derived data from context ──
+  const myTimeOff = useMemo(
+    () => getTimeOffForStaff(timeOff, staffId || ''),
+    [timeOff, staffId]
+  )
+
+  const mySwaps = useMemo(
+    () => getSwapsForStaff(swapRequests, staffId || ''),
+    [swapRequests, staffId]
+  )
+
   const swappableStaff = useMemo(
     () =>
       staff.filter((s) => s.id !== staffId && SWAPPABLE_ROLES.includes(s.role)),
     [staff, staffId]
   )
 
-  // Build a map of target staff's rostered shifts across all stored weeks
+  // ── Rota helpers ──
+  const getRotaForDate = useCallback(
+    (date) => {
+      const monday = getMondayOfWeek(date)
+      const key = dateKey(monday)
+      return monthRota[key] || null
+    },
+    [monthRota]
+  )
+
+  const hasShiftOnDate = useCallback(
+    (date, sid) => {
+      const rota = getRotaForDate(date)
+      if (!rota) return false
+      const dayOfWeek = (date.getDay() + 6) % 7
+      return (
+        (rota.early?.[dayOfWeek] || []).some((s) => s.id === sid) ||
+        (rota.late?.[dayOfWeek] || []).some((s) => s.id === sid)
+      )
+    },
+    [getRotaForDate]
+  )
+
   const getShiftsForStaff = useCallback(
     (targetStaffId) => {
       const shifts = []
@@ -120,29 +156,22 @@ function Calendar() {
           const earlyEntry = (rota.early?.[dayIdx] || []).find(
             (s) => s.id === targetStaffId
           )
-          if (earlyEntry) {
+          if (earlyEntry)
             shifts.push({ date: dateStr, type: 'early', sleepIn: false })
-          }
           const lateEntry = (rota.late?.[dayIdx] || []).find(
             (s) => s.id === targetStaffId
           )
-          if (lateEntry) {
+          if (lateEntry)
             shifts.push({
               date: dateStr,
               type: 'late',
               sleepIn: lateEntry.sleepIn || false,
             })
-          }
         }
       })
       return shifts
     },
     [monthRota]
-  )
-
-  const targetShifts = useMemo(
-    () => (swapTargetId ? getShiftsForStaff(swapTargetId) : []),
-    [swapTargetId, getShiftsForStaff]
   )
 
   const selectedTargetShift = useMemo(() => {
@@ -151,7 +180,6 @@ function Calendar() {
     return { date, type, sleepIn: false, sameDay: sameDayFlag === 'sameday' }
   }, [swapTargetShiftKey])
 
-  // My shifts for the current week
   const myShiftsForWeek = useMemo(() => {
     const shifts = []
     for (let dayIdx = 0; dayIdx < 7; dayIdx++) {
@@ -163,7 +191,7 @@ function Calendar() {
       const dateStr = `${y}-${m}-${d}`
       const earlyStaff = currentWeekRota.early?.[dayIdx] || []
       const myEarly = earlyStaff.find((s) => s.id === staffId)
-      if (myEarly) {
+      if (myEarly)
         shifts.push({
           date: dateStr,
           day: dayIdx,
@@ -172,10 +200,9 @@ function Calendar() {
           sleepIn: false,
           home: user?.home || 'Meadowview House',
         })
-      }
       const lateStaff = currentWeekRota.late?.[dayIdx] || []
       const myLate = lateStaff.find((s) => s.id === staffId)
-      if (myLate) {
+      if (myLate)
         shifts.push({
           date: dateStr,
           day: dayIdx,
@@ -184,108 +211,68 @@ function Calendar() {
           sleepIn: myLate.sleepIn || false,
           home: user?.home || 'Meadowview House',
         })
-      }
     }
     return shifts
   }, [currentWeekRota, currentMonday, staffId, user?.home])
 
   const getShiftForDay = (date) => myShiftsForWeek.find((s) => s.date === date)
 
+  // ── Cancel request helpers ──
   const getShiftRequestStatus = (shift) => {
     if (!shift || !staffId) return null
-    const requests = loadRequests()
-    return requests.find(
-      (r) =>
-        r.staffId === staffId &&
-        r.shiftDate === shift.date &&
-        r.shiftType === shift.type
-    )
+    return getShiftRequest(cancelRequests, staffId, shift.date, shift.type)
   }
 
-  // Swap helpers — re-reads on swapRefresh
-  const mySwaps = useMemo(
-    () => getSwapsForStaff(staffId || ''),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [staffId, swapRefresh]
-  )
-
-  // Get the active swap for a specific shift (pending or awaiting_manager)
+  // ── Swap helpers ──
   const getActiveSwapForShift = (shift) => {
     if (!shift) return null
     return (
       mySwaps.find(
         (r) =>
-          (r.initiatorId === staffId &&
-            r.initiatorShift.date === shift.date &&
-            r.initiatorShift.type === shift.type &&
+          (r.initiator_id === staffId &&
+            r.initiator_shift.date === shift.date &&
+            r.initiator_shift.type === shift.type &&
             ['pending', 'awaiting_manager'].includes(r.status)) ||
-          (r.targetId === staffId &&
-            r.targetShift.date === shift.date &&
-            r.targetShift.type === shift.type &&
+          (r.target_id === staffId &&
+            r.target_shift.date === shift.date &&
+            r.target_shift.type === shift.type &&
             r.status === 'pending')
       ) || null
     )
   }
 
-  // Get the most recent resolved swap for a shift (approved/rejected/declined)
   const getResolvedSwapForShift = (shift) => {
     if (!shift) return null
     return (
       mySwaps
         .filter(
           (r) =>
-            ((r.initiatorId === staffId &&
-              r.initiatorShift.date === shift.date &&
-              r.initiatorShift.type === shift.type) ||
-              (r.targetId === staffId &&
-                r.targetShift.date === shift.date &&
-                r.targetShift.type === shift.type)) &&
+            ((r.initiator_id === staffId &&
+              r.initiator_shift.date === shift.date &&
+              r.initiator_shift.type === shift.type) ||
+              (r.target_id === staffId &&
+                r.target_shift.date === shift.date &&
+                r.target_shift.type === shift.type)) &&
             ['approved', 'rejected', 'declined', 'withdrawn'].includes(r.status)
         )
-        .sort((a, b) => new Date(b.resolvedAt) - new Date(a.resolvedAt))[0] ||
+        .sort((a, b) => new Date(b.resolved_at) - new Date(a.resolved_at))[0] ||
       null
     )
   }
 
-  // Incoming swap requests where I am the target and status is pending
   const incomingSwaps = useMemo(
     () =>
-      mySwaps.filter((r) => r.targetId === staffId && r.status === 'pending'),
+      mySwaps.filter((r) => r.target_id === staffId && r.status === 'pending'),
     [mySwaps, staffId]
   )
 
-  // Time-off helpers
-  const myTimeOff = useMemo(
-    () => getTimeOffForStaff(staffId || ''),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [staffId, timeOffRefresh]
-  )
-  const getTimeOffForDateStr = (dateStr) =>
-    myTimeOff.filter((e) => e.date === dateStr)
-
-  // Navigation
+  // ── Navigation ──
   const prevWeek = () => setMonday((prev) => addWeeks(prev, -1))
   const nextWeek = () => setMonday((prev) => addWeeks(prev, 1))
   const weekDates = getWeekDates(currentMonday)
   const startLabel = formatDate(weekDates[0])
   const endLabel = formatDate(weekDates[6])
   const yearMonths = useMemo(() => getYearMonths(currentYear), [currentYear])
-
-  const getRotaForDate = (date) => {
-    const monday = getMondayOfWeek(date)
-    const key = dateKey(monday)
-    return monthRota[key] || null
-  }
-
-  const hasShiftOnDate = (date, sid) => {
-    const rota = getRotaForDate(date)
-    if (!rota) return false
-    const dayOfWeek = (date.getDay() + 6) % 7
-    return (
-      (rota.early?.[dayOfWeek] || []).some((s) => s.id === sid) ||
-      (rota.late?.[dayOfWeek] || []).some((s) => s.id === sid)
-    )
-  }
 
   const handleMonthClick = (year, month) => {
     const firstOfMonth = new Date(year, month, 1)
@@ -294,28 +281,34 @@ function Calendar() {
     setViewMode('week')
   }
 
-  // ── Cancel request handlers ────────────────────────────────────────────
-
-  const handleWithdraw = (requestId) => {
-    updateRequest(requestId, {
+  // ── Cancel request handlers ──
+  const handleWithdraw = async (requestId) => {
+    await updateRequest(requestId, {
       status: 'withdrawn',
       withdrawnAt: new Date().toISOString(),
     })
+    refreshCancels()
     setSelectedShift(null)
   }
 
-  const handleSubmitRequest = () => {
+  const handleSubmitRequest = async () => {
     if (!cancelReason) return
     if (cancelReason === 'Other' && !customReasonText.trim()) return
     setSubmitting(true)
-    addRequest({
-      staffId,
-      staffName,
-      shiftDate: selectedShift.date,
-      shiftType: selectedShift.type,
-      reason: cancelReason,
-      customReason: cancelReason === 'Other' ? customReasonText : '',
-    })
+    await addRequest(
+      {
+        staffId,
+        staffName,
+        shiftDate: selectedShift.date,
+        shiftType: selectedShift.type,
+        reason: cancelReason,
+        customReason: cancelReason === 'Other' ? customReasonText : '',
+        homeId: user.home,
+        orgId: user.org_id,
+      },
+      cancelRequests
+    )
+    refreshCancels()
     setTimeout(() => {
       setSelectedShift(null)
       setCancelReason('')
@@ -325,23 +318,26 @@ function Calendar() {
     }, 500)
   }
 
-  // ── Time-off handlers ──────────────────────────────────────────────────
-
-  const handleSubmitTimeOff = () => {
+  // ── Time-off handlers ──
+  const handleSubmitTimeOff = async () => {
     if (timeOffSelectedDates.length === 0) return
-    timeOffSelectedDates.forEach((dateStr) => {
-      const [y, m, d] = dateStr.split('-').map(Number)
-      addTimeOff(new Date(y, m - 1, d), {
-        id: generateTimeOffId(),
-        staffId,
-        staffName,
-        type: timeOffType,
-        status: 'pending',
-        notes: timeOffNote || null,
-        requestedAt: new Date().toISOString(),
-      })
-    })
-    setTimeOffRefresh((n) => n + 1)
+    for (const dateStr of timeOffSelectedDates) {
+      await addTimeOff(
+        {
+          id: generateTimeOffId(),
+          staffId,
+          staffName,
+          date: dateStr,
+          type: timeOffType,
+          status: 'pending',
+          notes: timeOffNote || null,
+          requestedAt: new Date().toISOString(),
+        },
+        user.home,
+        user.org_id
+      )
+    }
+    refreshTimeOff()
     setTimeOffSubmitted(true)
   }
 
@@ -353,8 +349,7 @@ function Calendar() {
     setTimeOffSubmitted(false)
   }
 
-  // ── Swap handlers ──────────────────────────────────────────────────────
-
+  // ── Swap handlers ──
   const openSwapModal = (shift) => {
     setSwapShift(shift)
     setSwapTargetId('')
@@ -374,10 +369,10 @@ function Calendar() {
     setSwapSubmitted(false)
   }
 
-  const handleSubmitSwap = () => {
+  const handleSubmitSwap = async () => {
     if (!swapShift || !swapTargetId || !selectedTargetShift) return
     const target = staff.find((s) => s.id === swapTargetId)
-    createSwapRequest({
+    await createSwapRequest({
       initiatorId: staffId,
       initiatorName: staffName,
       initiatorShift: {
@@ -394,85 +389,79 @@ function Calendar() {
         sameDay: selectedTargetShift.sameDay || false,
       },
       note: swapNote,
+      homeId: user.home,
+      orgId: user.org_id,
     })
-    setSwapRefresh((n) => n + 1)
+    refreshSwaps()
     setSwapSubmitted(true)
   }
 
-  const handleWithdrawSwap = (swapId) => {
-    withdrawSwapRequest(swapId, staffId)
-    setSwapRefresh((n) => n + 1)
+  const handleWithdrawSwap = async (swapId) => {
+    await withdrawSwapRequest(swapId, staffId)
+    refreshSwaps()
     setSelectedShift(null)
   }
 
-  const handleAcceptSwap = (swapId) => {
-    acceptSwapRequest(swapId, staffId)
-    setSwapRefresh((n) => n + 1)
+  const handleAcceptSwap = async (swapId) => {
+    await acceptSwapRequest(swapId, staffId)
+    refreshSwaps()
     setRespondSwap(null)
   }
 
-  const handleDeclineSwap = (swapId) => {
-    declineSwapRequest(swapId, staffId)
-    setSwapRefresh((n) => n + 1)
+  const handleDeclineSwap = async (swapId) => {
+    await declineSwapRequest(swapId, staffId)
+    refreshSwaps()
     setRespondSwap(null)
   }
 
-  // Swap badge for a shift cell
+  // ── Swap badge ──
   const getSwapBadge = (shift) => {
     const active = getActiveSwapForShift(shift)
     if (active) {
-      if (active.status === 'pending' && active.initiatorId === staffId) {
+      if (active.status === 'pending' && active.initiator_id === staffId)
         return {
           label: 'Swap pending',
           color: '#c4883a',
           bg: 'rgba(196,136,58,0.15)',
           border: 'rgba(196,136,58,0.3)',
         }
-      }
-      if (active.status === 'pending' && active.targetId === staffId) {
+      if (active.status === 'pending' && active.target_id === staffId)
         return {
           label: 'Swap request',
           color: '#c4883a',
           bg: 'rgba(196,136,58,0.15)',
           border: 'rgba(196,136,58,0.3)',
         }
-      }
-      if (active.status === 'awaiting_manager') {
+      if (active.status === 'awaiting_manager')
         return {
           label: 'With manager',
           color: '#6c8fff',
           bg: 'rgba(108,143,255,0.12)',
           border: 'rgba(108,143,255,0.25)',
         }
-      }
     }
     const resolved = getResolvedSwapForShift(shift)
-    if (resolved?.status === 'approved') {
+    if (resolved?.status === 'approved')
       return {
         label: 'Swapped',
         color: '#2ecc8a',
         bg: 'rgba(46,204,138,0.12)',
         border: 'rgba(46,204,138,0.25)',
       }
-    }
-    if (resolved?.status === 'rejected' || resolved?.status === 'declined') {
+    if (resolved?.status === 'rejected' || resolved?.status === 'declined')
       return {
         label: 'Swap rejected',
         color: '#e85c3d',
         bg: 'rgba(232,92,61,0.1)',
         border: 'rgba(232,92,61,0.25)',
       }
-    }
     return null
   }
 
-  // Can Staff A initiate a new swap on this shift?
   const canInitiateSwap = (shift) => {
     if (!shift) return false
     if (!SWAPPABLE_ROLES.includes(user?.activeRole)) return false
-    // Block if there's already an active swap for this shift
-    const active = getActiveSwapForShift(shift)
-    return !active
+    return !getActiveSwapForShift(shift)
   }
 
   const isSwappableRole = SWAPPABLE_ROLES.includes(user?.activeRole)
@@ -501,7 +490,6 @@ function Calendar() {
                 <FontAwesomeIcon icon='calendar-plus' /> Request time off
               </button>
             )}
-            {/* Incoming swap requests badge */}
             {incomingSwaps.length > 0 && (
               <button
                 style={s.incomingSwapBtn}
@@ -555,7 +543,6 @@ function Calendar() {
 
             <div style={s.gridWrap}>
               <div style={s.grid}>
-                {/* Header row */}
                 <div style={s.colLabel} />
                 {DAYS.map((day, i) => {
                   const date = weekDates[i]
@@ -590,7 +577,6 @@ function Calendar() {
                   )
                 })}
 
-                {/* My Shifts row */}
                 <div style={s.shiftLabel}>
                   <div style={s.shiftName}>My Shifts</div>
                   <div style={s.shiftTime}>Your assigned shifts</div>
@@ -607,13 +593,16 @@ function Calendar() {
                     : null
                   const isPending = shiftRequest?.status === 'pending'
                   const isApproved = shiftRequest?.status === 'approved'
-                  const timeOffEntries = getTimeOffForDateStr(dateStr)
+                  const timeOffEntries = getTimeOffForDateStr(
+                    myTimeOff,
+                    dateStr
+                  )
                   const swapBadge = shift ? getSwapBadge(shift) : null
                   const hasIncomingForThisShift = shift
                     ? incomingSwaps.some(
                         (r) =>
-                          r.targetShift.date === shift.date &&
-                          r.targetShift.type === shift.type
+                          r.target_shift.date === shift.date &&
+                          r.target_shift.type === shift.type
                       )
                     : false
 
@@ -626,12 +615,11 @@ function Calendar() {
                       }}
                       onClick={() => {
                         if (!shift) return
-                        // If Staff C has an incoming swap on this cell, open respond modal
                         if (hasIncomingForThisShift) {
                           const incoming = incomingSwaps.find(
                             (r) =>
-                              r.targetShift.date === shift.date &&
-                              r.targetShift.type === shift.type
+                              r.target_shift.date === shift.date &&
+                              r.target_shift.type === shift.type
                           )
                           if (incoming) {
                             setRespondSwap(incoming)
@@ -641,7 +629,6 @@ function Calendar() {
                         setSelectedShift(shift)
                       }}
                     >
-                      {/* Leave badges */}
                       {timeOffEntries.map((e) => (
                         <div
                           key={e.id}
@@ -669,7 +656,6 @@ function Calendar() {
                         </div>
                       ))}
 
-                      {/* Swap badge */}
                       {swapBadge && (
                         <div
                           style={{
@@ -687,7 +673,6 @@ function Calendar() {
                         </div>
                       )}
 
-                      {/* Shift or off-day */}
                       {isApproved ? (
                         <div style={s.cancelledTag}>Cancelled</div>
                       ) : shift ? (
@@ -777,9 +762,8 @@ function Calendar() {
                   if (
                     date.getMonth() === month &&
                     hasShiftOnDate(date, staffId)
-                  ) {
+                  )
                     shiftCount++
-                  }
                 })
                 return (
                   <div
@@ -874,7 +858,7 @@ function Calendar() {
         )}
       </div>
 
-      {/* ── Shift detail modal ─────────────────────────────────────────── */}
+      {/* ── Shift detail modal ── */}
       {selectedShift && (
         <div
           style={s.overlay}
@@ -981,9 +965,8 @@ function Calendar() {
               const activeSwap = getActiveSwapForShift(selectedShift)
               const resolvedSwap = getResolvedSwapForShift(selectedShift)
 
-              if (activeSwap && activeSwap.initiatorId === staffId) {
-                // Staff A — their pending swap
-                const otherName = activeSwap.targetName
+              if (activeSwap && activeSwap.initiator_id === staffId) {
+                const otherName = activeSwap.target_name
                 const statusLabel =
                   activeSwap.status === 'awaiting_manager'
                     ? `${otherName} accepted — awaiting manager`
@@ -1015,7 +998,6 @@ function Calendar() {
                 resolvedSwap?.status === 'rejected' ||
                 resolvedSwap?.status === 'declined'
               ) {
-                // Allow Staff A to initiate a new swap
                 return (
                   <div style={s.swapStatusWrap}>
                     <div
@@ -1062,7 +1044,7 @@ function Calendar() {
                         icon='check'
                         style={{ fontSize: '11px' }}
                       />
-                      <span>Swap approved by {resolvedSwap.resolvedBy}</span>
+                      <span>Swap approved by {resolvedSwap.resolved_by}</span>
                     </div>
                   </div>
                 )
@@ -1092,9 +1074,13 @@ function Calendar() {
                       {pingInfo.canPing ? (
                         <button
                           style={s.pingBtn}
-                          onClick={() => {
-                            const updated = pingRequest(request.id, staffId)
-                            if (updated) setSelectedShift({ ...selectedShift })
+                          onClick={async () => {
+                            await pingRequest(
+                              request.id,
+                              staffId,
+                              cancelRequests
+                            )
+                            refreshCancels()
                           }}
                         >
                           Ping ({pingInfo.remainingPings})
@@ -1110,7 +1096,6 @@ function Calendar() {
               }
               if (request?.status === 'approved') return null
 
-              // Show swap + cancel buttons if no active swap
               const activeSwap = getActiveSwapForShift(selectedShift)
               if (!activeSwap) {
                 if (!showReasonForm) {
@@ -1145,6 +1130,7 @@ function Calendar() {
                   )
                 }
                 const { shouldWarn, message } = getRecentRequestWarning(
+                  cancelRequests,
                   staffId,
                   selectedShift.date,
                   selectedShift.type
@@ -1223,7 +1209,7 @@ function Calendar() {
         </div>
       )}
 
-      {/* ── Swap initiation modal (Staff A) ───────────────────────────── */}
+      {/* ── Swap initiation modal (Staff A) ── */}
       {showSwapModal && (
         <div style={s.overlay} onClick={closeSwapModal}>
           <div style={s.modal} onClick={(e) => e.stopPropagation()}>
@@ -1257,7 +1243,6 @@ function Calendar() {
             ) : (
               <>
                 <div style={s.modalBody}>
-                  {/* Your shift */}
                   <div style={s.swapShiftCard}>
                     <div style={s.swapCardLabel}>Your shift</div>
                     <div style={s.swapCardMain}>
@@ -1283,7 +1268,6 @@ function Calendar() {
                     />
                   </div>
 
-                  {/* Pick staff — searchable */}
                   <div style={{ position: 'relative' }}>
                     <div style={s.fieldLabel}>Swap with</div>
                     <input
@@ -1328,7 +1312,7 @@ function Calendar() {
                                   fontFamily: 'DM Mono, monospace',
                                 }}
                               >
-                                {st.roleCode}
+                                {st.role}
                               </span>
                             </div>
                           ))}
@@ -1351,7 +1335,6 @@ function Calendar() {
                     )}
                   </div>
 
-                  {/* Pick their shift — calendar picker */}
                   {swapTargetId && (
                     <div>
                       <div style={s.fieldLabel}>Their shift to swap</div>
@@ -1369,7 +1352,6 @@ function Calendar() {
                     </div>
                   )}
 
-                  {/* Their shift preview */}
                   {selectedTargetShift && (
                     <div style={s.targetShiftCard}>
                       <div style={s.targetCardLabel}>
@@ -1403,7 +1385,6 @@ function Calendar() {
                     </div>
                   )}
 
-                  {/* Sleep-in warning */}
                   {selectedTargetShift?.sleepIn && (
                     <div style={s.swapWarn}>
                       <FontAwesomeIcon
@@ -1433,7 +1414,6 @@ function Calendar() {
                       </div>
                     )}
 
-                  {/* Note */}
                   <div>
                     <div style={s.fieldLabel}>Note (optional)</div>
                     <textarea
@@ -1471,7 +1451,7 @@ function Calendar() {
         </div>
       )}
 
-      {/* ── Swap respond modal (Staff C) ───────────────────────────────── */}
+      {/* ── Swap respond modal (Staff C) ── */}
       {respondSwap && (
         <div style={s.overlay} onClick={() => setRespondSwap(null)}>
           <div style={s.modal} onClick={(e) => e.stopPropagation()}>
@@ -1481,7 +1461,7 @@ function Calendar() {
                   icon='right-left'
                   style={{ marginRight: '8px', color: '#6c8fff' }}
                 />
-                Swap request from {respondSwap.initiatorName}
+                Swap request from {respondSwap.initiator_name}
               </div>
               <button style={s.closeBtn} onClick={() => setRespondSwap(null)}>
                 <FontAwesomeIcon icon='xmark' />
@@ -1489,28 +1469,31 @@ function Calendar() {
             </div>
             <div style={s.modalBody}>
               <div
-                style={{ fontSize: '13px', color: '#9499b0', lineHeight: 1.5 }}
+                style={{
+                  fontSize: '13px',
+                  color: '#9499b0',
+                  lineHeight: 1.5,
+                }}
               >
-                {respondSwap.initiatorName} wants to swap shifts with you.
+                {respondSwap.initiator_name} wants to swap shifts with you.
                 Accept or decline below.
               </div>
 
-              {/* Their shift */}
               <div style={s.swapShiftCard}>
                 <div style={s.swapCardLabel}>
-                  {respondSwap.initiatorName} gives up
+                  {respondSwap.initiator_name} gives up
                 </div>
                 <div style={s.swapCardMain}>
-                  {respondSwap.initiatorShift.type === 'early'
+                  {respondSwap.initiator_shift.type === 'early'
                     ? 'Early'
                     : 'Late'}{' '}
-                  · {respondSwap.initiatorShift.date}
+                  · {respondSwap.initiator_shift.date}
                 </div>
                 <div style={s.swapCardSub}>
-                  {respondSwap.initiatorShift.type === 'early'
+                  {respondSwap.initiator_shift.type === 'early'
                     ? '07:00–14:30'
                     : '14:00–23:00'}
-                  {respondSwap.initiatorShift.sleepIn ? ' · Sleep-in' : ''}
+                  {respondSwap.initiator_shift.sleepIn ? ' · Sleep-in' : ''}
                 </div>
               </div>
 
@@ -1525,40 +1508,37 @@ function Calendar() {
                 />
               </div>
 
-              {/* Your shift */}
               <div style={s.targetShiftCard}>
                 <div style={s.targetCardLabel}>
-                  {respondSwap.targetShift.sameDay
+                  {respondSwap.target_shift.sameDay
                     ? 'Same day — you cover'
                     : 'You give up'}
                 </div>
                 <div style={s.swapCardMain}>
-                  {respondSwap.targetShift.type === 'early' ? 'Early' : 'Late'}{' '}
-                  · {respondSwap.targetShift.date}
+                  {respondSwap.target_shift.type === 'early' ? 'Early' : 'Late'}{' '}
+                  · {respondSwap.target_shift.date}
                 </div>
                 <div style={s.swapCardSub}>
-                  {respondSwap.targetShift.type === 'early'
+                  {respondSwap.target_shift.type === 'early'
                     ? '07:00–14:30'
                     : '14:00–23:00'}
-                  {respondSwap.targetShift.sleepIn ? ' · Sleep-in' : ''}
+                  {respondSwap.target_shift.sleepIn ? ' · Sleep-in' : ''}
                 </div>
               </div>
 
-              {/* Sleep-in warning */}
-              {respondSwap.initiatorShift.sleepIn && (
+              {respondSwap.initiator_shift.sleepIn && (
                 <div style={s.swapWarn}>
                   <FontAwesomeIcon
                     icon='triangle-exclamation'
                     style={{ flexShrink: 0 }}
                   />
                   <span>
-                    If you accept, you will inherit {respondSwap.initiatorName}
-                    's sleep-in on {respondSwap.initiatorShift.date}.
+                    If you accept, you will inherit {respondSwap.initiator_name}
+                    's sleep-in on {respondSwap.initiator_shift.date}.
                   </span>
                 </div>
               )}
 
-              {/* Initiator's note */}
               {respondSwap.note && (
                 <div style={s.swapNote}>
                   <div
@@ -1568,7 +1548,7 @@ function Calendar() {
                       marginBottom: '4px',
                     }}
                   >
-                    Note from {respondSwap.initiatorName}
+                    Note from {respondSwap.initiator_name}
                   </div>
                   <div style={{ fontSize: '13px', color: '#9499b0' }}>
                     {respondSwap.note}
@@ -1599,7 +1579,7 @@ function Calendar() {
         </div>
       )}
 
-      {/* ── Time-off modal ─────────────────────────────────────────────── */}
+      {/* ── Time-off modal ── */}
       {showTimeOffModal && (
         <div style={s.overlay} onClick={closeTimeOffModal}>
           <div style={s.modal} onClick={(e) => e.stopPropagation()}>
@@ -2211,7 +2191,6 @@ const s = {
     maxWidth: '300px',
     marginBottom: '8px',
   },
-  // Swap-specific styles
   swapShiftCard: {
     background: 'rgba(108,143,255,0.07)',
     border: '1px solid rgba(108,143,255,0.2)',

@@ -1,184 +1,157 @@
-const SWAP_KEY = 'rotapp_swap_requests'
-
-// ── Helpers ────────────────────────────────────────────────────────────────
-
-function loadAll() {
-  try {
-    const stored = localStorage.getItem(SWAP_KEY)
-    return stored ? JSON.parse(stored) : []
-  } catch {
-    return []
-  }
-}
-
-function saveAll(requests) {
-  try {
-    localStorage.setItem(SWAP_KEY, JSON.stringify(requests))
-  } catch {
-    console.error('Failed to save swap requests')
-  }
-}
+import { supabase } from '../lib/supabase'
 
 function generateId() {
   return `swap_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
 }
 
-// ── Read ───────────────────────────────────────────────────────────────────
+// ── Read helpers (operate on context array) ────────────────────────────────
 
-export function getSwapRequests() {
-  return loadAll()
-}
-
-export function getSwapRequestById(id) {
-  return loadAll().find((r) => r.id === id) || null
-}
-
-// All swaps where this staff is initiator OR target — for calendar badge
-export function getSwapsForStaff(staffId) {
-  return loadAll().filter(
-    (r) => r.initiatorId === staffId || r.targetId === staffId
+export function getSwapsForStaff(swapArray, staffId) {
+  return (swapArray || []).filter(
+    (r) => r.initiator_id === staffId || r.target_id === staffId
   )
 }
 
-// Pending swaps awaiting manager review (Staff C has accepted)
-export function getPendingManagerSwaps() {
-  return loadAll().filter((r) => r.status === 'awaiting_manager')
+export function getPendingManagerSwaps(swapArray) {
+  return (swapArray || []).filter((r) => r.status === 'awaiting_manager')
 }
 
-// Count for navbar badge
-export function getPendingSwapCount() {
-  return getPendingManagerSwaps().length
+export function getPendingSwapCount(swapArray) {
+  return getPendingManagerSwaps(swapArray).length
 }
 
-// ── Write ──────────────────────────────────────────────────────────────────
+export function getSwapRequestById(swapArray, id) {
+  return (swapArray || []).find((r) => r.id === id) || null
+}
 
-// Staff A submits a swap request
-export function createSwapRequest({
+// ── Write (Supabase) ───────────────────────────────────────────────────────
+
+export async function createSwapRequest({
   initiatorId,
   initiatorName,
-  initiatorShift, // { date, type, sleepIn }
+  initiatorShift,
   targetId,
   targetName,
-  targetShift, // { date, type, sleepIn }
+  targetShift,
   note,
+  homeId,
+  orgId,
 }) {
-  const requests = loadAll()
   const newRequest = {
     id: generateId(),
-    initiatorId,
-    initiatorName,
-    initiatorShift, // snapshot at time of submission
-    targetId,
-    targetName,
-    targetShift, // snapshot at time of submission
+    org_id: orgId,
+    home_id: homeId,
+    initiator_id: initiatorId,
+    initiator_name: initiatorName,
+    initiator_shift: initiatorShift,
+    target_id: targetId,
+    target_name: targetName,
+    target_shift: targetShift,
     note: note || null,
-    status: 'pending', // pending → awaiting_manager → approved | rejected
-    // pending → withdrawn (Staff A)
-    // pending → declined (Staff C)
-    createdAt: new Date().toISOString(),
-    // Filled in as flow progresses:
-    targetRespondedAt: null,
-    managerNote: null,
-    resolvedBy: null,
-    resolvedAt: null,
+    status: 'pending',
+    created_at: new Date().toISOString(),
+    target_responded_at: null,
+    manager_note: null,
+    resolved_by: null,
+    resolved_at: null,
   }
-  requests.push(newRequest)
-  saveAll(requests)
+  const { error } = await supabase
+    .from('rotapp_swap_requests')
+    .insert(newRequest)
+  if (error) {
+    console.error('createSwapRequest error:', error)
+    throw error
+  }
   return newRequest
 }
 
-// Staff A withdraws before Staff C responds
-export function withdrawSwapRequest(id, initiatorId) {
-  const requests = loadAll()
-  const idx = requests.findIndex(
-    (r) =>
-      r.id === id && r.initiatorId === initiatorId && r.status === 'pending'
-  )
-  if (idx === -1) return null
-  requests[idx] = {
-    ...requests[idx],
-    status: 'withdrawn',
-    resolvedAt: new Date().toISOString(),
+export async function withdrawSwapRequest(id, initiatorId) {
+  const { error } = await supabase
+    .from('rotapp_swap_requests')
+    .update({
+      status: 'withdrawn',
+      resolved_at: new Date().toISOString(),
+    })
+    .eq('id', id)
+    .eq('initiator_id', initiatorId)
+    .eq('status', 'pending')
+  if (error) {
+    console.error('withdrawSwapRequest error:', error)
+    throw error
   }
-  saveAll(requests)
-  return requests[idx]
 }
 
-// Staff C declines
-export function declineSwapRequest(id, targetId) {
-  const requests = loadAll()
-  const idx = requests.findIndex(
-    (r) => r.id === id && r.targetId === targetId && r.status === 'pending'
-  )
-  if (idx === -1) return null
-  requests[idx] = {
-    ...requests[idx],
-    status: 'declined',
-    targetRespondedAt: new Date().toISOString(),
-    resolvedAt: new Date().toISOString(),
+export async function declineSwapRequest(id, targetId) {
+  const { error } = await supabase
+    .from('rotapp_swap_requests')
+    .update({
+      status: 'declined',
+      target_responded_at: new Date().toISOString(),
+      resolved_at: new Date().toISOString(),
+    })
+    .eq('id', id)
+    .eq('target_id', targetId)
+    .eq('status', 'pending')
+  if (error) {
+    console.error('declineSwapRequest error:', error)
+    throw error
   }
-  saveAll(requests)
-  return requests[idx]
 }
 
-// Staff C accepts — moves to awaiting manager
-export function acceptSwapRequest(id, targetId) {
-  const requests = loadAll()
-  const idx = requests.findIndex(
-    (r) => r.id === id && r.targetId === targetId && r.status === 'pending'
-  )
-  if (idx === -1) return null
-  requests[idx] = {
-    ...requests[idx],
-    status: 'awaiting_manager',
-    targetRespondedAt: new Date().toISOString(),
+export async function acceptSwapRequest(id, targetId) {
+  const { error } = await supabase
+    .from('rotapp_swap_requests')
+    .update({
+      status: 'awaiting_manager',
+      target_responded_at: new Date().toISOString(),
+    })
+    .eq('id', id)
+    .eq('target_id', targetId)
+    .eq('status', 'pending')
+  if (error) {
+    console.error('acceptSwapRequest error:', error)
+    throw error
   }
-  saveAll(requests)
-  return requests[idx]
 }
 
-// Manager approves
-export function approveSwapRequest(id, managerName) {
-  const requests = loadAll()
-  const idx = requests.findIndex(
-    (r) => r.id === id && r.status === 'awaiting_manager'
-  )
-  if (idx === -1) return null
-  requests[idx] = {
-    ...requests[idx],
-    status: 'approved',
-    resolvedBy: managerName,
-    resolvedAt: new Date().toISOString(),
+export async function approveSwapRequest(id, managerName) {
+  const { error } = await supabase
+    .from('rotapp_swap_requests')
+    .update({
+      status: 'approved',
+      resolved_by: managerName,
+      resolved_at: new Date().toISOString(),
+    })
+    .eq('id', id)
+    .eq('status', 'awaiting_manager')
+  if (error) {
+    console.error('approveSwapRequest error:', error)
+    throw error
   }
-  saveAll(requests)
-  return requests[idx]
 }
 
-// Manager rejects
-export function rejectSwapRequest(id, managerName, note) {
-  const requests = loadAll()
-  const idx = requests.findIndex(
-    (r) => r.id === id && r.status === 'awaiting_manager'
-  )
-  if (idx === -1) return null
-  requests[idx] = {
-    ...requests[idx],
-    status: 'rejected',
-    managerNote: note || null,
-    resolvedBy: managerName,
-    resolvedAt: new Date().toISOString(),
+export async function rejectSwapRequest(id, managerName, note) {
+  const { error } = await supabase
+    .from('rotapp_swap_requests')
+    .update({
+      status: 'rejected',
+      manager_note: note || null,
+      resolved_by: managerName,
+      resolved_at: new Date().toISOString(),
+    })
+    .eq('id', id)
+    .eq('status', 'awaiting_manager')
+  if (error) {
+    console.error('rejectSwapRequest error:', error)
+    throw error
   }
-  saveAll(requests)
-  return requests[idx]
 }
 
 // ── Rota mutation ──────────────────────────────────────────────────────────
 
-// Called after manager approves — swaps the two staff in monthRota
-// Returns the updated monthRota object
-export function applySwapToRota(swapRequest, monthRota) {
-  const { initiatorId, initiatorShift, targetId, targetShift } = swapRequest
-  const updated = JSON.parse(JSON.stringify(monthRota)) // deep clone
+// Called after manager approves — swaps the two staff in Supabase rota
+export async function applySwapToRota(swapRequest, homeId, orgId) {
+  const { initiator_id, initiator_shift, target_id, target_shift } = swapRequest
 
   function getMondayKey(dateStr) {
     const [y, m, d] = dateStr.split('-').map(Number)
@@ -200,70 +173,85 @@ export function applySwapToRota(swapRequest, monthRota) {
     return Math.round((date - monday) / (1000 * 60 * 60 * 24))
   }
 
-  function removeStaffFromShift(rota, mondayKey, shiftType, dayIdx, staffId) {
-    if (!rota[mondayKey]) return
-    const shiftArr = rota[mondayKey][shiftType]?.[dayIdx]
-    if (!shiftArr) return
-    rota[mondayKey][shiftType][dayIdx] = shiftArr.filter(
-      (s) => s.id !== staffId
-    )
+  const iMondayKey = getMondayKey(initiator_shift.date)
+  const iDayIdx = getDayIndex(initiator_shift.date, iMondayKey)
+  const tMondayKey = getMondayKey(target_shift.date)
+  const tDayIdx = getDayIndex(target_shift.date, tMondayKey)
+
+  // Fetch both weeks (may be the same week)
+  const weekKeysToFetch = [...new Set([iMondayKey, tMondayKey])]
+  const { data: rotaRows, error: fetchError } = await supabase
+    .from('rotapp_month_rota')
+    .select('week_key, rota_data')
+    .eq('home_id', homeId)
+    .eq('org_id', orgId)
+    .in('week_key', weekKeysToFetch)
+
+  if (fetchError) {
+    console.error('applySwapToRota fetch error:', fetchError)
+    throw fetchError
   }
 
-  function addStaffToShift(
-    rota,
-    mondayKey,
-    shiftType,
-    dayIdx,
-    staffId,
-    sleepIn
-  ) {
-    if (!rota[mondayKey]) return
-    if (!rota[mondayKey][shiftType]) return
-    if (!rota[mondayKey][shiftType][dayIdx]) return
-    // Avoid duplicates
-    const already = rota[mondayKey][shiftType][dayIdx].some(
+  const rotaMap = {}
+  ;(rotaRows || []).forEach((row) => {
+    rotaMap[row.week_key] = JSON.parse(JSON.stringify(row.rota_data))
+  })
+
+  function removeFromShift(weekKey, shiftType, dayIdx, staffId) {
+    if (!rotaMap[weekKey]?.[shiftType]?.[dayIdx]) return
+    rotaMap[weekKey][shiftType][dayIdx] = rotaMap[weekKey][shiftType][
+      dayIdx
+    ].filter((s) => s.id !== staffId)
+  }
+
+  function addToShift(weekKey, shiftType, dayIdx, staffId, sleepIn) {
+    if (!rotaMap[weekKey]?.[shiftType]?.[dayIdx]) return
+    const already = rotaMap[weekKey][shiftType][dayIdx].some(
       (s) => s.id === staffId
     )
     if (!already) {
-      rota[mondayKey][shiftType][dayIdx].push({
+      rotaMap[weekKey][shiftType][dayIdx].push({
         id: staffId,
         sleepIn: sleepIn || false,
       })
     }
   }
 
-  const iMondayKey = getMondayKey(initiatorShift.date)
-  const iDayIdx = getDayIndex(initiatorShift.date, iMondayKey)
-  const tMondayKey = getMondayKey(targetShift.date)
-  const tDayIdx = getDayIndex(targetShift.date, tMondayKey)
-
-  // Remove initiator from their shift, add target
-  removeStaffFromShift(
-    updated,
+  // Swap initiator out, target in — on initiator's shift
+  removeFromShift(iMondayKey, initiator_shift.type, iDayIdx, initiator_id)
+  addToShift(
     iMondayKey,
-    initiatorShift.type,
+    initiator_shift.type,
     iDayIdx,
-    initiatorId
-  )
-  addStaffToShift(
-    updated,
-    iMondayKey,
-    initiatorShift.type,
-    iDayIdx,
-    targetId,
-    initiatorShift.sleepIn
+    target_id,
+    initiator_shift.sleepIn
   )
 
-  // Remove target from their shift, add initiator
-  removeStaffFromShift(updated, tMondayKey, targetShift.type, tDayIdx, targetId)
-  addStaffToShift(
-    updated,
+  // Swap target out, initiator in — on target's shift
+  removeFromShift(tMondayKey, target_shift.type, tDayIdx, target_id)
+  addToShift(
     tMondayKey,
-    targetShift.type,
+    target_shift.type,
     tDayIdx,
-    initiatorId,
-    targetShift.sleepIn
+    initiator_id,
+    target_shift.sleepIn
   )
 
-  return updated
+  // Upsert both weeks back
+  const upserts = weekKeysToFetch.map((wk) => ({
+    home_id: homeId,
+    org_id: orgId,
+    week_key: wk,
+    rota_data: rotaMap[wk],
+    updated_at: new Date().toISOString(),
+  }))
+
+  const { error: upsertError } = await supabase
+    .from('rotapp_month_rota')
+    .upsert(upserts, { onConflict: 'home_id,week_key' })
+
+  if (upsertError) {
+    console.error('applySwapToRota upsert error:', upsertError)
+    throw upsertError
+  }
 }

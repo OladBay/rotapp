@@ -11,10 +11,10 @@ function GenerateModal({
   scopeYear,
   scopeMonth,
   monthLabel,
-  leaveData,
   staffMap,
+  timeOff,
 }) {
-  const [step, setStep] = useState(1) // 1 = generating, 2 = review
+  const [step, setStep] = useState(1)
   const [monthResult, setMonthResult] = useState(null)
   const [overrideChecked, setOverride] = useState(false)
   const [generating, setGenerating] = useState(false)
@@ -44,7 +44,7 @@ function GenerateModal({
     addLog('  1 permanent staff per shift and on sleep-in', '')
     await sleep(350)
 
-    const result = generateMonthRota(scopeYear, scopeMonth, staffMap, leaveData)
+    const result = generateMonthRota(scopeYear, scopeMonth, staffMap, timeOff)
     setMonthResult(result)
 
     const allViolations = Object.values(result.weekViolations).flat()
@@ -74,7 +74,6 @@ function GenerateModal({
     setStep(2)
   }
 
-  // Derived violation totals
   const allMonthViolations = monthResult
     ? Object.values(monthResult.weekViolations).flat()
     : []
@@ -93,9 +92,11 @@ function GenerateModal({
     setOverride(false)
     setExpandedWeek(null)
   }
+
   useEffect(() => {
     runGeneration()
   }, [])
+
   return (
     <div style={s.overlay} onClick={onClose}>
       <div style={s.modal} onClick={(e) => e.stopPropagation()}>
@@ -155,7 +156,7 @@ function GenerateModal({
           ))}
         </div>
 
-        {/* ── STEP 1: GENERATING ── */}
+        {/* Step 1: Generating */}
         {step === 1 && (
           <div style={s.body}>
             <div style={s.generatingWrap}>
@@ -196,11 +197,10 @@ function GenerateModal({
           </div>
         )}
 
-        {/* ── STEP 2: REVIEW ── */}
+        {/* Step 2: Review */}
         {step === 2 && monthResult && (
           <>
             <div style={s.body}>
-              {/* Stats */}
               <div style={s.reviewStats}>
                 <div style={s.reviewStat}>
                   <div style={s.reviewStatVal}>{monthResult.weeks.length}</div>
@@ -248,7 +248,6 @@ function GenerateModal({
                 </div>
               </div>
 
-              {/* All clear or violations */}
               {allMonthViolations.length === 0 ? (
                 <div style={s.allGood}>
                   <FontAwesomeIcon icon='check' /> Fully compliant across all{' '}
@@ -323,7 +322,6 @@ function GenerateModal({
                 </div>
               )}
 
-              {/* Override checkbox */}
               {hardViolations.length > 0 && (
                 <div style={s.overrideRow}>
                   <input
@@ -341,7 +339,6 @@ function GenerateModal({
               )}
             </div>
 
-            {/* Footer */}
             <div style={s.footer}>
               <button style={s.secondaryBtn} onClick={handleRegenerate}>
                 <FontAwesomeIcon icon='arrow-right-arrow-left' /> Regenerate
@@ -470,11 +467,7 @@ const s = {
     justifyContent: 'center',
     flexShrink: 0,
   },
-  steps: {
-    display: 'flex',
-    alignItems: 'center',
-    padding: '20px 28px 0',
-  },
+  steps: { display: 'flex', alignItems: 'center', padding: '20px 28px 0' },
   stepItem: { display: 'flex', alignItems: 'center', gap: '8px' },
   stepNum: {
     width: '26px',
@@ -493,11 +486,7 @@ const s = {
     background: 'rgba(255,255,255,0.1)',
     margin: '0 8px',
   },
-  body: {
-    padding: '24px 28px',
-    overflowY: 'auto',
-    flex: 1,
-  },
+  body: { padding: '24px 28px', overflowY: 'auto', flex: 1 },
   generatingWrap: {
     display: 'flex',
     flexDirection: 'column',
@@ -561,11 +550,7 @@ const s = {
     fontFamily: 'Syne, sans-serif',
     color: '#e8eaf0',
   },
-  reviewStatLabel: {
-    fontSize: '11px',
-    color: '#9499b0',
-    marginTop: '4px',
-  },
+  reviewStatLabel: { fontSize: '11px', color: '#9499b0', marginTop: '4px' },
   allGood: {
     background: 'rgba(46,204,138,0.08)',
     border: '1px solid rgba(46,204,138,0.2)',

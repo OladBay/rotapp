@@ -1,21 +1,16 @@
 import { getMonthWeeks, dateKey, toLocalDateString } from './dateUtils'
-import { getTimeOffRecords } from './timeOffStorage'
 
-// Build a Set of 'staffId_YYYY-MM-DD' keys from approved rotapp_time_off records
-function buildAbsenceSet() {
+// Build a Set of 'staffId_YYYY-MM-DD' keys from approved time-off entries
+function buildAbsenceSet(timeOffArray = []) {
   const absent = new Set()
   try {
-    const records = getTimeOffRecords()
-    Object.entries(records).forEach(([dateStr, entries]) => {
-      if (!Array.isArray(entries)) return
-      entries.forEach((entry) => {
-        if (entry.status === 'approved' && entry.staffId) {
-          absent.add(`${entry.staffId}_${dateStr}`)
-        }
-      })
+    timeOffArray.forEach((entry) => {
+      if (entry.status === 'approved' && entry.staff_id && entry.date) {
+        absent.add(`${entry.staff_id}_${entry.date}`)
+      }
     })
   } catch (e) {
-    console.warn('rotaGenerator: could not read time-off records', e)
+    console.warn('rotaGenerator: could not build absence set', e)
   }
   return absent
 }
@@ -74,14 +69,12 @@ function generateWeekRota(monday, absenceSet, staffMap) {
   return rota
 }
 
-// Generate rota for every week in a given month
-export function generateMonthRota(year, month, staffMap, leaveData) {
+export function generateMonthRota(year, month, staffMap, timeOffArray = []) {
   const weeks = getMonthWeeks(year, month)
   const weekRotas = {}
   const weekViolations = {}
 
-  // Always build from rotapp_time_off — ignore legacy leaveData param
-  const absenceSet = buildAbsenceSet()
+  const absenceSet = buildAbsenceSet(timeOffArray)
 
   weeks.forEach((monday) => {
     const rota = generateWeekRota(monday, absenceSet, staffMap)

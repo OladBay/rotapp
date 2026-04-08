@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { useRota } from '../../context/RotaContext'
 import { getTimeOffForStaff } from '../../utils/timeOffStorage'
 
 const DAYS = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su']
@@ -31,9 +32,11 @@ function LeaveCalendar({ staffId, selectedDates = [], onSelectionChange }) {
   const [viewYear, setViewYear] = useState(today.getFullYear())
   const [viewMonth, setViewMonth] = useState(today.getMonth())
 
+  const { timeOff } = useRota()
+
   const existingLeave = useMemo(
-    () => getTimeOffForStaff(staffId || ''),
-    [staffId]
+    () => getTimeOffForStaff(timeOff, staffId || ''),
+    [timeOff, staffId]
   )
 
   const blockedMap = useMemo(() => {

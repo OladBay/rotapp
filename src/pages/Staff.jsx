@@ -1,20 +1,20 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
+import { useRota } from '../context/RotaContext'
 import { useNavigate } from 'react-router-dom'
 import Navbar from '../components/layout/Navbar'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { useLocalStorage } from '../hooks/useLocalStorage'
 import { supabase } from '../lib/supabase'
 import InviteModal from '../components/shared/InviteModal'
 import {
-  loadRequests,
-  updateRequest,
   getPendingRequests,
   getAllRequests,
+  updateRequest,
+  getPendingCancelCount,
 } from '../utils/cancelRequests'
 import {
   getPendingManagerSwaps,
-  getSwapRequests,
+  getPendingSwapCount,
   approveSwapRequest,
   rejectSwapRequest,
   applySwapToRota,
@@ -22,9 +22,11 @@ import {
 import {
   getTimeOffForStaff,
   addTimeOff,
+  approveTimeOff,
   removeTimeOff,
   generateTimeOffId,
   getPendingTimeOffCount,
+  removeStaffFromRotaOnLeave,
 } from '../utils/timeOffStorage'
 import LeaveCalendar from '../components/shared/LeaveCalendar'
 import { fetchHomes } from '../utils/homesData'
@@ -75,26 +77,28 @@ const TYPE_STYLES = {
 
 function Staff() {
   const { user } = useAuth()
+  const {
+    timeOff,
+    refreshTimeOff,
+    swapRequests,
+    refreshSwaps,
+    cancelRequests,
+    refreshCancels,
+    refreshMonthRota,
+  } = useRota()
   const navigate = useNavigate()
 
   const isOLorAdmin = ['operationallead', 'superadmin'].includes(
     user?.activeRole
   )
 
-  // ── Supabase staff state ──
+  // ── Staff state ──
   const [allStaff, setAllStaff] = useState([])
   const [staffLoading, setStaffLoading] = useState(true)
   const [staffError, setStaffError] = useState('')
   const [staffRefresh, setStaffRefresh] = useState(0)
   const [homes, setHomes] = useState([])
-
-  // ── OL home filter ──
   const [homeFilter, setHomeFilter] = useState('all')
-
-  useEffect(() => {
-    if (!user) return
-    fetchHomes(user.activeRole, user.home, user.org_id).then(setHomes)
-  }, [user])
 
   // ── UI state ──
   const [showInviteModal, setShowInviteModal] = useState(false)
@@ -106,24 +110,26 @@ function Staff() {
   const [leaveModalType, setLeaveModalType] = useState('annual_leave')
   const [leaveSelectedDates, setLeaveSelectedDates] = useState([])
   const [leaveNotes, setLeaveNotes] = useState('')
-  const [leaveRefresh, setLeaveRefresh] = useState(0)
   const [selectedLeaveEntry, setSelectedLeaveEntry] = useState(null)
 
-  // ── Request state ──
-  const [requests, setRequests] = useState(() => loadRequests())
+  // ── Cancel request state ──
   const [selectedRequest, setSelectedRequest] = useState(null)
   const [rejectionReason, setRejectionReason] = useState('')
   const [managerNotes, setManagerNotes] = useState('')
   const [showRejectModal, setShowRejectModal] = useState(false)
 
   // ── Swap state ──
-  const [swapRefresh, setSwapRefresh] = useState(0)
   const [selectedSwap, setSelectedSwap] = useState(null)
   const [swapRejectNote, setSwapRejectNote] = useState('')
   const [showSwapRejectModal, setShowSwapRejectModal] = useState(false)
-  const [monthRota, setMonthRota] = useLocalStorage('rotapp_month_rota', {})
 
-  // ── Fetch staff from Supabase ──
+  // ── Fetch homes ──
+  useEffect(() => {
+    if (!user) return
+    fetchHomes(user.activeRole, user.home, user.org_id).then(setHomes)
+  }, [user])
+
+  // ── Fetch staff ──
   useEffect(() => {
     async function fetchStaff() {
       setStaffLoading(true)
@@ -133,12 +139,9 @@ function Staff() {
           .from('profiles')
           .select('*')
           .order('name', { ascending: true })
-
-        // Manager sees only their home + relief pool
         if (!isOLorAdmin) {
           query = query.or(`home.eq.${user?.home},role.eq.relief`)
         }
-
         const { data, error } = await query
         if (error) throw error
         setAllStaff(data || [])
@@ -152,7 +155,7 @@ function Staff() {
     fetchStaff()
   }, [staffRefresh, user?.home, isOLorAdmin])
 
-  // ── Approve staff — instant status flip ──
+  // ── Approve staff ──
   const handleApprove = async (staffMember) => {
     try {
       const { error } = await supabase
@@ -160,10 +163,7 @@ function Staff() {
         .update({ status: 'active' })
         .eq('id', staffMember.id)
       if (error) throw error
-
-      // Sync role and home into auth metadata so RLS works on next login
       await supabase.rpc('sync_auth_metadata', { user_id: staffMember.id })
-
       setStaffRefresh((n) => n + 1)
       setSelectedStaff(null)
     } catch (err) {
@@ -171,7 +171,7 @@ function Staff() {
     }
   }
 
-  // ── Decline staff — sets status to declined ──
+  // ── Decline staff ──
   const handleDecline = async (staffMember) => {
     try {
       const { error } = await supabase
@@ -214,30 +214,36 @@ function Staff() {
               ? reliefStaff
               : visibleStaff
 
-  // ── Request handlers ──
-  const refreshRequests = () => setRequests(loadRequests())
+  const uniqueHomes = [...new Set(allStaff.map((s) => s.home).filter(Boolean))]
 
-  const handleApproveRequest = (request) => {
-    updateRequest(request.id, {
+  // ── Derived context data ──
+  const pendingSwaps = getPendingManagerSwaps(swapRequests)
+  const allSwaps = swapRequests || []
+  const pendingCancels = getPendingRequests(cancelRequests)
+  const allCancels = getAllRequests(cancelRequests)
+
+  // ── Cancel request handlers ──
+  const handleApproveRequest = async (request) => {
+    await updateRequest(request.id, {
       status: 'approved',
       reviewedAt: new Date().toISOString(),
       reviewedBy: user?.name,
       managerNotes: managerNotes || null,
     })
-    refreshRequests()
+    refreshCancels()
     setSelectedRequest(null)
     setManagerNotes('')
   }
 
-  const handleRejectRequest = (request) => {
-    updateRequest(request.id, {
+  const handleRejectRequest = async (request) => {
+    await updateRequest(request.id, {
       status: 'rejected',
       reviewedAt: new Date().toISOString(),
       reviewedBy: user?.name,
       rejectionReason: rejectionReason || null,
       managerNotes: managerNotes || null,
     })
-    refreshRequests()
+    refreshCancels()
     setSelectedRequest(null)
     setRejectionReason('')
     setManagerNotes('')
@@ -245,27 +251,29 @@ function Staff() {
   }
 
   // ── Swap handlers ──
-  const pendingSwaps = getPendingManagerSwaps()
-  const allSwaps = getSwapRequests()
-
-  const handleApproveSwap = (swap) => {
-    const updatedRota = applySwapToRota(swap, monthRota)
-    setMonthRota(updatedRota)
-    approveSwapRequest(swap.id, user?.name)
-    setSwapRefresh((n) => n + 1)
-    setSelectedSwap(null)
+  const handleApproveSwap = async (swap) => {
+    try {
+      await applySwapToRota(swap, user.home, user.org_id)
+      await approveSwapRequest(swap.id, user?.name)
+      refreshSwaps()
+      refreshMonthRota()
+      setSelectedSwap(null)
+    } catch (err) {
+      console.error('Approve swap failed:', err)
+    }
   }
 
-  const handleRejectSwap = (swap) => {
-    rejectSwapRequest(swap.id, user?.name, swapRejectNote)
-    setSwapRefresh((n) => n + 1)
-    setSelectedSwap(null)
-    setSwapRejectNote('')
-    setShowSwapRejectModal(false)
+  const handleRejectSwap = async (swap) => {
+    try {
+      await rejectSwapRequest(swap.id, user?.name, swapRejectNote)
+      refreshSwaps()
+      setSelectedSwap(null)
+      setSwapRejectNote('')
+      setShowSwapRejectModal(false)
+    } catch (err) {
+      console.error('Reject swap failed:', err)
+    }
   }
-
-  // ── Unique homes for OL filter ──
-  const uniqueHomes = [...new Set(allStaff.map((s) => s.home).filter(Boolean))]
 
   return (
     <div style={s.page}>
@@ -360,7 +368,6 @@ function Staff() {
           </div>
         </div>
 
-        {/* Loading / error state */}
         {staffLoading && <div style={s.empty}>Loading staff…</div>}
         {staffError && <div style={s.errorBanner}>{staffError}</div>}
 
@@ -387,13 +394,13 @@ function Staff() {
               {
                 key: 'leave',
                 label: 'Leave & Absence',
-                hasBadge: getPendingTimeOffCount() > 0,
-                badgeCount: getPendingTimeOffCount(),
+                hasBadge: getPendingTimeOffCount(timeOff) > 0,
+                badgeCount: getPendingTimeOffCount(timeOff),
               },
               {
                 key: 'requests',
-                label: `Requests${getPendingRequests().length > 0 ? ` (${getPendingRequests().length})` : ''}`,
-                hasBadge: getPendingRequests().length > 0,
+                label: `Requests${pendingCancels.length > 0 ? ` (${pendingCancels.length})` : ''}`,
+                hasBadge: pendingCancels.length > 0,
               },
               {
                 key: 'swaps',
@@ -535,7 +542,7 @@ function Staff() {
                   st.status === 'active'
               )
               .map((st) => {
-                const entries = getTimeOffForStaff(st.id)
+                const entries = getTimeOffForStaff(timeOff, st.id)
                 const approved = entries.filter((e) => e.status === 'approved')
                 const pending = entries.filter((e) => e.status === 'pending')
                 return (
@@ -572,13 +579,10 @@ function Staff() {
                               <span style={s.leaveTagDate}>{entry.date}</span>
                               <button
                                 style={s.removeLeave}
-                                onClick={(e) => {
+                                onClick={async (e) => {
                                   e.stopPropagation()
-                                  const [y, m, d] = entry.date
-                                    .split('-')
-                                    .map(Number)
-                                  removeTimeOff(new Date(y, m - 1, d), entry.id)
-                                  setLeaveRefresh((n) => n + 1)
+                                  await removeTimeOff(entry.id)
+                                  refreshTimeOff()
                                 }}
                               >
                                 <FontAwesomeIcon icon='xmark' />
@@ -608,74 +612,27 @@ function Staff() {
                               <span style={s.leaveTagDate}>{entry.date}</span>
                               <button
                                 style={s.approveLeaveBtn}
-                                onClick={(e) => {
+                                onClick={async (e) => {
                                   e.stopPropagation()
-                                  const records = JSON.parse(
-                                    localStorage.getItem('rotapp_time_off') ||
-                                      '{}'
+                                  await approveTimeOff(entry.id, user?.name)
+                                  await removeStaffFromRotaOnLeave(
+                                    entry.staff_id,
+                                    entry.date,
+                                    user.home,
+                                    user.org_id
                                   )
-                                  if (records[entry.date]) {
-                                    records[entry.date] = records[
-                                      entry.date
-                                    ].map((r) =>
-                                      r.id === entry.id
-                                        ? {
-                                            ...r,
-                                            status: 'approved',
-                                            approvedBy: user?.name,
-                                            approvedAt:
-                                              new Date().toISOString(),
-                                          }
-                                        : r
-                                    )
-                                    localStorage.setItem(
-                                      'rotapp_time_off',
-                                      JSON.stringify(records)
-                                    )
-                                  }
-                                  const [y, m, d] = entry.date
-                                    .split('-')
-                                    .map(Number)
-                                  const date = new Date(y, m - 1, d)
-                                  const dayOfWeek = (date.getDay() + 6) % 7
-                                  const monday = new Date(date)
-                                  monday.setDate(date.getDate() - dayOfWeek)
-                                  const mondayKey = `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, '0')}-${String(monday.getDate()).padStart(2, '0')}`
-                                  const monthRota = JSON.parse(
-                                    localStorage.getItem('rotapp_month_rota') ||
-                                      '{}'
-                                  )
-                                  if (monthRota[mondayKey]) {
-                                    const weekRota = monthRota[mondayKey]
-                                    if (weekRota.early?.[dayOfWeek])
-                                      weekRota.early[dayOfWeek] =
-                                        weekRota.early[dayOfWeek].filter(
-                                          (s) => s.id !== entry.staffId
-                                        )
-                                    if (weekRota.late?.[dayOfWeek])
-                                      weekRota.late[dayOfWeek] = weekRota.late[
-                                        dayOfWeek
-                                      ].filter((s) => s.id !== entry.staffId)
-                                    monthRota[mondayKey] = weekRota
-                                    localStorage.setItem(
-                                      'rotapp_month_rota',
-                                      JSON.stringify(monthRota)
-                                    )
-                                  }
-                                  setLeaveRefresh((n) => n + 1)
+                                  refreshTimeOff()
+                                  refreshMonthRota()
                                 }}
                               >
                                 <FontAwesomeIcon icon='check' />
                               </button>
                               <button
                                 style={s.removeLeave}
-                                onClick={(e) => {
+                                onClick={async (e) => {
                                   e.stopPropagation()
-                                  const [y, m, d] = entry.date
-                                    .split('-')
-                                    .map(Number)
-                                  removeTimeOff(new Date(y, m - 1, d), entry.id)
-                                  setLeaveRefresh((n) => n + 1)
+                                  await removeTimeOff(entry.id)
+                                  refreshTimeOff()
                                 }}
                               >
                                 <FontAwesomeIcon icon='xmark' />
@@ -700,25 +657,24 @@ function Staff() {
         {/* Requests tab */}
         {tab === 'requests' && (
           <div style={s.requestsWrap}>
-            {getPendingRequests().length === 0 &&
-            getAllRequests().length === 0 ? (
+            {pendingCancels.length === 0 && allCancels.length === 0 ? (
               <div style={s.empty}>No cancellation requests</div>
             ) : (
               <>
-                {getPendingRequests().length > 0 && (
+                {pendingCancels.length > 0 && (
                   <>
                     <div style={s.sectionLabel}>Pending Requests</div>
-                    {getPendingRequests().map((request) => (
+                    {pendingCancels.map((request) => (
                       <div key={request.id} style={s.requestCard}>
                         <div style={s.requestHeader}>
-                          <div style={s.requestStaff}>{request.staffName}</div>
+                          <div style={s.requestStaff}>{request.staff_name}</div>
                           <div style={s.requestHeaderRight}>
-                            {request.pingCount > 0 && (
+                            {request.ping_count > 0 && (
                               <span style={s.pingBadge}>
                                 <FontAwesomeIcon icon='bell' /> Pinged{' '}
-                                {request.pingCount}x
-                                {request.lastPingedAt &&
-                                  ` · ${new Date(request.lastPingedAt).toLocaleDateString()}`}
+                                {request.ping_count}x
+                                {request.last_pinged_at &&
+                                  ` · ${new Date(request.last_pinged_at).toLocaleDateString()}`}
                               </span>
                             )}
                             <div style={s.requestStatus}>pending</div>
@@ -732,26 +688,26 @@ function Staff() {
                                 navigate('/rota')
                                 sessionStorage.setItem(
                                   'rota_jump_date',
-                                  request.shiftDate
+                                  request.shift_date
                                 )
                               }}
                             >
-                              {request.shiftDate}
+                              {request.shift_date}
                             </span>
                             <span style={{ color: '#5d6180' }}>
                               {' '}
-                              · {request.shiftType} shift
+                              · {request.shift_type} shift
                             </span>
                           </div>
                           <div>
                             Reason:{' '}
                             {request.reason === 'Other'
-                              ? request.customReason
+                              ? request.custom_reason
                               : request.reason}
                           </div>
                           <div style={s.requestTime}>
                             Requested:{' '}
-                            {new Date(request.requestedAt).toLocaleString()}
+                            {new Date(request.requested_at).toLocaleString()}
                           </div>
                         </div>
                         <div style={s.requestActions}>
@@ -775,23 +731,23 @@ function Staff() {
                     ))}
                   </>
                 )}
-                {getAllRequests().filter((r) => r.status !== 'pending').length >
+                {allCancels.filter((r) => r.status !== 'pending').length >
                   0 && (
                   <>
                     <div style={{ ...s.sectionLabel, marginTop: '24px' }}>
                       History
                     </div>
-                    {getAllRequests()
+                    {allCancels
                       .filter((r) => r.status !== 'pending')
                       .sort(
                         (a, b) =>
-                          new Date(b.requestedAt) - new Date(a.requestedAt)
+                          new Date(b.requested_at) - new Date(a.requested_at)
                       )
                       .map((request) => (
                         <div key={request.id} style={s.requestCardHistory}>
                           <div style={s.requestHeader}>
                             <div style={s.requestStaff}>
-                              {request.staffName}
+                              {request.staff_name}
                             </div>
                             <div
                               style={{
@@ -821,42 +777,48 @@ function Staff() {
                                   navigate('/rota')
                                   sessionStorage.setItem(
                                     'rota_jump_date',
-                                    request.shiftDate
+                                    request.shift_date
                                   )
                                 }}
                               >
-                                {request.shiftDate}
+                                {request.shift_date}
                               </span>
                               <span style={{ color: '#5d6180' }}>
                                 {' '}
-                                · {request.shiftType} shift
+                                · {request.shift_type} shift
                               </span>
                             </div>
                             <div>
                               Reason:{' '}
                               {request.reason === 'Other'
-                                ? request.customReason
+                                ? request.custom_reason
                                 : request.reason}
                             </div>
-                            {request.rejectionReason && (
+                            {request.rejection_reason && (
                               <div
-                                style={{ color: '#e85c3d', fontSize: '12px' }}
+                                style={{
+                                  color: '#e85c3d',
+                                  fontSize: '12px',
+                                }}
                               >
-                                Rejection reason: {request.rejectionReason}
+                                Rejection reason: {request.rejection_reason}
                               </div>
                             )}
-                            {request.managerNotes && (
+                            {request.manager_notes && (
                               <div
-                                style={{ color: '#6c8fff', fontSize: '12px' }}
+                                style={{
+                                  color: '#6c8fff',
+                                  fontSize: '12px',
+                                }}
                               >
-                                Manager notes: {request.managerNotes}
+                                Manager notes: {request.manager_notes}
                               </div>
                             )}
                             <div style={s.requestTime}>
                               Requested:{' '}
-                              {new Date(request.requestedAt).toLocaleString()}
-                              {request.reviewedAt &&
-                                ` · Reviewed: ${new Date(request.reviewedAt).toLocaleString()}`}
+                              {new Date(request.requested_at).toLocaleString()}
+                              {request.reviewed_at &&
+                                ` · Reviewed: ${new Date(request.reviewed_at).toLocaleString()}`}
                             </div>
                           </div>
                         </div>
@@ -881,12 +843,12 @@ function Staff() {
                   <>
                     <div style={s.sectionLabel}>Awaiting your decision</div>
                     {pendingSwaps.map((swap) => {
-                      const isSameDay = swap.targetShift?.sameDay
+                      const isSameDay = swap.target_shift?.sameDay
                       return (
                         <div key={swap.id} style={s.requestCard}>
                           <div style={s.requestHeader}>
                             <div style={s.requestStaff}>
-                              {swap.initiatorName}
+                              {swap.initiator_name}
                               <span
                                 style={{
                                   color: '#5d6180',
@@ -895,7 +857,7 @@ function Staff() {
                                   marginLeft: '6px',
                                 }}
                               >
-                                with {swap.targetName}
+                                with {swap.target_name}
                               </span>
                             </div>
                             <div style={s.requestStatus}>awaiting approval</div>
@@ -906,54 +868,57 @@ function Staff() {
                                 style={{
                                   ...s.swapShiftPill,
                                   background:
-                                    swap.initiatorShift.type === 'early'
+                                    swap.initiator_shift.type === 'early'
                                       ? 'rgba(42,127,98,0.1)'
                                       : 'rgba(122,79,168,0.1)',
                                   color:
-                                    swap.initiatorShift.type === 'early'
+                                    swap.initiator_shift.type === 'early'
                                       ? '#2a7f62'
                                       : '#7a4fa8',
-                                  border: `1px solid ${swap.initiatorShift.type === 'early' ? 'rgba(42,127,98,0.3)' : 'rgba(122,79,168,0.3)'}`,
+                                  border: `1px solid ${swap.initiator_shift.type === 'early' ? 'rgba(42,127,98,0.3)' : 'rgba(122,79,168,0.3)'}`,
                                 }}
                               >
-                                {swap.initiatorName.split(' ')[0]} ·{' '}
-                                {swap.initiatorShift.type === 'early'
+                                {swap.initiator_name.split(' ')[0]} ·{' '}
+                                {swap.initiator_shift.type === 'early'
                                   ? 'Early'
                                   : 'Late'}{' '}
-                                · {swap.initiatorShift.date}
-                                {swap.initiatorShift.sleepIn && ' · Sleep-in'}
+                                · {swap.initiator_shift.date}
+                                {swap.initiator_shift.sleepIn && ' · Sleep-in'}
                               </div>
                               <FontAwesomeIcon
                                 icon='right-left'
-                                style={{ color: '#5d6180', fontSize: '11px' }}
+                                style={{
+                                  color: '#5d6180',
+                                  fontSize: '11px',
+                                }}
                               />
                               <div
                                 style={{
                                   ...s.swapShiftPill,
                                   background:
-                                    swap.targetShift.type === 'early'
+                                    swap.target_shift.type === 'early'
                                       ? 'rgba(42,127,98,0.1)'
                                       : 'rgba(122,79,168,0.1)',
                                   color:
-                                    swap.targetShift.type === 'early'
+                                    swap.target_shift.type === 'early'
                                       ? '#2a7f62'
                                       : '#7a4fa8',
-                                  border: `1px solid ${swap.targetShift.type === 'early' ? 'rgba(42,127,98,0.3)' : 'rgba(122,79,168,0.3)'}`,
+                                  border: `1px solid ${swap.target_shift.type === 'early' ? 'rgba(42,127,98,0.3)' : 'rgba(122,79,168,0.3)'}`,
                                 }}
                               >
-                                {swap.targetName.split(' ')[0]} ·{' '}
-                                {swap.targetShift.type === 'early'
+                                {swap.target_name.split(' ')[0]} ·{' '}
+                                {swap.target_shift.type === 'early'
                                   ? 'Early'
                                   : 'Late'}{' '}
-                                · {swap.targetShift.date}
-                                {swap.targetShift.sleepIn && ' · Sleep-in'}
+                                · {swap.target_shift.date}
+                                {swap.target_shift.sleepIn && ' · Sleep-in'}
                                 {isSameDay && (
                                   <span style={s.sameDayPill}>same day</span>
                                 )}
                               </div>
                             </div>
-                            {(swap.initiatorShift.sleepIn ||
-                              swap.targetShift.sleepIn) && (
+                            {(swap.initiator_shift.sleepIn ||
+                              swap.target_shift.sleepIn) && (
                               <div style={s.swapWarnRow}>
                                 <FontAwesomeIcon
                                   icon='triangle-exclamation'
@@ -976,9 +941,9 @@ function Staff() {
                             )}
                             <div style={s.requestTime}>
                               Requested:{' '}
-                              {new Date(swap.createdAt).toLocaleString()}
-                              {swap.targetRespondedAt &&
-                                ` · Accepted by ${swap.targetName}: ${new Date(swap.targetRespondedAt).toLocaleString()}`}
+                              {new Date(swap.created_at).toLocaleString()}
+                              {swap.target_responded_at &&
+                                ` · Accepted by ${swap.target_name}: ${new Date(swap.target_responded_at).toLocaleString()}`}
                             </div>
                           </div>
                           <div style={s.requestActions}>
@@ -1018,13 +983,14 @@ function Staff() {
                           r.status !== 'pending'
                       )
                       .sort(
-                        (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
+                        (a, b) =>
+                          new Date(b.created_at) - new Date(a.created_at)
                       )
                       .map((swap) => (
                         <div key={swap.id} style={s.requestCardHistory}>
                           <div style={s.requestHeader}>
                             <div style={s.requestStaff}>
-                              {swap.initiatorName}
+                              {swap.initiator_name}
                               <span
                                 style={{
                                   color: '#5d6180',
@@ -1033,7 +999,7 @@ function Staff() {
                                   marginLeft: '6px',
                                 }}
                               >
-                                with {swap.targetName}
+                                with {swap.target_name}
                               </span>
                             </div>
                             <div
@@ -1059,27 +1025,36 @@ function Staff() {
                           <div style={s.requestDetails}>
                             <div style={s.swapShiftRow}>
                               <span
-                                style={{ fontSize: '12px', color: '#9499b0' }}
+                                style={{
+                                  fontSize: '12px',
+                                  color: '#9499b0',
+                                }}
                               >
-                                {swap.initiatorShift.type === 'early'
+                                {swap.initiator_shift.type === 'early'
                                   ? 'Early'
                                   : 'Late'}{' '}
-                                · {swap.initiatorShift.date}
+                                · {swap.initiator_shift.date}
                               </span>
                               <FontAwesomeIcon
                                 icon='right-left'
-                                style={{ color: '#5d6180', fontSize: '10px' }}
+                                style={{
+                                  color: '#5d6180',
+                                  fontSize: '10px',
+                                }}
                               />
                               <span
-                                style={{ fontSize: '12px', color: '#9499b0' }}
+                                style={{
+                                  fontSize: '12px',
+                                  color: '#9499b0',
+                                }}
                               >
-                                {swap.targetShift.type === 'early'
+                                {swap.target_shift.type === 'early'
                                   ? 'Early'
                                   : 'Late'}{' '}
-                                · {swap.targetShift.date}
+                                · {swap.target_shift.date}
                               </span>
                             </div>
-                            {swap.managerNote && (
+                            {swap.manager_note && (
                               <div
                                 style={{
                                   fontSize: '12px',
@@ -1087,13 +1062,13 @@ function Staff() {
                                   marginTop: '4px',
                                 }}
                               >
-                                Manager note: {swap.managerNote}
+                                Manager note: {swap.manager_note}
                               </div>
                             )}
                             <div style={s.requestTime}>
-                              {new Date(swap.createdAt).toLocaleDateString()}
-                              {swap.resolvedBy &&
-                                ` · ${swap.status} by ${swap.resolvedBy}`}
+                              {new Date(swap.created_at).toLocaleDateString()}
+                              {swap.resolved_by &&
+                                ` · ${swap.status} by ${swap.resolved_by}`}
                             </div>
                           </div>
                         </div>
@@ -1158,7 +1133,10 @@ function Staff() {
                   label: 'Driver',
                   val: selectedStaff.driver ? '✓ Yes' : '✗ No',
                 },
-                { label: 'Home', val: selectedStaff.home || 'Relief pool' },
+                {
+                  label: 'Home',
+                  val: selectedStaff.home || 'Relief pool',
+                },
                 { label: 'Status', val: selectedStaff.status },
                 { label: 'Org', val: selectedStaff.org_id || '—' },
               ].map((row) => (
@@ -1277,21 +1255,25 @@ function Staff() {
                     leaveSelectedDates.length > 0 ? 'pointer' : 'not-allowed',
                 }}
                 disabled={leaveSelectedDates.length === 0}
-                onClick={() => {
-                  leaveSelectedDates.forEach((dateStr) => {
-                    const [y, m, d] = dateStr.split('-').map(Number)
-                    addTimeOff(new Date(y, m - 1, d), {
-                      id: generateTimeOffId(),
-                      staffId: leaveStaff.id,
-                      staffName: leaveStaff.name,
-                      type: leaveModalType,
-                      status: 'approved',
-                      approvedBy: user?.name || 'Manager',
-                      approvedAt: new Date().toISOString(),
-                      notes: leaveNotes || null,
-                    })
-                  })
-                  setLeaveRefresh((n) => n + 1)
+                onClick={async () => {
+                  for (const dateStr of leaveSelectedDates) {
+                    await addTimeOff(
+                      {
+                        id: generateTimeOffId(),
+                        staffId: leaveStaff.id,
+                        staffName: leaveStaff.name,
+                        date: dateStr,
+                        type: leaveModalType,
+                        status: 'approved',
+                        approvedBy: user?.name || 'Manager',
+                        approvedAt: new Date().toISOString(),
+                        notes: leaveNotes || null,
+                      },
+                      user.home,
+                      user.org_id
+                    )
+                  }
+                  refreshTimeOff()
                   setLeaveStaff(null)
                   setLeaveSelectedDates([])
                   setLeaveNotes('')
@@ -1332,12 +1314,12 @@ function Staff() {
                 ...(selectedLeaveEntry.notes
                   ? [{ label: 'Note', val: selectedLeaveEntry.notes }]
                   : []),
-                ...(selectedLeaveEntry.requestedAt
+                ...(selectedLeaveEntry.requested_at
                   ? [
                       {
                         label: 'Requested',
                         val: new Date(
-                          selectedLeaveEntry.requestedAt
+                          selectedLeaveEntry.requested_at
                         ).toLocaleDateString('en-GB', {
                           day: 'numeric',
                           month: 'short',
@@ -1346,11 +1328,11 @@ function Staff() {
                       },
                     ]
                   : []),
-                ...(selectedLeaveEntry.approvedBy
+                ...(selectedLeaveEntry.approved_by
                   ? [
                       {
                         label: 'Approved by',
-                        val: selectedLeaveEntry.approvedBy,
+                        val: selectedLeaveEntry.approved_by,
                       },
                     ]
                   : []),
@@ -1364,15 +1346,9 @@ function Staff() {
                 <div style={{ ...s.modalActions, marginTop: '20px' }}>
                   <button
                     style={s.declineBtn}
-                    onClick={() => {
-                      const [y, m, d] = selectedLeaveEntry.date
-                        .split('-')
-                        .map(Number)
-                      removeTimeOff(
-                        new Date(y, m - 1, d),
-                        selectedLeaveEntry.id
-                      )
-                      setLeaveRefresh((n) => n + 1)
+                    onClick={async () => {
+                      await removeTimeOff(selectedLeaveEntry.id)
+                      refreshTimeOff()
                       setSelectedLeaveEntry(null)
                     }}
                   >
@@ -1380,53 +1356,16 @@ function Staff() {
                   </button>
                   <button
                     style={s.approveBtn}
-                    onClick={() => {
-                      const records = JSON.parse(
-                        localStorage.getItem('rotapp_time_off') || '{}'
+                    onClick={async () => {
+                      await approveTimeOff(selectedLeaveEntry.id, user?.name)
+                      await removeStaffFromRotaOnLeave(
+                        selectedLeaveEntry.staff_id,
+                        selectedLeaveEntry.date,
+                        user.home,
+                        user.org_id
                       )
-                      if (records[selectedLeaveEntry.date]) {
-                        records[selectedLeaveEntry.date] = records[
-                          selectedLeaveEntry.date
-                        ].map((r) =>
-                          r.id === selectedLeaveEntry.id
-                            ? {
-                                ...r,
-                                status: 'approved',
-                                approvedBy: user?.name || 'Manager',
-                                approvedAt: new Date().toISOString(),
-                              }
-                            : r
-                        )
-                        localStorage.setItem(
-                          'rotapp_time_off',
-                          JSON.stringify(records)
-                        )
-                      }
-                      const monthRota = JSON.parse(
-                        localStorage.getItem('rotapp_month_rota') || '{}'
-                      )
-                      const staffIdToRemove = selectedLeaveEntry.staffId
-                      const targetDate = new Date(
-                        selectedLeaveEntry.date + 'T00:00:00'
-                      )
-                      const dayOfWeek = (targetDate.getDay() + 6) % 7
-                      Object.keys(monthRota).forEach((mondayKey) => {
-                        const weekRota = monthRota[mondayKey]
-                        if (weekRota.early?.[dayOfWeek])
-                          weekRota.early[dayOfWeek] = weekRota.early[
-                            dayOfWeek
-                          ].filter((s) => s.id !== staffIdToRemove)
-                        if (weekRota.late?.[dayOfWeek])
-                          weekRota.late[dayOfWeek] = weekRota.late[
-                            dayOfWeek
-                          ].filter((s) => s.id !== staffIdToRemove)
-                        monthRota[mondayKey] = weekRota
-                      })
-                      localStorage.setItem(
-                        'rotapp_month_rota',
-                        JSON.stringify(monthRota)
-                      )
-                      setLeaveRefresh((n) => n + 1)
+                      refreshTimeOff()
+                      refreshMonthRota()
                       setSelectedLeaveEntry(null)
                     }}
                   >
@@ -1439,7 +1378,7 @@ function Staff() {
         </div>
       )}
 
-      {/* Approve request modal */}
+      {/* Approve cancel request modal */}
       {selectedRequest && !showRejectModal && (
         <div style={s.overlay} onClick={() => setSelectedRequest(null)}>
           <div style={s.modal} onClick={(e) => e.stopPropagation()}>
@@ -1455,19 +1394,19 @@ function Staff() {
             <div style={s.modalBody}>
               <div style={s.detailRow}>
                 <span style={s.detailLabel}>Staff</span>
-                <span style={s.detailVal}>{selectedRequest.staffName}</span>
+                <span style={s.detailVal}>{selectedRequest.staff_name}</span>
               </div>
               <div style={s.detailRow}>
                 <span style={s.detailLabel}>Shift</span>
                 <span style={s.detailVal}>
-                  {selectedRequest.shiftDate} · {selectedRequest.shiftType}
+                  {selectedRequest.shift_date} · {selectedRequest.shift_type}
                 </span>
               </div>
               <div style={s.detailRow}>
                 <span style={s.detailLabel}>Reason</span>
                 <span style={s.detailVal}>
                   {selectedRequest.reason === 'Other'
-                    ? selectedRequest.customReason
+                    ? selectedRequest.custom_reason
                     : selectedRequest.reason}
                 </span>
               </div>
@@ -1506,7 +1445,7 @@ function Staff() {
         </div>
       )}
 
-      {/* Reject request modal */}
+      {/* Reject cancel request modal */}
       {showRejectModal && selectedRequest && (
         <div
           style={s.overlay}
@@ -1535,12 +1474,12 @@ function Staff() {
             <div style={s.modalBody}>
               <div style={s.detailRow}>
                 <span style={s.detailLabel}>Staff</span>
-                <span style={s.detailVal}>{selectedRequest.staffName}</span>
+                <span style={s.detailVal}>{selectedRequest.staff_name}</span>
               </div>
               <div style={s.detailRow}>
                 <span style={s.detailLabel}>Shift</span>
                 <span style={s.detailVal}>
-                  {selectedRequest.shiftDate} · {selectedRequest.shiftType}
+                  {selectedRequest.shift_date} · {selectedRequest.shift_type}
                 </span>
               </div>
               <div style={s.field}>
@@ -1612,7 +1551,7 @@ function Staff() {
             <div style={s.modalBody}>
               <div style={s.detailRow}>
                 <span style={s.detailLabel}>Initiator</span>
-                <span style={s.detailVal}>{selectedSwap.initiatorName}</span>
+                <span style={s.detailVal}>{selectedSwap.initiator_name}</span>
               </div>
               <div style={s.detailRow}>
                 <span style={s.detailLabel}>Their shift</span>
@@ -1620,21 +1559,21 @@ function Staff() {
                   style={{
                     ...s.detailVal,
                     color:
-                      selectedSwap.initiatorShift.type === 'early'
+                      selectedSwap.initiator_shift.type === 'early'
                         ? '#2a7f62'
                         : '#7a4fa8',
                   }}
                 >
-                  {selectedSwap.initiatorShift.type === 'early'
+                  {selectedSwap.initiator_shift.type === 'early'
                     ? 'Early'
                     : 'Late'}{' '}
-                  · {selectedSwap.initiatorShift.date}
-                  {selectedSwap.initiatorShift.sleepIn ? ' · Sleep-in' : ''}
+                  · {selectedSwap.initiator_shift.date}
+                  {selectedSwap.initiator_shift.sleepIn ? ' · Sleep-in' : ''}
                 </span>
               </div>
               <div style={s.detailRow}>
                 <span style={s.detailLabel}>Swapping with</span>
-                <span style={s.detailVal}>{selectedSwap.targetName}</span>
+                <span style={s.detailVal}>{selectedSwap.target_name}</span>
               </div>
               <div style={s.detailRow}>
                 <span style={s.detailLabel}>Their shift</span>
@@ -1642,18 +1581,20 @@ function Staff() {
                   style={{
                     ...s.detailVal,
                     color:
-                      selectedSwap.targetShift.type === 'early'
+                      selectedSwap.target_shift.type === 'early'
                         ? '#2a7f62'
                         : '#7a4fa8',
                   }}
                 >
-                  {selectedSwap.targetShift.type === 'early' ? 'Early' : 'Late'}{' '}
-                  · {selectedSwap.targetShift.date}
-                  {selectedSwap.targetShift.sleepIn ? ' · Sleep-in' : ''}
+                  {selectedSwap.target_shift.type === 'early'
+                    ? 'Early'
+                    : 'Late'}{' '}
+                  · {selectedSwap.target_shift.date}
+                  {selectedSwap.target_shift.sleepIn ? ' · Sleep-in' : ''}
                 </span>
               </div>
-              {(selectedSwap.initiatorShift.sleepIn ||
-                selectedSwap.targetShift.sleepIn) && (
+              {(selectedSwap.initiator_shift.sleepIn ||
+                selectedSwap.target_shift.sleepIn) && (
                 <div style={s.warningNote}>
                   <FontAwesomeIcon icon='triangle-exclamation' /> Sleep-in
                   changes hands. Verify shift compliance after approving.
@@ -1712,14 +1653,14 @@ function Staff() {
               <div style={s.detailRow}>
                 <span style={s.detailLabel}>Swap</span>
                 <span style={s.detailVal}>
-                  {selectedSwap.initiatorName} ↔ {selectedSwap.targetName}
+                  {selectedSwap.initiator_name} ↔ {selectedSwap.target_name}
                 </span>
               </div>
               <div style={s.detailRow}>
                 <span style={s.detailLabel}>Shifts</span>
                 <span style={s.detailVal}>
-                  {selectedSwap.initiatorShift.date} ↔{' '}
-                  {selectedSwap.targetShift.date}
+                  {selectedSwap.initiator_shift.date} ↔{' '}
+                  {selectedSwap.target_shift.date}
                 </span>
               </div>
               <div style={s.field}>

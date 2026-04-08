@@ -24,7 +24,13 @@ function buildMonthOptions() {
 
 const MONTH_OPTIONS = buildMonthOptions()
 
-function BatchGenerateModal({ onClose, onApplyBatch, monthRota, staffMap }) {
+function BatchGenerateModal({
+  onClose,
+  onApplyBatch,
+  monthRota,
+  staffMap,
+  timeOff,
+}) {
   // Default from = current month, to = 3 months ahead
   const [fromIdx, setFromIdx] = useState(0)
   const [toIdx, setToIdx] = useState(3)
@@ -87,7 +93,7 @@ function BatchGenerateModal({ onClose, onApplyBatch, monthRota, staffMap }) {
         monday.getFullYear(),
         monday.getMonth(),
         staffMap,
-        {}
+        timeOff
       )
       // generateMonthRota returns all weeks for that month — we only want this one
       if (weekRotas[key]) {

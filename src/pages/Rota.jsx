@@ -80,7 +80,6 @@ const HEALTH_TEXT = {
 }
 
 function Rota() {
-  const [leaveData] = useLocalStorage('rotapp_leave', {})
   const { user } = useAuth()
   const navigate = useNavigate()
   const [summaryExpanded, setSummaryExpanded] = useState(false)
@@ -114,7 +113,7 @@ function Rota() {
 
   const [overwriteTarget, setOverwriteTarget] = useState(null)
 
-  const { staff, staffMap, monthRota, setMonthRota } = useRota()
+  const { staff, staffMap, monthRota, setMonthRota, timeOff } = useRota()
 
   const [weekRota, setWeekRota] = useLocalStorage('rotapp_week_rota', {
     early: Array(7).fill([]),
@@ -1080,8 +1079,8 @@ function Rota() {
           scopeYear={generateTarget.year}
           scopeMonth={generateTarget.month}
           monthLabel={generateTarget.label}
-          leaveData={leaveData}
           staffMap={staffMap}
+          timeOff={timeOff}
         />
       )}
 
@@ -1092,6 +1091,7 @@ function Rota() {
           onApplyBatch={handleApplyBatch}
           monthRota={monthRota}
           staffMap={staffMap}
+          timeOff={timeOff}
         />
       )}
 

@@ -3,13 +3,15 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { useTheme } from '../../context/ThemeContext'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { getPendingRequests } from '../../utils/cancelRequests'
+import { useRota } from '../../context/RotaContext'
 import { getPendingTimeOffCount } from '../../utils/timeOffStorage'
 import { getPendingSwapCount } from '../../utils/swapRequests'
+import { getPendingCancelCount } from '../../utils/cancelRequests'
 
 function Navbar() {
   const { user, logout } = useAuth()
   const { theme, toggleTheme } = useTheme()
+  const { timeOff, swapRequests, cancelRequests } = useRota()
   const navigate = useNavigate()
   const location = useLocation()
 
@@ -18,9 +20,10 @@ function Navbar() {
     navigate('/login')
   }
 
-  const pendingRequests = getPendingRequests().length
-  const pendingTimeOff = getPendingTimeOffCount()
-  const pendingSwaps = getPendingSwapCount()
+  const pendingRequests = getPendingCancelCount(cancelRequests)
+  const pendingTimeOff = getPendingTimeOffCount(timeOff)
+  const pendingSwaps = getPendingSwapCount(swapRequests)
+
   const totalPending = pendingRequests + pendingTimeOff + pendingSwaps
   const hasStaffAction = totalPending > 0
 

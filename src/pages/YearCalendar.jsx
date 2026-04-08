@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react'
+
 import { useAuth } from '../context/AuthContext'
+import { useRota } from '../context/RotaContext'
 import Navbar from '../components/layout/Navbar'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { fetchBankHolidays, getBankHolidayForDate } from '../utils/bankHolidays'
-import { getTimeOffRecords, removeTimeOff } from '../utils/timeOffStorage'
-import { toLocalDateString, fromLocalDateString } from '../utils/dateUtils'
+import { removeTimeOff } from '../utils/timeOffStorage'
+import { toLocalDateString } from '../utils/dateUtils'
 import { getEventsForDate, getEventColor } from '../data/worldEvents'
 
 const MONTHS = [
@@ -26,33 +28,29 @@ const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
 function YearCalendar() {
   const { user } = useAuth()
+  const { timeOff, refreshTimeOff } = useRota()
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear())
   const [bankHolidays, setBankHolidays] = useState([])
-  const [timeOffRecords, setTimeOffRecords] = useState({})
   const [selectedDate, setSelectedDate] = useState(null)
   const [selectedDateInfo, setSelectedDateInfo] = useState(null)
   const [loading, setLoading] = useState(true)
 
+  // Build timeOffRecords keyed by date string from flat context array
+  const timeOffRecords = timeOff.reduce((acc, entry) => {
+    if (!acc[entry.date]) acc[entry.date] = []
+    acc[entry.date].push(entry)
+    return acc
+  }, {})
+
   useEffect(() => {
     const loadData = async () => {
       setLoading(true)
-
-      import('../utils/timeOffStorage').then((module) => {
-        module.migrateLeaveDataIfNeeded()
-      })
-
       const holidays = await fetchBankHolidays()
       setBankHolidays(holidays)
-      const records = getTimeOffRecords()
-      setTimeOffRecords(records)
       setLoading(false)
     }
     loadData()
   }, [])
-
-  const refreshTimeOff = () => {
-    setTimeOffRecords(getTimeOffRecords())
-  }
 
   const getDaysInMonth = (year, month) => {
     return new Date(year, month + 1, 0).getDate()
@@ -68,18 +66,17 @@ function YearCalendar() {
     setSelectedDateInfo({ bankHoliday, staffOff, events })
   }
 
-  const handleRemoveTimeOff = (dateStr, timeOffId) => {
-    const date = fromLocalDateString(dateStr)
-    if (!date) return
-    removeTimeOff(date, timeOffId)
+  const handleRemoveTimeOff = async (dateStr, timeOffId) => {
+    await removeTimeOff(timeOffId)
     refreshTimeOff()
-    const updatedRecords = getTimeOffRecords()
-    if (!updatedRecords[dateStr] || updatedRecords[dateStr].length === 0) {
+    const remaining = (timeOffRecords[dateStr] || []).filter(
+      (e) => e.id !== timeOffId
+    )
+    if (remaining.length === 0) {
       setSelectedDate(null)
       setSelectedDateInfo(null)
     } else {
-      const updatedStaffOff = updatedRecords[dateStr] || []
-      setSelectedDateInfo((prev) => ({ ...prev, staffOff: updatedStaffOff }))
+      setSelectedDateInfo((prev) => ({ ...prev, staffOff: remaining }))
     }
   }
 
@@ -144,7 +141,7 @@ function YearCalendar() {
           <div style={s.staffList}>
             {staffOff.slice(0, 2).map((off) => (
               <div key={off.id} style={s.staffNameTag}>
-                {off.staffName.split(' ')[0]}
+                {(off.staff_name || off.staffName || '').split(' ')[0]}
               </div>
             ))}
             {staffOff.length > 2 && (
@@ -333,7 +330,9 @@ function YearCalendar() {
                     {selectedDateInfo.staffOff.map((off) => (
                       <div key={off.id} style={s.staffOffCard}>
                         <div>
-                          <div style={s.staffOffName}>{off.staffName}</div>
+                          <div style={s.staffOffName}>
+                            {off.staff_name || off.staffName}
+                          </div>
                           <div style={s.staffOffType}>
                             Type: {off.type.replace('_', ' ')}
                           </div>
