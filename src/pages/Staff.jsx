@@ -75,6 +75,8 @@ const TYPE_STYLES = {
   },
 }
 
+const EXCLUDED_ROLES = ['superadmin', 'operationallead', 'relief']
+
 function Staff() {
   const { user } = useAuth()
   const {
@@ -102,7 +104,7 @@ function Staff() {
 
   // ── UI state ──
   const [showInviteModal, setShowInviteModal] = useState(false)
-  const [tab, setTab] = useState('all')
+  const [tab, setTab] = useState('active')
   const [selectedStaff, setSelectedStaff] = useState(null)
 
   // ── Leave state ──
@@ -193,26 +195,21 @@ function Staff() {
       : allStaff
 
   const activeStaff = visibleStaff.filter(
-    (s) => s.status === 'active' && s.role !== 'relief'
+    (s) => s.status === 'active' && !EXCLUDED_ROLES.includes(s.role)
   )
-  const pendingStaff = visibleStaff.filter((s) => s.status === 'pending')
-  const offStaff = visibleStaff.filter((s) => s.status === 'off')
+  const pendingStaff = visibleStaff.filter(
+    (s) => s.status === 'pending' && !EXCLUDED_ROLES.includes(s.role)
+  )
   const reliefStaff = allStaff.filter((s) => s.role === 'relief')
 
   const displayed =
-    tab === 'all'
-      ? visibleStaff.filter(
-          (s) => s.role !== 'relief' && s.status !== 'declined'
-        )
-      : tab === 'active'
-        ? activeStaff
-        : tab === 'off'
-          ? offStaff
-          : tab === 'pending'
-            ? pendingStaff
-            : tab === 'relief'
-              ? reliefStaff
-              : visibleStaff
+    tab === 'active'
+      ? activeStaff
+      : tab === 'pending'
+        ? pendingStaff
+        : tab === 'relief'
+          ? reliefStaff
+          : visibleStaff
 
   const uniqueHomes = [...new Set(allStaff.map((s) => s.home).filter(Boolean))]
 
@@ -286,15 +283,10 @@ function Staff() {
             <p style={s.subtitle}>
               {isOLorAdmin
                 ? `All homes · ${allStaff.length} staff members`
-                : `${user?.home ? user.home.charAt(0).toUpperCase() + user.home.slice(1) : ''} · ${visibleStaff.filter((s) => s.status !== 'declined').length} staff members`}
+                : `${user?.home ? user.home.charAt(0).toUpperCase() + user.home.slice(1) : ''} · ${visibleStaff.filter((s) => s.status !== 'declined' && !EXCLUDED_ROLES.includes(s.role)).length} staff members`}
             </p>
           </div>
           <div style={s.headerActions}>
-            {pendingStaff.length > 0 && (
-              <div style={s.pendingBadge}>
-                {pendingStaff.length} pending approval
-              </div>
-            )}
             <button
               style={s.inviteBtn}
               onClick={() => setShowInviteModal(true)}
@@ -331,43 +323,6 @@ function Staff() {
           </div>
         )}
 
-        {/* Stats */}
-        <div style={s.statsRow}>
-          <div style={s.statCard}>
-            <div style={s.statVal}>
-              {visibleStaff.filter((s) => s.status !== 'declined').length}
-            </div>
-            <div style={s.statLabel}>Total staff</div>
-          </div>
-          <div style={s.statCard}>
-            <div style={{ ...s.statVal, color: '#2ecc8a' }}>
-              {activeStaff.length}
-            </div>
-            <div style={s.statLabel}>Active</div>
-          </div>
-          <div style={s.statCard}>
-            <div style={{ ...s.statVal, color: '#6c8fff' }}>
-              {offStaff.length}
-            </div>
-            <div style={s.statLabel}>Off today</div>
-          </div>
-          <div style={s.statCard}>
-            <div
-              style={{
-                ...s.statVal,
-                color: pendingStaff.length > 0 ? '#c4883a' : '#e8eaf0',
-              }}
-            >
-              {pendingStaff.length}
-            </div>
-            <div style={s.statLabel}>Pending</div>
-          </div>
-          <div style={s.statCard}>
-            <div style={s.statVal}>{reliefStaff.length}</div>
-            <div style={s.statLabel}>Relief pool</div>
-          </div>
-        </div>
-
         {staffLoading && <div style={s.empty}>Loading staff…</div>}
         {staffError && <div style={s.errorBanner}>{staffError}</div>}
 
@@ -378,12 +333,7 @@ function Staff() {
             key={`tabs-${allStaff.length}-${pendingStaff.length}`}
           >
             {[
-              {
-                key: 'all',
-                label: `All (${visibleStaff.filter((s) => s.status !== 'declined').length})`,
-              },
               { key: 'active', label: `Active (${activeStaff.length})` },
-              { key: 'off', label: `Off (${offStaff.length})` },
               {
                 key: 'pending',
                 label: `Pending (${pendingStaff.length})`,
@@ -1734,15 +1684,7 @@ const s = {
   },
   subtitle: { fontSize: '13px', color: '#9499b0', marginTop: '4px' },
   headerActions: { display: 'flex', alignItems: 'center', gap: '10px' },
-  pendingBadge: {
-    background: 'rgba(196,136,58,0.15)',
-    color: '#c4883a',
-    border: '1px solid rgba(196,136,58,0.3)',
-    borderRadius: '8px',
-    padding: '6px 12px',
-    fontSize: '12px',
-    fontWeight: 500,
-  },
+
   inviteBtn: {
     background: '#6c8fff',
     color: '#fff',
@@ -1778,25 +1720,7 @@ const s = {
     border: '1px solid rgba(108,143,255,0.3)',
     color: '#6c8fff',
   },
-  statsRow: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(5, 1fr)',
-    gap: '10px',
-    marginBottom: '20px',
-  },
-  statCard: {
-    background: '#161820',
-    border: '1px solid rgba(255,255,255,0.07)',
-    borderRadius: '12px',
-    padding: '14px',
-  },
-  statVal: {
-    fontSize: '22px',
-    fontWeight: 600,
-    fontFamily: 'Syne, sans-serif',
-    color: '#e8eaf0',
-  },
-  statLabel: { fontSize: '11px', color: '#9499b0', marginTop: '3px' },
+
   errorBanner: {
     background: 'rgba(232,92,61,0.08)',
     border: '1px solid rgba(232,92,61,0.2)',

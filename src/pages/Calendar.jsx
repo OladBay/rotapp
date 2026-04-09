@@ -1108,18 +1108,22 @@ function Calendar() {
                         gap: '8px',
                       }}
                     >
-                      {isSwappableRole && canInitiateSwap(selectedShift) && (
-                        <button
-                          style={s.requestSwapBtn}
-                          onClick={() => {
-                            setSelectedShift(null)
-                            openSwapModal(selectedShift)
-                          }}
-                        >
-                          <FontAwesomeIcon icon='right-left' /> Request shift
-                          swap
-                        </button>
-                      )}
+                      {isSwappableRole &&
+                        canInitiateSwap(selectedShift) &&
+                        !['rejected', 'declined'].includes(
+                          getResolvedSwapForShift(selectedShift)?.status
+                        ) && (
+                          <button
+                            style={s.requestSwapBtn}
+                            onClick={() => {
+                              setSelectedShift(null)
+                              openSwapModal(selectedShift)
+                            }}
+                          >
+                            <FontAwesomeIcon icon='right-left' /> Request shift
+                            swap
+                          </button>
+                        )}
                       <button
                         style={s.cancelShiftBtn}
                         onClick={() => setShowReasonForm(true)}
@@ -1341,6 +1345,7 @@ function Calendar() {
                       <ShiftPickerCalendar
                         targetStaffId={swapTargetId}
                         monthRota={monthRota}
+                        timeOff={timeOff}
                         initiatorShiftDate={swapShift?.date}
                         selected={selectedTargetShift}
                         onSelect={(sh) =>
@@ -1510,7 +1515,8 @@ function Calendar() {
 
               <div style={s.targetShiftCard}>
                 <div style={s.targetCardLabel}>
-                  {respondSwap.target_shift.sameDay
+                  {respondSwap.target_shift.date ===
+                  respondSwap.initiator_shift.date
                     ? 'Same day — you cover'
                     : 'You give up'}
                 </div>

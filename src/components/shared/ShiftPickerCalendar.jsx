@@ -78,9 +78,10 @@ function getShiftInfo(monthRota, staffId, dateStr) {
 export default function ShiftPickerCalendar({
   targetStaffId,
   monthRota,
-  initiatorShiftDate, // Staff A's shift date — always selectable regardless
-  onSelect, // ({ date, type, sleepIn, sameDay }) => void
-  selected, // { date, type } | null
+  timeOff,
+  initiatorShiftDate,
+  onSelect,
+  selected,
 }) {
   const TODAY = new Date()
   const [year, setYear] = useState(TODAY.getFullYear())
@@ -88,10 +89,9 @@ export default function ShiftPickerCalendar({
   const [activeDateStr, setActiveDateStr] = useState(null)
 
   const targetTimeOff = useMemo(
-    () => getTimeOffForStaff(targetStaffId || ''),
-    [targetStaffId]
+    () => getTimeOffForStaff(timeOff || [], targetStaffId || ''),
+    [timeOff, targetStaffId]
   )
-
   const getLeaveForDate = (dateStr) =>
     targetTimeOff.filter((e) => e.date === dateStr && e.status === 'approved')
 

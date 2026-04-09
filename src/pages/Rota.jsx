@@ -922,7 +922,7 @@ function Rota() {
                               member.id,
                               currentRotaForWeek,
                               currentMonday,
-                              leaveData
+                              timeOff
                             )
                             const weekVariance = weekHours - 37
                             return { ...member, weekHours, weekVariance }
