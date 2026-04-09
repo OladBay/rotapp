@@ -205,7 +205,10 @@ export async function applySwapToRota(swapRequest, homeId, orgId) {
   }
 
   function addToShift(weekKey, shiftType, dayIdx, staffId, sleepIn) {
-    if (!rotaMap[weekKey]?.[shiftType]?.[dayIdx]) return
+    if (!rotaMap[weekKey]?.[shiftType]) return
+    if (!rotaMap[weekKey][shiftType][dayIdx]) {
+      rotaMap[weekKey][shiftType][dayIdx] = []
+    }
     const already = rotaMap[weekKey][shiftType][dayIdx].some(
       (s) => s.id === staffId
     )

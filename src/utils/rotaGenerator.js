@@ -35,9 +35,15 @@ function generateWeekRota(monday, absenceSet, staffMap) {
   )
 
   const shiftEligible = allStaff.filter(
-    (s) => !['manager', 'deputy', 'relief'].includes(s.role)
+    (s) =>
+      ![
+        'manager',
+        'deputy',
+        'relief',
+        'superadmin',
+        'operationallead',
+      ].includes(s.role)
   )
-
   for (let dayOffset = 0; dayOffset < 7; dayOffset++) {
     const date = new Date(monday)
     date.setDate(monday.getDate() + dayOffset)

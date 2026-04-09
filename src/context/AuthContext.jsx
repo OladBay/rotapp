@@ -40,7 +40,7 @@ export function AuthProvider({ children }) {
       name: profile.name,
       email: profile.email,
       role: profile.role,
-      activeRole: profile.active_role,
+      activeRole: profile.active_role || profile.role,
       home: profile.home,
       status: profile.status,
       gender: profile.gender,

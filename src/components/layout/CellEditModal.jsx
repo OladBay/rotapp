@@ -18,7 +18,10 @@ function CellEditModal({
   // Staff not already on this shift
   const eligible = staff.filter(
     (s) =>
-      !['manager', 'deputy'].includes(s.role) &&
+      !['manager', 'deputy', 'superadmin', 'operationallead'].includes(
+        s.role
+      ) &&
+      s.status === 'active' &&
       !current.find((e) => e.id === s.id)
   )
 
