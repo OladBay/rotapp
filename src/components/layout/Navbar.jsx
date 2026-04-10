@@ -1,17 +1,15 @@
-// src/components/layout/Navbar.jsx
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { useTheme } from '../../context/ThemeContext'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { useRota } from '../../context/RotaContext'
 import { getPendingTimeOffCount } from '../../utils/timeOffStorage'
-import { getPendingSwapCount } from '../../utils/swapRequests'
 import { getPendingCancelCount } from '../../utils/cancelRequests'
 
 function Navbar() {
   const { user, logout } = useAuth()
   const { theme, toggleTheme } = useTheme()
-  const { timeOff, swapRequests, cancelRequests } = useRota()
+  const { timeOff, cancelRequests } = useRota()
   const navigate = useNavigate()
   const location = useLocation()
 
@@ -22,9 +20,8 @@ function Navbar() {
 
   const pendingRequests = getPendingCancelCount(cancelRequests)
   const pendingTimeOff = getPendingTimeOffCount(timeOff)
-  const pendingSwaps = getPendingSwapCount(swapRequests)
 
-  const totalPending = pendingRequests + pendingTimeOff + pendingSwaps
+  const totalPending = pendingRequests + pendingTimeOff
   const hasStaffAction = totalPending > 0
 
   const canSeeStaff = ['manager', 'superadmin', 'operationallead'].includes(
@@ -84,7 +81,6 @@ function Navbar() {
         <span style={styles.role}>{user?.activeRole}</span>
         <span style={styles.name}>{user?.name}</span>
 
-        {/* Theme toggle */}
         <button
           style={styles.iconBtn}
           onClick={toggleTheme}

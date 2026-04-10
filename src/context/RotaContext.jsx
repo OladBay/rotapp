@@ -21,8 +21,6 @@ export function RotaProvider({ children }) {
   const [rotaLoading, setRotaLoading] = useState(true)
   const [timeOff, setTimeOffState] = useState([])
   const [timeOffLoading, setTimeOffLoading] = useState(true)
-  const [swapRequests, setSwapRequestsState] = useState([])
-  const [swapsLoading, setSwapsLoading] = useState(true)
   const [cancelRequests, setCancelRequestsState] = useState([])
   const [cancelsLoading, setCancelsLoading] = useState(true)
 
@@ -30,31 +28,25 @@ export function RotaProvider({ children }) {
   const fetchAll = useCallback(async () => {
     if (!user?.org_id || !user?.home) return
 
-    const [staffRes, rotaRes, timeOffRes, swapsRes, cancelsRes] =
-      await Promise.all([
-        supabase
-          .from('profiles')
-          .select('*')
-          .eq('org_id', user.org_id)
-          .neq('status', 'declined')
-          .order('name', { ascending: true }),
-        supabase
-          .from('rotapp_month_rota')
-          .select('week_key, rota_data')
-          .eq('org_id', user.org_id)
-          .eq('home_id', user.home),
-        supabase.from('rotapp_time_off').select('*').eq('org_id', user.org_id),
-        supabase
-          .from('rotapp_swap_requests')
-          .select('*')
-          .eq('org_id', user.org_id)
-          .order('created_at', { ascending: false }),
-        supabase
-          .from('rotapp_cancel_requests')
-          .select('*')
-          .eq('org_id', user.org_id)
-          .order('requested_at', { ascending: false }),
-      ])
+    const [staffRes, rotaRes, timeOffRes, cancelsRes] = await Promise.all([
+      supabase
+        .from('profiles')
+        .select('*')
+        .eq('org_id', user.org_id)
+        .neq('status', 'declined')
+        .order('name', { ascending: true }),
+      supabase
+        .from('rotapp_month_rota')
+        .select('week_key, rota_data')
+        .eq('org_id', user.org_id)
+        .eq('home_id', user.home),
+      supabase.from('rotapp_time_off').select('*').eq('org_id', user.org_id),
+      supabase
+        .from('rotapp_cancel_requests')
+        .select('*')
+        .eq('org_id', user.org_id)
+        .order('requested_at', { ascending: false }),
+    ])
 
     if (staffRes.error)
       console.error('RotaContext: staff fetch failed', staffRes.error)
@@ -80,11 +72,6 @@ export function RotaProvider({ children }) {
       console.error('RotaContext: timeOff fetch failed', timeOffRes.error)
     else setTimeOffState(timeOffRes.data || [])
     setTimeOffLoading(false)
-
-    if (swapsRes.error)
-      console.error('RotaContext: swaps fetch failed', swapsRes.error)
-    else setSwapRequestsState(swapsRes.data || [])
-    setSwapsLoading(false)
 
     if (cancelsRes.error)
       console.error('RotaContext: cancels fetch failed', cancelsRes.error)
@@ -126,20 +113,6 @@ export function RotaProvider({ children }) {
       return
     }
     setTimeOffState(data || [])
-  }, [user?.org_id])
-
-  const refreshSwaps = useCallback(async () => {
-    if (!user?.org_id) return
-    const { data, error } = await supabase
-      .from('rotapp_swap_requests')
-      .select('*')
-      .eq('org_id', user.org_id)
-      .order('created_at', { ascending: false })
-    if (error) {
-      console.error('RotaContext: swaps refresh failed', error)
-      return
-    }
-    setSwapRequestsState(data || [])
   }, [user?.org_id])
 
   const refreshCancels = useCallback(async () => {
@@ -209,10 +182,6 @@ export function RotaProvider({ children }) {
         timeOff,
         timeOffLoading,
         refreshTimeOff,
-        // Swap requests
-        swapRequests,
-        swapsLoading,
-        refreshSwaps,
         // Cancel requests
         cancelRequests,
         cancelsLoading,
