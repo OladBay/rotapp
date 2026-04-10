@@ -36,14 +36,8 @@ const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
 function Calendar() {
   const { user } = useAuth()
-  const {
-    staff,
-    monthRota,
-    timeOff,
-    refreshTimeOff,
-    cancelRequests,
-    refreshCancels,
-  } = useRota()
+  const { monthRota, timeOff, refreshTimeOff, cancelRequests, refreshCancels } =
+    useRota()
 
   const [weekRotaState] = useState({
     early: Array(7).fill([]),
@@ -57,14 +51,16 @@ function Calendar() {
   const [currentYear, setCurrentYear] = useState(TODAY.getFullYear())
   const [hoveredMonth, setHoveredMonth] = useState(null)
 
-  // ── Shift detail / cancel modal ──
+  // ── Modals ──
   const [selectedShift, setSelectedShift] = useState(null)
+  const [cancelledShiftDetail, setCancelledShiftDetail] = useState(null)
+
   const [cancelReason, setCancelReason] = useState('')
   const [customReasonText, setCustomReasonText] = useState('')
+  const [cancelNote, setCancelNote] = useState('')
   const [showReasonForm, setShowReasonForm] = useState(false)
   const [submitting, setSubmitting] = useState(false)
 
-  // ── Time-off modal ──
   const [showTimeOffModal, setShowTimeOffModal] = useState(false)
   const [timeOffType, setTimeOffType] = useState('annual_leave')
   const [timeOffSelectedDates, setTimeOffSelectedDates] = useState([])
@@ -77,7 +73,7 @@ function Calendar() {
   const currentWeekKey = getGeneratorMondayKey(currentMonday)
   const currentWeekRota = monthRota[currentWeekKey] || weekRotaState
 
-  // ── Derived data from context ──
+  // ── Derived data ──
   const myTimeOff = useMemo(
     () => getTimeOffForStaff(timeOff, staffId || ''),
     [timeOff, staffId]
@@ -124,7 +120,7 @@ function Calendar() {
           dayName: DAYS[dayIdx],
           type: 'early',
           sleepIn: false,
-          home: user?.home || 'Meadowview House',
+          home: user?.home || '',
         })
       const lateStaff = currentWeekRota.late?.[dayIdx] || []
       const myLate = lateStaff.find((s) => s.id === staffId)
@@ -135,19 +131,48 @@ function Calendar() {
           dayName: DAYS[dayIdx],
           type: 'late',
           sleepIn: myLate.sleepIn || false,
-          home: user?.home || 'Meadowview House',
+          home: user?.home || '',
         })
     }
     return shifts
   }, [currentWeekRota, currentMonday, staffId, user?.home])
 
-  const getShiftForDay = (date) => myShiftsForWeek.find((s) => s.date === date)
+  // ── getDayState ────────────────────────────────────────────────────────
+  // Single source of truth for what is happening on a given day.
+  // The render loop reads from this — it never does its own lookups.
+  const getDayState = useCallback(
+    (dateStr, dayIdx) => {
+      const shift = myShiftsForWeek.find((s) => s.date === dateStr) || null
 
-  // ── Cancel request helpers ──
-  const getShiftRequestStatus = (shift) => {
-    if (!shift || !staffId) return null
-    return getShiftRequest(cancelRequests, staffId, shift.date, shift.type)
-  }
+      const shiftRequest =
+        shift && staffId
+          ? getShiftRequest(cancelRequests, staffId, shift.date, shift.type)
+          : null
+
+      // Look up approved cancellation directly from the cancel record.
+      // This works even when the shift has been removed from the rota —
+      // the cancel record is the source of truth for the cancelled state.
+      const approvedCancel =
+        cancelRequests.find(
+          (r) =>
+            r.staff_id === staffId &&
+            r.shift_date === dateStr &&
+            r.status === 'approved'
+        ) || null
+
+      const timeOffEntries = getTimeOffForDateStr(myTimeOff, dateStr)
+
+      return {
+        shift,
+        shiftRequest,
+        approvedCancel,
+        timeOffEntries,
+        isPending: shiftRequest?.status === 'pending',
+        isCancelled: !!approvedCancel,
+      }
+    },
+    [myShiftsForWeek, cancelRequests, staffId, myTimeOff]
+  )
 
   // ── Navigation ──
   const prevWeek = () => setMonday((prev) => addWeeks(prev, -1))
@@ -186,6 +211,7 @@ function Calendar() {
         shiftType: selectedShift.type,
         reason: cancelReason,
         customReason: cancelReason === 'Other' ? customReasonText : '',
+        notes: cancelNote.trim() || null,
         homeId: user.home,
         orgId: user.org_id,
       },
@@ -196,6 +222,7 @@ function Calendar() {
       setSelectedShift(null)
       setCancelReason('')
       setCustomReasonText('')
+      setCancelNote('')
       setShowReasonForm(false)
       setSubmitting(false)
     }, 500)
@@ -235,7 +262,6 @@ function Calendar() {
   return (
     <div style={s.page}>
       <Navbar />
-
       <div style={s.body}>
         {/* Header */}
         <div style={s.header}>
@@ -337,35 +363,47 @@ function Calendar() {
                   <div style={s.shiftName}>My Shifts</div>
                   <div style={s.shiftTime}>Your assigned shifts</div>
                 </div>
+
                 {DAYS.map((_, dayIdx) => {
                   const date = weekDates[dayIdx]
                   const y2 = date.getFullYear()
                   const m2 = String(date.getMonth() + 1).padStart(2, '0')
                   const d2 = String(date.getDate()).padStart(2, '0')
                   const dateStr = `${y2}-${m2}-${d2}`
-                  const shift = getShiftForDay(dateStr)
-                  const shiftRequest = shift
-                    ? getShiftRequestStatus(shift)
-                    : null
-                  const isPending = shiftRequest?.status === 'pending'
-                  const isApproved = shiftRequest?.status === 'approved'
-                  const timeOffEntries = getTimeOffForDateStr(
-                    myTimeOff,
-                    dateStr
-                  )
+
+                  const {
+                    shift,
+                    shiftRequest,
+                    approvedCancel,
+                    timeOffEntries,
+                    isPending,
+                    isCancelled,
+                  } = getDayState(dateStr, dayIdx)
 
                   return (
                     <div
                       key={dayIdx}
                       style={{
                         ...s.cell,
-                        cursor: shift ? 'pointer' : 'default',
+                        cursor: shift || isCancelled ? 'pointer' : 'default',
                       }}
                       onClick={() => {
+                        if (isCancelled) {
+                          setCancelledShiftDetail({
+                            date: dateStr,
+                            dayName: DAYS[dayIdx],
+                            type: approvedCancel.shift_type,
+                            sleepIn: shift?.sleepIn || false,
+                            home: shift?.home || user?.home || '',
+                            cancelRecord: approvedCancel,
+                          })
+                          return
+                        }
                         if (!shift) return
                         setSelectedShift(shift)
                       }}
                     >
+                      {/* Time off badges */}
                       {timeOffEntries.map((e) => (
                         <div
                           key={e.id}
@@ -393,8 +431,15 @@ function Calendar() {
                         </div>
                       ))}
 
-                      {isApproved ? (
-                        <div style={s.cancelledTag}>Cancelled</div>
+                      {/* Cancelled shift badge */}
+                      {isCancelled ? (
+                        <div style={{ ...s.cancelledTag, cursor: 'pointer' }}>
+                          <FontAwesomeIcon
+                            icon='circle-xmark'
+                            style={{ marginRight: '4px', fontSize: '10px' }}
+                          />
+                          Shift cancelled
+                        </div>
                       ) : shift ? (
                         <div
                           style={{
@@ -587,6 +632,7 @@ function Calendar() {
             setShowReasonForm(false)
             setCancelReason('')
             setCustomReasonText('')
+            setCancelNote('')
           }}
         >
           <div style={s.modal} onClick={(e) => e.stopPropagation()}>
@@ -599,6 +645,7 @@ function Calendar() {
                   setShowReasonForm(false)
                   setCancelReason('')
                   setCustomReasonText('')
+                  setCancelNote('')
                 }}
               >
                 <FontAwesomeIcon icon='xmark' />
@@ -646,17 +693,16 @@ function Calendar() {
               <div style={s.detailRow}>
                 <span style={s.detailLabel}>Status</span>
                 {(() => {
-                  const request = getShiftRequestStatus(selectedShift)
+                  const request = getShiftRequest(
+                    cancelRequests,
+                    staffId,
+                    selectedShift.date,
+                    selectedShift.type
+                  )
                   if (request?.status === 'pending')
                     return (
                       <span style={{ ...s.detailVal, color: '#c4883a' }}>
                         Cancellation requested
-                      </span>
-                    )
-                  if (request?.status === 'approved')
-                    return (
-                      <span style={{ ...s.detailVal, color: '#e85c3d' }}>
-                        Cancelled
                       </span>
                     )
                   if (request?.status === 'rejected')
@@ -682,7 +728,12 @@ function Calendar() {
 
             {/* Cancel request section */}
             {(() => {
-              const request = getShiftRequestStatus(selectedShift)
+              const request = getShiftRequest(
+                cancelRequests,
+                staffId,
+                selectedShift.date,
+                selectedShift.type
+              )
               if (request?.status === 'pending') {
                 const pingInfo = getPingInfo(request)
                 return (
@@ -721,7 +772,6 @@ function Calendar() {
                   </>
                 )
               }
-              if (request?.status === 'approved') return null
 
               if (!showReasonForm) {
                 return (
@@ -768,15 +818,42 @@ function Calendar() {
                     <option value='Transport issue'>Transport issue</option>
                     <option value='Other'>Other (please specify)</option>
                   </select>
+
                   {cancelReason === 'Other' && (
+                    <div style={s.field}>
+                      <label style={s.reasonLabel}>
+                        Please specify your reason
+                      </label>
+                      <textarea
+                        style={s.reasonTextarea}
+                        placeholder='Describe your reason...'
+                        value={customReasonText}
+                        onChange={(e) => setCustomReasonText(e.target.value)}
+                        rows='2'
+                      />
+                    </div>
+                  )}
+                  <div
+                    style={{
+                      ...s.field,
+                      borderTop: '1px solid rgba(255,255,255,0.06)',
+                      paddingTop: '12px',
+                    }}
+                  >
+                    <label style={s.reasonLabel}>
+                      Additional note{' '}
+                      <span style={{ color: '#5d6180', fontWeight: 400 }}>
+                        (optional)
+                      </span>
+                    </label>
                     <textarea
                       style={s.reasonTextarea}
-                      placeholder='Please specify your reason...'
-                      value={customReasonText}
-                      onChange={(e) => setCustomReasonText(e.target.value)}
-                      rows='3'
+                      placeholder='Anything else your manager should know...'
+                      value={cancelNote}
+                      onChange={(e) => setCancelNote(e.target.value)}
+                      rows='2'
                     />
-                  )}
+                  </div>
                   <div style={s.reasonActions}>
                     <button
                       style={s.cancelReasonBtn}
@@ -784,6 +861,7 @@ function Calendar() {
                         setShowReasonForm(false)
                         setCancelReason('')
                         setCustomReasonText('')
+                        setCancelNote('')
                       }}
                     >
                       Back
@@ -814,6 +892,114 @@ function Calendar() {
                 </div>
               )
             })()}
+          </div>
+        </div>
+      )}
+
+      {/* ── Cancelled shift detail modal ── */}
+      {cancelledShiftDetail && (
+        <div style={s.overlay} onClick={() => setCancelledShiftDetail(null)}>
+          <div style={s.modal} onClick={(e) => e.stopPropagation()}>
+            <div style={s.modalHeader}>
+              <div style={s.modalTitle}>Cancelled Shift</div>
+              <button
+                style={s.closeBtn}
+                onClick={() => setCancelledShiftDetail(null)}
+              >
+                <FontAwesomeIcon icon='xmark' />
+              </button>
+            </div>
+            <div style={s.modalBody}>
+              <div style={s.detailRow}>
+                <span style={s.detailLabel}>Day</span>
+                <span style={s.detailVal}>
+                  {cancelledShiftDetail.dayName}, {cancelledShiftDetail.date}
+                </span>
+              </div>
+              <div style={s.detailRow}>
+                <span style={s.detailLabel}>Shift</span>
+                <span
+                  style={{
+                    ...s.detailVal,
+                    color:
+                      cancelledShiftDetail.type === 'early'
+                        ? '#2a7f62'
+                        : '#7a4fa8',
+                    textTransform: 'capitalize',
+                  }}
+                >
+                  {cancelledShiftDetail.type}
+                </span>
+              </div>
+              <div style={s.detailRow}>
+                <span style={s.detailLabel}>Time</span>
+                <span style={s.detailVal}>
+                  {cancelledShiftDetail.type === 'early'
+                    ? '07:00–14:30'
+                    : '14:00–23:00'}
+                </span>
+              </div>
+              {cancelledShiftDetail.sleepIn && (
+                <div style={s.detailRow}>
+                  <span style={s.detailLabel}>Sleep-in</span>
+                  <span style={{ ...s.detailVal, color: '#c4883a' }}>Yes</span>
+                </div>
+              )}
+              <div style={s.detailRow}>
+                <span style={s.detailLabel}>Status</span>
+                <span style={{ ...s.detailVal, color: '#e85c3d' }}>
+                  Cancelled
+                </span>
+              </div>
+              {cancelledShiftDetail.cancelRecord?.reason && (
+                <div style={s.detailRow}>
+                  <span style={s.detailLabel}>Reason</span>
+                  <span style={s.detailVal}>
+                    {cancelledShiftDetail.cancelRecord.reason === 'Other'
+                      ? cancelledShiftDetail.cancelRecord.custom_reason
+                      : cancelledShiftDetail.cancelRecord.reason}
+                  </span>
+                </div>
+              )}
+              {cancelledShiftDetail.cancelRecord?.reviewed_at && (
+                <div style={s.detailRow}>
+                  <span style={s.detailLabel}>Approved on</span>
+                  <span style={s.detailVal}>
+                    {new Date(
+                      cancelledShiftDetail.cancelRecord.reviewed_at
+                    ).toLocaleDateString('en-GB', {
+                      day: 'numeric',
+                      month: 'short',
+                      year: 'numeric',
+                    })}
+                  </span>
+                </div>
+              )}
+            </div>
+            <div
+              style={{
+                padding: '16px 24px',
+                borderTop: '1px solid rgba(255,255,255,0.07)',
+              }}
+            >
+              <div
+                style={{
+                  background: 'rgba(232,92,61,0.08)',
+                  border: '1px solid rgba(232,92,61,0.2)',
+                  borderRadius: '8px',
+                  padding: '10px 14px',
+                  fontSize: '12px',
+                  color: '#e85c3d',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                }}
+              >
+                <FontAwesomeIcon icon='triangle-exclamation' />
+                This shift has been removed from the rota. Contact your manager
+                if this was a mistake.
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -1077,9 +1263,12 @@ const s = {
     fontSize: '11px',
     color: '#e85c3d',
     background: 'rgba(232,92,61,0.1)',
+    border: '1px solid rgba(232,92,61,0.25)',
     borderRadius: '6px',
-    padding: '8px',
-    textAlign: 'center',
+    padding: '6px 8px',
+    display: 'flex',
+    alignItems: 'center',
+    fontWeight: 500,
   },
   yearWrap: {
     display: 'grid',

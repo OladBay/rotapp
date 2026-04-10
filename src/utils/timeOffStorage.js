@@ -1,11 +1,16 @@
 import { supabase } from '../lib/supabase'
+import { removeStaffFromShift } from './rotaMutations'
 
 // Generate unique ID
 export function generateTimeOffId() {
   return `to_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
 }
 
-// Add time off entry to Supabase
+// ── addTimeOff ─────────────────────────────────────────────────────────────
+// Inserts a time off entry into Supabase.
+// If status is 'approved' (e.g. manager adding leave directly), also removes
+// the staff member from the rota for that date and supersedes any active
+// cancel record — leave is the authoritative state.
 export async function addTimeOff(timeOffEntry, homeId, orgId) {
   const { error } = await supabase.from('rotapp_time_off').insert({
     id: timeOffEntry.id,
@@ -25,9 +30,25 @@ export async function addTimeOff(timeOffEntry, homeId, orgId) {
     console.error('addTimeOff error:', error)
     throw error
   }
+
+  // If leave is being added as already approved (manager direct add),
+  // remove from rota and supersede any conflicting cancel record immediately.
+  // fromLeave: true triggers supersedeCancelForDate inside removeStaffFromShift.
+  if (timeOffEntry.status === 'approved') {
+    await removeStaffFromShift(
+      timeOffEntry.staffId,
+      timeOffEntry.date,
+      homeId,
+      orgId,
+      { fromLeave: true }
+    )
+  }
 }
 
-// Approve a time off entry
+// ── approveTimeOff ─────────────────────────────────────────────────────────
+// Updates a pending time off entry to approved status.
+// Does NOT call removeStaffFromShift here — that is the caller's
+// responsibility so it can also call refreshMonthRota() afterwards.
 export async function approveTimeOff(timeOffId, approvedBy) {
   const { error } = await supabase
     .from('rotapp_time_off')
@@ -70,52 +91,9 @@ export function getPendingTimeOffCount(timeOffArray) {
   return (timeOffArray || []).filter((e) => e.status === 'pending').length
 }
 
-// Remove staff from rota on approved leave dates
-// Called after approving time off — mutates monthRota in Supabase
-export async function removeStaffFromRotaOnLeave(
-  staffId,
-  dateStr,
-  homeId,
-  orgId
-) {
-  // Find the Monday key for this date
-  const [year, month, day] = dateStr.split('-').map(Number)
-  const date = new Date(year, month - 1, day)
-  const dayOfWeek = (date.getDay() + 6) % 7
-  const monday = new Date(date)
-  monday.setDate(date.getDate() - dayOfWeek)
-  const mondayKey = `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, '0')}-${String(monday.getDate()).padStart(2, '0')}`
-
-  // Fetch the rota for that week
-  const { data, error } = await supabase
-    .from('rotapp_month_rota')
-    .select('rota_data')
-    .eq('home_id', homeId)
-    .eq('org_id', orgId)
-    .eq('week_key', mondayKey)
-    .maybeSingle()
-
-  if (error || !data) return
-
-  const weekRota = data.rota_data
-  if (weekRota.early?.[dayOfWeek]) {
-    weekRota.early[dayOfWeek] = weekRota.early[dayOfWeek].filter(
-      (s) => s.id !== staffId
-    )
-  }
-  if (weekRota.late?.[dayOfWeek]) {
-    weekRota.late[dayOfWeek] = weekRota.late[dayOfWeek].filter(
-      (s) => s.id !== staffId
-    )
-  }
-
-  await supabase
-    .from('rotapp_month_rota')
-    .update({ rota_data: weekRota, updated_at: new Date().toISOString() })
-    .eq('home_id', homeId)
-    .eq('org_id', orgId)
-    .eq('week_key', mondayKey)
-}
+// removeStaffFromRotaOnLeave — legacy re-export for backwards compatibility.
+// All new code should call removeStaffFromShift from rotaMutations directly.
+export { removeStaffFromShift as removeStaffFromRotaOnLeave } from './rotaMutations'
 
 // Legacy migration — no longer needed, kept as no-op to avoid import errors
 export function migrateLeaveDataIfNeeded() {

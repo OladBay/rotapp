@@ -19,8 +19,8 @@ import {
   removeTimeOff,
   generateTimeOffId,
   getPendingTimeOffCount,
-  removeStaffFromRotaOnLeave,
 } from '../utils/timeOffStorage'
+import { removeStaffFromShift } from '../utils/rotaMutations'
 import LeaveCalendar from '../components/shared/LeaveCalendar'
 import { fetchHomes } from '../utils/homesData'
 
@@ -111,8 +111,6 @@ function Staff() {
   const [managerNotes, setManagerNotes] = useState('')
   const [showRejectModal, setShowRejectModal] = useState(false)
 
-  // ── Swap state ──
-
   // ── Fetch homes ──
   useEffect(() => {
     if (!user) return
@@ -202,21 +200,33 @@ function Staff() {
   const uniqueHomes = [...new Set(allStaff.map((s) => s.home).filter(Boolean))]
 
   // ── Derived context data ──
-
   const pendingCancels = getPendingRequests(cancelRequests)
   const allCancels = getAllRequests(cancelRequests)
 
   // ── Cancel request handlers ──
   const handleApproveRequest = async (request) => {
-    await updateRequest(request.id, {
-      status: 'approved',
-      reviewedAt: new Date().toISOString(),
-      reviewedBy: user?.name,
-      managerNotes: managerNotes || null,
-    })
-    refreshCancels()
-    setSelectedRequest(null)
-    setManagerNotes('')
+    try {
+      await updateRequest(request.id, {
+        status: 'approved',
+        reviewedAt: new Date().toISOString(),
+        reviewedBy: user?.name,
+        managerNotes: managerNotes || null,
+      })
+      // fromLeave is false here — cancellation approval does not supersede leave
+      await removeStaffFromShift(
+        request.staff_id,
+        request.shift_date,
+        user.home,
+        user.org_id,
+        { fromLeave: false }
+      )
+      refreshCancels()
+      refreshMonthRota()
+      setSelectedRequest(null)
+      setManagerNotes('')
+    } catch (err) {
+      console.error('Approve cancellation failed:', err)
+    }
   }
 
   const handleRejectRequest = async (request) => {
@@ -232,31 +242,6 @@ function Staff() {
     setRejectionReason('')
     setManagerNotes('')
     setShowRejectModal(false)
-  }
-
-  // ── Swap handlers ──
-  const handleApproveSwap = async (swap) => {
-    try {
-      await applySwapToRota(swap, user.org_id)
-      await approveSwapRequest(swap.id, user?.name)
-      refreshSwaps()
-      refreshMonthRota()
-      setSelectedSwap(null)
-    } catch (err) {
-      console.error('Approve swap failed:', err)
-    }
-  }
-
-  const handleRejectSwap = async (swap) => {
-    try {
-      await rejectSwapRequest(swap.id, user?.name, swapRejectNote)
-      refreshSwaps()
-      setSelectedSwap(null)
-      setSwapRejectNote('')
-      setShowSwapRejectModal(false)
-    } catch (err) {
-      console.error('Reject swap failed:', err)
-    }
   }
 
   return (
@@ -336,8 +321,9 @@ function Staff() {
               },
               {
                 key: 'requests',
-                label: `Requests${pendingCancels.length > 0 ? ` (${pendingCancels.length})` : ''}`,
+                label: `Cancellations${pendingCancels.length > 0 ? ` (${pendingCancels.length})` : ''}`,
                 hasBadge: pendingCancels.length > 0,
+                badgeCount: pendingCancels.length,
               },
             ].map((t) => (
               <button
@@ -360,104 +346,101 @@ function Staff() {
         )}
 
         {/* Staff list */}
-        {!staffLoading &&
-          tab !== 'leave' &&
-          tab !== 'requests' &&
-          tab !== 'swaps' && (
-            <div style={s.list}>
-              {displayed.length === 0 && (
-                <div style={s.empty}>No staff in this category</div>
-              )}
-              {displayed.map((member) => (
+        {!staffLoading && tab !== 'leave' && tab !== 'requests' && (
+          <div style={s.list}>
+            {displayed.length === 0 && (
+              <div style={s.empty}>No staff in this category</div>
+            )}
+            {displayed.map((member) => (
+              <div
+                key={member.id}
+                style={{
+                  ...s.staffRow,
+                  background:
+                    member.status === 'pending'
+                      ? 'rgba(196,136,58,0.04)'
+                      : 'var(--bg-card, #161820)',
+                  border:
+                    member.status === 'pending'
+                      ? '1px solid rgba(196,136,58,0.2)'
+                      : '1px solid rgba(255,255,255,0.07)',
+                }}
+                onClick={() => setSelectedStaff(member)}
+              >
                 <div
-                  key={member.id}
                   style={{
-                    ...s.staffRow,
+                    ...s.avatar,
                     background:
-                      member.status === 'pending'
-                        ? 'rgba(196,136,58,0.04)'
-                        : 'var(--bg-card, #161820)',
-                    border:
-                      member.status === 'pending'
-                        ? '1px solid rgba(196,136,58,0.2)'
-                        : '1px solid rgba(255,255,255,0.07)',
+                      member.gender === 'F'
+                        ? 'rgba(122,79,168,0.2)'
+                        : 'rgba(108,143,255,0.15)',
+                    color: member.gender === 'F' ? '#7a4fa8' : '#6c8fff',
                   }}
-                  onClick={() => setSelectedStaff(member)}
                 >
-                  <div
+                  {member.name
+                    ? member.name
+                        .split(' ')
+                        .map((n) => n[0])
+                        .join('')
+                    : '?'}
+                </div>
+                <div style={s.staffInfo}>
+                  <div style={s.staffName}>{member.name || '—'}</div>
+                  <div style={s.staffMeta}>
+                    {ROLE_LABELS[member.role] || member.role}
+                    {member.driver && ' · Driver'}
+                    {member.home === null && ' · Relief pool'}
+                    {isOLorAdmin &&
+                      member.home &&
+                      ` · ${member.home.charAt(0).toUpperCase() + member.home.slice(1)}`}
+                  </div>
+                </div>
+                <div style={s.staffTags}>
+                  {member.gender && (
+                    <span style={s.tag}>
+                      {member.gender === 'F'
+                        ? 'Female'
+                        : member.gender === 'M'
+                          ? 'Male'
+                          : 'Other'}
+                    </span>
+                  )}
+                  <span
                     style={{
-                      ...s.avatar,
+                      ...s.tag,
                       background:
-                        member.gender === 'F'
-                          ? 'rgba(122,79,168,0.2)'
-                          : 'rgba(108,143,255,0.15)',
-                      color: member.gender === 'F' ? '#7a4fa8' : '#6c8fff',
+                        STATUS_COLORS[member.status]?.bg ||
+                        'rgba(255,255,255,0.06)',
+                      color: STATUS_COLORS[member.status]?.color || '#9499b0',
                     }}
                   >
-                    {member.name
-                      ? member.name
-                          .split(' ')
-                          .map((n) => n[0])
-                          .join('')
-                      : '?'}
-                  </div>
-                  <div style={s.staffInfo}>
-                    <div style={s.staffName}>{member.name || '—'}</div>
-                    <div style={s.staffMeta}>
-                      {ROLE_LABELS[member.role] || member.role}
-                      {member.driver && ' · Driver'}
-                      {member.home === null && ' · Relief pool'}
-                      {isOLorAdmin &&
-                        member.home &&
-                        ` · ${member.home.charAt(0).toUpperCase() + member.home.slice(1)}`}
-                    </div>
-                  </div>
-                  <div style={s.staffTags}>
-                    {member.gender && (
-                      <span style={s.tag}>
-                        {member.gender === 'F'
-                          ? 'Female'
-                          : member.gender === 'M'
-                            ? 'Male'
-                            : 'Other'}
-                      </span>
-                    )}
-                    <span
-                      style={{
-                        ...s.tag,
-                        background:
-                          STATUS_COLORS[member.status]?.bg ||
-                          'rgba(255,255,255,0.06)',
-                        color: STATUS_COLORS[member.status]?.color || '#9499b0',
-                      }}
-                    >
-                      {member.status}
-                    </span>
-                  </div>
-                  {member.status === 'pending' && (
-                    <div
-                      style={s.pendingActions}
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <button
-                        style={s.approveBtn}
-                        onClick={() => handleApprove(member)}
-                      >
-                        Approve
-                      </button>
-                      <button
-                        style={s.declineBtn}
-                        onClick={() => handleDecline(member)}
-                      >
-                        Decline
-                      </button>
-                    </div>
-                  )}
-                  <div style={s.chevron}>›</div>
+                    {member.status}
+                  </span>
                 </div>
-              ))}
-            </div>
-          )}
+                {member.status === 'pending' && (
+                  <div
+                    style={s.pendingActions}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <button
+                      style={s.approveBtn}
+                      onClick={() => handleApprove(member)}
+                    >
+                      Approve
+                    </button>
+                    <button
+                      style={s.declineBtn}
+                      onClick={() => handleDecline(member)}
+                    >
+                      Decline
+                    </button>
+                  </div>
+                )}
+                <div style={s.chevron}>›</div>
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* Leave tab */}
         {tab === 'leave' && (
@@ -546,11 +529,14 @@ function Staff() {
                                 onClick={async (e) => {
                                   e.stopPropagation()
                                   await approveTimeOff(entry.id, user?.name)
-                                  await removeStaffFromRotaOnLeave(
+                                  // fromLeave: true supersedes any active cancel
+                                  // record for this date
+                                  await removeStaffFromShift(
                                     entry.staff_id,
                                     entry.date,
                                     user.home,
-                                    user.org_id
+                                    user.org_id,
+                                    { fromLeave: true }
                                   )
                                   refreshTimeOff()
                                   refreshMonthRota()
@@ -585,7 +571,7 @@ function Staff() {
           </div>
         )}
 
-        {/* Requests tab */}
+        {/* Cancellations tab */}
         {tab === 'requests' && (
           <div style={s.requestsWrap}>
             {pendingCancels.length === 0 && allCancels.length === 0 ? (
@@ -636,6 +622,29 @@ function Staff() {
                               ? request.custom_reason
                               : request.reason}
                           </div>
+                          {request.notes && (
+                            <div
+                              style={{
+                                fontSize: '12px',
+                                color: '#9499b0',
+                                background: 'rgba(255,255,255,0.03)',
+                                border: '1px solid rgba(255,255,255,0.07)',
+                                borderRadius: '6px',
+                                padding: '6px 10px',
+                                marginTop: '2px',
+                              }}
+                            >
+                              <span
+                                style={{
+                                  color: '#5d6180',
+                                  marginRight: '4px',
+                                }}
+                              >
+                                Note:
+                              </span>
+                              {request.notes}
+                            </div>
+                          )}
                           <div style={s.requestTime}>
                             Requested:{' '}
                             {new Date(request.requested_at).toLocaleString()}
@@ -662,14 +671,18 @@ function Staff() {
                     ))}
                   </>
                 )}
-                {allCancels.filter((r) => r.status !== 'pending').length >
-                  0 && (
+                {allCancels.filter(
+                  (r) => r.status !== 'pending' && r.status !== 'superseded'
+                ).length > 0 && (
                   <>
                     <div style={{ ...s.sectionLabel, marginTop: '24px' }}>
                       History
                     </div>
                     {allCancels
-                      .filter((r) => r.status !== 'pending')
+                      .filter(
+                        (r) =>
+                          r.status !== 'pending' && r.status !== 'superseded'
+                      )
                       .sort(
                         (a, b) =>
                           new Date(b.requested_at) - new Date(a.requested_at)
@@ -725,22 +738,39 @@ function Staff() {
                                 ? request.custom_reason
                                 : request.reason}
                             </div>
-                            {request.rejection_reason && (
+                            {request.notes && (
                               <div
                                 style={{
-                                  color: '#e85c3d',
                                   fontSize: '12px',
+                                  color: '#9499b0',
+                                  background: 'rgba(255,255,255,0.03)',
+                                  border: '1px solid rgba(255,255,255,0.07)',
+                                  borderRadius: '6px',
+                                  padding: '6px 10px',
+                                  marginTop: '2px',
                                 }}
+                              >
+                                <span
+                                  style={{
+                                    color: '#5d6180',
+                                    marginRight: '4px',
+                                  }}
+                                >
+                                  Note:
+                                </span>
+                                {request.notes}
+                              </div>
+                            )}
+                            {request.rejection_reason && (
+                              <div
+                                style={{ color: '#e85c3d', fontSize: '12px' }}
                               >
                                 Rejection reason: {request.rejection_reason}
                               </div>
                             )}
                             {request.manager_notes && (
                               <div
-                                style={{
-                                  color: '#6c8fff',
-                                  fontSize: '12px',
-                                }}
+                                style={{ color: '#6c8fff', fontSize: '12px' }}
                               >
                                 Manager notes: {request.manager_notes}
                               </div>
@@ -938,6 +968,8 @@ function Staff() {
                 disabled={leaveSelectedDates.length === 0}
                 onClick={async () => {
                   for (const dateStr of leaveSelectedDates) {
+                    // addTimeOff handles rota removal and cancel supersession
+                    // internally when status is 'approved' — no separate call needed
                     await addTimeOff(
                       {
                         id: generateTimeOffId(),
@@ -955,6 +987,7 @@ function Staff() {
                     )
                   }
                   refreshTimeOff()
+                  refreshMonthRota()
                   setLeaveStaff(null)
                   setLeaveSelectedDates([])
                   setLeaveNotes('')
@@ -1039,11 +1072,13 @@ function Staff() {
                     style={s.approveBtn}
                     onClick={async () => {
                       await approveTimeOff(selectedLeaveEntry.id, user?.name)
-                      await removeStaffFromRotaOnLeave(
+                      // fromLeave: true supersedes any active cancel record
+                      await removeStaffFromShift(
                         selectedLeaveEntry.staff_id,
                         selectedLeaveEntry.date,
                         user.home,
-                        user.org_id
+                        user.org_id,
+                        { fromLeave: true }
                       )
                       refreshTimeOff()
                       refreshMonthRota()
@@ -1091,6 +1126,14 @@ function Staff() {
                     : selectedRequest.reason}
                 </span>
               </div>
+              {selectedRequest.notes && (
+                <div style={s.detailRow}>
+                  <span style={s.detailLabel}>Staff note</span>
+                  <span style={{ ...s.detailVal, color: '#9499b0' }}>
+                    {selectedRequest.notes}
+                  </span>
+                </div>
+              )}
               <div style={s.field}>
                 <label style={s.detailLabel}>Notes to staff (optional)</label>
                 <textarea
@@ -1247,7 +1290,6 @@ const s = {
   },
   subtitle: { fontSize: '13px', color: '#9499b0', marginTop: '4px' },
   headerActions: { display: 'flex', alignItems: 'center', gap: '10px' },
-
   inviteBtn: {
     background: '#6c8fff',
     color: '#fff',
@@ -1283,7 +1325,6 @@ const s = {
     border: '1px solid rgba(108,143,255,0.3)',
     color: '#6c8fff',
   },
-
   errorBanner: {
     background: 'rgba(232,92,61,0.08)',
     border: '1px solid rgba(232,92,61,0.2)',
@@ -1769,38 +1810,6 @@ const s = {
     display: 'flex',
     alignItems: 'center',
     gap: '5px',
-  },
-  swapShiftRow: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    flexWrap: 'wrap',
-    marginBottom: '6px',
-  },
-  swapShiftPill: {
-    fontSize: '12px',
-    fontWeight: 500,
-    padding: '4px 10px',
-    borderRadius: '6px',
-    fontFamily: 'DM Mono, monospace',
-  },
-  sameDayPill: {
-    fontSize: '10px',
-    color: '#6c8fff',
-    background: 'rgba(108,143,255,0.12)',
-    border: '1px solid rgba(108,143,255,0.25)',
-    borderRadius: '4px',
-    padding: '1px 5px',
-    marginLeft: '4px',
-    fontFamily: 'DM Sans, sans-serif',
-  },
-  swapWarnRow: {
-    fontSize: '12px',
-    color: '#c4883a',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '6px',
-    marginTop: '4px',
   },
 }
 
