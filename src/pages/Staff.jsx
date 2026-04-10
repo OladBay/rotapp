@@ -671,18 +671,14 @@ function Staff() {
                     ))}
                   </>
                 )}
-                {allCancels.filter(
-                  (r) => r.status !== 'pending' && r.status !== 'superseded'
-                ).length > 0 && (
+                {allCancels.filter((r) => r.status !== 'pending').length >
+                  0 && (
                   <>
                     <div style={{ ...s.sectionLabel, marginTop: '24px' }}>
                       History
                     </div>
                     {allCancels
-                      .filter(
-                        (r) =>
-                          r.status !== 'pending' && r.status !== 'superseded'
-                      )
+                      .filter((r) => r.status !== 'pending')
                       .sort(
                         (a, b) =>
                           new Date(b.requested_at) - new Date(a.requested_at)
@@ -701,13 +697,17 @@ function Staff() {
                                     ? 'rgba(46,204,138,0.12)'
                                     : request.status === 'rejected'
                                       ? 'rgba(232,92,61,0.12)'
-                                      : 'rgba(108,143,255,0.12)',
+                                      : request.status === 'superseded'
+                                        ? 'rgba(148,153,176,0.12)'
+                                        : 'rgba(108,143,255,0.12)',
                                 color:
                                   request.status === 'approved'
                                     ? '#2ecc8a'
                                     : request.status === 'rejected'
                                       ? '#e85c3d'
-                                      : '#6c8fff',
+                                      : request.status === 'superseded'
+                                        ? '#9499b0'
+                                        : '#6c8fff',
                               }}
                             >
                               {request.status}
