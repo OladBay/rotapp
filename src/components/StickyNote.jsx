@@ -1,9 +1,9 @@
-// src/components/StickyNote.jsx
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { useLocalStorage } from '../hooks/useLocalStorage'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { supabase } from '../lib/supabase'
+import styles from './StickyNote.module.css'
 
 const STICKY_ROLES = ['manager', 'deputy', 'operationallead', 'superadmin']
 const STORAGE_KEY_PREFIX = 'rotapp_sticky_notes_'
@@ -143,7 +143,6 @@ function StickyNoteWidget({ user }) {
   const saveTimer = useRef(null)
   const textareaRefs = useRef({})
 
-  // ── Persist ──────────────────────────────────────────────────────────────
   const persist = useCallback(
     (newBlocks, newPos, newLastEdited) => {
       clearTimeout(saveTimer.current)
@@ -158,7 +157,6 @@ function StickyNoteWidget({ user }) {
     [setSaved]
   )
 
-  // ── Auto-resize textarea ─────────────────────────────────────────────────
   const resizeTextarea = (el) => {
     if (!el) return
     el.style.height = 'auto'
@@ -169,13 +167,11 @@ function StickyNoteWidget({ user }) {
     Object.values(textareaRefs.current).forEach(resizeTextarea)
   }, [blocks, expanded])
 
-  // ── Pill mount ───────────────────────────────────────────────────────────
   useEffect(() => {
     const t = setTimeout(() => setPillMounted(true), 100)
     return () => clearTimeout(t)
   }, [])
 
-  // ── Badge pop ────────────────────────────────────────────────────────────
   useEffect(() => {
     const current = countUnchecked(blocks)
     if (current !== prevUnchecked.current) {
@@ -185,14 +181,12 @@ function StickyNoteWidget({ user }) {
     }
   }, [blocks])
 
-  // ── Auto-scroll transcript ───────────────────────────────────────────────
   useEffect(() => {
     if (transcriptRef.current) {
       transcriptRef.current.scrollTop = transcriptRef.current.scrollHeight
     }
   }, [liveTranscript])
 
-  // ── Focus mention search ─────────────────────────────────────────────────
   useEffect(() => {
     if (mentionState) {
       setMentionSearch('')
@@ -200,7 +194,6 @@ function StickyNoteWidget({ user }) {
     }
   }, [mentionState])
 
-  // ── Nudge ────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (sessionStorage.getItem(NUDGE_SESSION_KEY)) return
     const delay = 90000 + Math.random() * 30000
@@ -215,7 +208,6 @@ function StickyNoteWidget({ user }) {
     return () => clearTimeout(t)
   }, [firstName])
 
-  // ── Block mutations ──────────────────────────────────────────────────────
   const nowTs = () => new Date().toISOString()
 
   const updateBlocks = useCallback(
@@ -277,7 +269,6 @@ function StickyNoteWidget({ user }) {
         return next
       })
       updateBlocks((prev) => {
-        // FIX 1: reset to fresh plain textBlock instead of keeping task type
         if (prev.length <= 1) return [textBlock()]
         const idx = prev.findIndex((b) => b.id === id)
         const next = prev.filter((b) => b.id !== id)
@@ -288,7 +279,6 @@ function StickyNoteWidget({ user }) {
     }, 180)
   }
 
-  // ── @ mention ────────────────────────────────────────────────────────────
   const handleTextareaChange = (e, block) => {
     const val = e.target.value
     updateBlock(block.id, { content: val })
@@ -340,7 +330,6 @@ function StickyNoteWidget({ user }) {
     }, 30)
   }
 
-  // ── Keyboard shortcuts ───────────────────────────────────────────────────
   const handleKeyDown = (e, block) => {
     if (e.key === 'Escape' && mentionState) {
       setMentionState(null)
@@ -393,7 +382,6 @@ function StickyNoteWidget({ user }) {
     persist(fresh, expandedPos, null)
   }
 
-  // ── Focus management ─────────────────────────────────────────────────────
   const handleFocus = (id) => {
     clearTimeout(blurTimer.current)
     setFocusedId(id)
@@ -414,7 +402,6 @@ function StickyNoteWidget({ user }) {
     }
   }
 
-  // ── Expand / collapse ────────────────────────────────────────────────────
   const handleExpand = () => {
     setPanelAnim('in')
     setExpanded(true)
@@ -430,7 +417,6 @@ function StickyNoteWidget({ user }) {
     }, 220)
   }
 
-  // ── Drag ─────────────────────────────────────────────────────────────────
   const defaultPos = () => ({
     x: window.innerWidth - 344,
     y: window.innerHeight - 500,
@@ -474,7 +460,6 @@ function StickyNoteWidget({ user }) {
     }
   }, [blocks, lastEdited, persist])
 
-  // ── Voice ─────────────────────────────────────────────────────────────────
   const startRecording = () => {
     setVoiceError('')
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition
@@ -525,7 +510,6 @@ function StickyNoteWidget({ user }) {
     fn()
   }
 
-  // FIX 2: stripMentions = true so @names don't appear in email body
   const handleSendEmail = () => {
     const to = selectedRecipients.map((r) => r.email).join(',')
     const subject = encodeURIComponent('Rota notes')
@@ -536,7 +520,6 @@ function StickyNoteWidget({ user }) {
   const removeRecipient = (id) =>
     setSelectedRecipients((prev) => prev.filter((r) => r.id !== id))
 
-  // ── Derived ───────────────────────────────────────────────────────────────
   const unchecked = countUnchecked(blocks)
   const isEmpty = isEffectivelyEmpty(blocks)
   const pos = expandedPos || defaultPos()
@@ -547,8 +530,57 @@ function StickyNoteWidget({ user }) {
     return u.name.toLowerCase().includes(q) || u.role.toLowerCase().includes(q)
   })
 
+  const toolbarBtns = [
+    {
+      label: <span style={{ fontWeight: 700, fontSize: 12 }}>B</span>,
+      title: 'Bold (Cmd/Ctrl+B)',
+      active: getFocusedBlock()?.bold,
+      action: () => {
+        const b = getFocusedBlock()
+        if (b) updateBlock(b.id, { bold: !b.bold })
+      },
+    },
+    {
+      label: <span style={{ fontStyle: 'italic', fontSize: 12 }}>I</span>,
+      title: 'Italic (Cmd/Ctrl+I)',
+      active: getFocusedBlock()?.italic,
+      action: () => {
+        const b = getFocusedBlock()
+        if (b) updateBlock(b.id, { italic: !b.italic })
+      },
+    },
+    {
+      label: (
+        <FontAwesomeIcon
+          icon={['fas', 'list-check']}
+          style={{ fontSize: 10 }}
+        />
+      ),
+      title: 'Checklist (Cmd/Ctrl+Shift+C)',
+      active: getFocusedBlock()?.type === 'task',
+      action: () => {
+        const b = getFocusedBlock()
+        if (b)
+          updateBlock(b.id, {
+            type: b.type === 'task' ? 'text' : 'task',
+            done: false,
+          })
+      },
+    },
+    {
+      label: <span style={{ fontSize: 14, lineHeight: 1 }}>—</span>,
+      title: 'Divider (Cmd/Ctrl+Shift+D)',
+      active: false,
+      action: () => {
+        const b = getFocusedBlock()
+        if (b) addDividerAfter(b.id)
+      },
+    },
+  ]
+
   return (
     <>
+      {/* Keyframes + utility classes — must stay as injected styles */}
       <style>{`
         @keyframes sn-panel-in {
           from { opacity:0; transform:scale(0.94) translateY(10px); }
@@ -576,25 +608,10 @@ function StickyNoteWidget({ user }) {
 
       {/* Nudge toast */}
       <div
+        className={styles.nudge}
         style={{
-          position: 'fixed',
-          bottom: 72,
-          right: 24,
-          maxWidth: 256,
-          background: 'var(--bg-overlay)',
-          color: 'var(--text-secondary)',
-          fontSize: 12,
-          lineHeight: 1.55,
-          padding: '10px 14px',
-          borderRadius: 10,
-          border: '1px solid var(--border-default)',
-          zIndex: 10001,
-          boxShadow: 'var(--shadow-md)',
-          pointerEvents: 'none',
-          fontFamily: 'DM Sans, sans-serif',
           opacity: nudgeVisible ? 1 : 0,
           transform: nudgeVisible ? 'translateY(0)' : 'translateY(10px)',
-          transition: 'opacity 0.5s ease, transform 0.5s ease',
         }}
       >
         {nudgeText}
@@ -603,32 +620,13 @@ function StickyNoteWidget({ user }) {
       {/* Collapsed pill */}
       {!expanded && (
         <button
-          className='sn-pill-btn'
+          className={`sn-pill-btn ${styles.pill}`}
           onClick={handleExpand}
           style={{
-            position: 'fixed',
-            bottom: 24,
-            right: 24,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            background: 'var(--sn-pill-bg)',
-            color: 'var(--sn-pill-text)',
-            padding: '10px 18px 10px 14px',
-            borderRadius: 'var(--radius-full)',
-            cursor: 'pointer',
-            fontSize: 13,
-            fontWeight: 600,
-            fontFamily: 'DM Sans, sans-serif',
-            boxShadow: 'var(--shadow-md)',
-            border: 'none',
-            zIndex: 9998,
             opacity: pillMounted ? 1 : 0,
             transform: pillMounted
               ? 'translateY(0) scale(1)'
               : 'translateY(16px) scale(0.92)',
-            transition:
-              'opacity 0.4s ease, transform 0.4s cubic-bezier(0.34,1.56,0.64,1)',
           }}
         >
           <FontAwesomeIcon
@@ -659,56 +657,23 @@ function StickyNoteWidget({ user }) {
       {/* Expanded panel */}
       {expanded && (
         <div
+          className={styles.panel}
           style={{
-            position: 'fixed',
             left: pos.x,
             top: pos.y,
-            width: 320,
-            zIndex: 9999,
-            borderRadius: 'var(--radius-xl)',
-            border: '1px solid var(--sn-border)',
-            background: 'var(--sn-bg)',
-            fontFamily: 'DM Sans, sans-serif',
-            boxShadow: 'var(--shadow-lg)',
-            display: 'flex',
-            flexDirection: 'column',
-            maxHeight: 540,
-            overflow: 'hidden',
             animation: `${panelAnim === 'in' ? 'sn-panel-in' : 'sn-panel-out'} 0.22s cubic-bezier(0.34,1.3,0.64,1) forwards`,
           }}
         >
           {/* Header */}
-          <div
-            onMouseDown={onMouseDown}
-            style={{
-              background: 'var(--sn-header)',
-              padding: '11px 12px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              cursor: 'grab',
-              flexShrink: 0,
-              userSelect: 'none',
-              borderRadius:
-                'calc(var(--radius-xl) - 1px) calc(var(--radius-xl) - 1px) 0 0',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div className={styles.panelHeader} onMouseDown={onMouseDown}>
+            <div className={styles.panelHeaderLeft}>
               <FontAwesomeIcon
                 icon={['fas', 'pen-to-square']}
                 style={{ color: 'var(--text-muted)', fontSize: 13 }}
               />
-              <span
-                style={{
-                  color: 'var(--text-primary)',
-                  fontSize: 13,
-                  fontWeight: 600,
-                }}
-              >
-                Rota notes
-              </span>
+              <span className={styles.panelHeaderTitle}>Rota notes</span>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <div className={styles.panelHeaderRight}>
               <FontAwesomeIcon
                 icon={['fas', 'grip-vertical']}
                 style={{
@@ -718,84 +683,24 @@ function StickyNoteWidget({ user }) {
                 }}
               />
               <button
-                className='sn-hdr-btn'
+                className={`sn-hdr-btn ${styles.panelCollapseBtn}`}
                 onClick={handleCollapse}
                 title='Collapse'
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  color: 'var(--text-muted)',
-                  cursor: 'pointer',
-                  width: 26,
-                  height: 26,
-                  borderRadius: 6,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: 11,
-                }}
               >
                 <FontAwesomeIcon icon={['fas', 'chevron-down']} />
               </button>
             </div>
           </div>
 
-          {/* Recording banner — FIX 3: transcript scrolls with ref */}
+          {/* Recording banner */}
           {recording && (
-            <div
-              style={{
-                background: 'var(--sn-recording-bg)',
-                borderBottom: '1px solid var(--sn-recording-border)',
-                padding: '8px 12px',
-                flexShrink: 0,
-                animation: 'sn-banner-in 0.2s ease forwards',
-              }}
-            >
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  marginBottom: 6,
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span
-                    style={{
-                      width: 7,
-                      height: 7,
-                      borderRadius: '50%',
-                      background: 'var(--color-danger)',
-                      display: 'inline-block',
-                      animation: 'sn-pulse 1s infinite',
-                    }}
-                  />
-                  <span
-                    style={{
-                      fontSize: 11,
-                      fontWeight: 600,
-                      color: 'var(--color-danger)',
-                    }}
-                  >
-                    Recording
-                  </span>
+            <div className={styles.recordingBanner}>
+              <div className={styles.recordingTop}>
+                <div className={styles.recordingLeft}>
+                  <span className={styles.recordingDot} />
+                  <span className={styles.recordingLabel}>Recording</span>
                 </div>
-                <button
-                  onClick={stopRecording}
-                  style={{
-                    background: 'var(--color-danger)',
-                    color: '#fff',
-                    border: 'none',
-                    borderRadius: 6,
-                    padding: '4px 10px',
-                    fontSize: 11,
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 5,
-                  }}
-                >
+                <button className={styles.stopBtn} onClick={stopRecording}>
                   <FontAwesomeIcon
                     icon={['fas', 'stop']}
                     style={{ fontSize: 9 }}
@@ -803,33 +708,11 @@ function StickyNoteWidget({ user }) {
                   Stop & insert
                 </button>
               </div>
-              <div
-                ref={transcriptRef}
-                style={{ maxHeight: 64, overflowY: 'auto' }}
-              >
+              <div className={styles.transcriptScroll} ref={transcriptRef}>
                 {liveTranscript ? (
-                  <p
-                    style={{
-                      margin: 0,
-                      fontSize: 12,
-                      color: 'var(--color-danger)',
-                      fontStyle: 'italic',
-                      lineHeight: 1.5,
-                      opacity: 0.9,
-                    }}
-                  >
-                    {liveTranscript}
-                  </p>
+                  <p className={styles.transcriptText}>{liveTranscript}</p>
                 ) : (
-                  <p
-                    style={{
-                      margin: 0,
-                      fontSize: 11,
-                      color: 'var(--text-muted)',
-                    }}
-                  >
-                    Listening…
-                  </p>
+                  <p className={styles.transcriptPlaceholder}>Listening…</p>
                 )}
               </div>
             </div>
@@ -837,104 +720,24 @@ function StickyNoteWidget({ user }) {
 
           {/* Voice error */}
           {voiceError && !recording && (
-            <div
-              style={{
-                padding: '6px 12px',
-                background: 'var(--color-danger-bg)',
-                borderBottom: '1px solid var(--color-danger-border)',
-                fontSize: 11,
-                color: 'var(--color-danger)',
-                flexShrink: 0,
-              }}
-            >
-              {voiceError}
-            </div>
+            <div className={styles.voiceError}>{voiceError}</div>
           )}
 
           {/* Toolbar */}
-          <div
-            style={{
-              padding: '7px 10px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              borderBottom: '1px solid var(--sn-border)',
-              flexShrink: 0,
-              background: 'var(--bg-raised)',
-              gap: 4,
-            }}
-          >
-            <div style={{ display: 'flex', gap: 3 }}>
-              {[
-                {
-                  label: (
-                    <span style={{ fontWeight: 700, fontSize: 12 }}>B</span>
-                  ),
-                  title: 'Bold (Cmd/Ctrl+B)',
-                  active: getFocusedBlock()?.bold,
-                  action: () => {
-                    const b = getFocusedBlock()
-                    if (b) updateBlock(b.id, { bold: !b.bold })
-                  },
-                },
-                {
-                  label: (
-                    <span style={{ fontStyle: 'italic', fontSize: 12 }}>I</span>
-                  ),
-                  title: 'Italic (Cmd/Ctrl+I)',
-                  active: getFocusedBlock()?.italic,
-                  action: () => {
-                    const b = getFocusedBlock()
-                    if (b) updateBlock(b.id, { italic: !b.italic })
-                  },
-                },
-                {
-                  label: (
-                    <FontAwesomeIcon
-                      icon={['fas', 'list-check']}
-                      style={{ fontSize: 10 }}
-                    />
-                  ),
-                  title: 'Checklist (Cmd/Ctrl+Shift+C)',
-                  active: getFocusedBlock()?.type === 'task',
-                  action: () => {
-                    const b = getFocusedBlock()
-                    if (b)
-                      updateBlock(b.id, {
-                        type: b.type === 'task' ? 'text' : 'task',
-                        done: false,
-                      })
-                  },
-                },
-                {
-                  label: <span style={{ fontSize: 14, lineHeight: 1 }}>—</span>,
-                  title: 'Divider (Cmd/Ctrl+Shift+D)',
-                  active: false,
-                  action: () => {
-                    const b = getFocusedBlock()
-                    if (b) addDividerAfter(b.id)
-                  },
-                },
-              ].map((btn, i) => (
+          <div className={styles.toolbar}>
+            <div className={styles.toolbarLeft}>
+              {toolbarBtns.map((btn, i) => (
                 <button
                   key={i}
-                  className='sn-tbr-btn'
+                  className={`sn-tbr-btn ${styles.toolbarBtn}`}
                   title={btn.title}
                   onMouseDown={(e) => toolbarAction(e, btn.action)}
                   style={{
-                    width: 28,
-                    height: 28,
-                    borderRadius: 6,
                     border: `1px solid ${btn.active ? 'var(--accent-border)' : 'var(--border-subtle)'}`,
                     background: btn.active ? 'var(--accent-bg)' : 'transparent',
                     color: btn.active
                       ? 'var(--accent)'
                       : 'var(--sn-icon-color)',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    transition: 'background 0.12s, border-color 0.12s',
                   }}
                 >
                   {btn.label}
@@ -942,15 +745,12 @@ function StickyNoteWidget({ user }) {
               ))}
             </div>
             <button
-              className='sn-tbr-btn'
+              className={`sn-tbr-btn ${styles.toolbarBtn}`}
               title={recording ? 'Stop recording' : 'Record voice note'}
               onMouseDown={(e) =>
                 toolbarAction(e, recording ? stopRecording : startRecording)
               }
               style={{
-                width: 28,
-                height: 28,
-                borderRadius: 6,
                 border: `1px solid ${recording ? 'var(--color-danger-border)' : 'var(--border-default)'}`,
                 background: recording
                   ? 'var(--color-danger-bg)'
@@ -958,11 +758,6 @@ function StickyNoteWidget({ user }) {
                 color: recording
                   ? 'var(--color-danger)'
                   : 'var(--sn-icon-color)',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                transition: 'background 0.12s',
               }}
             >
               <FontAwesomeIcon
@@ -973,61 +768,17 @@ function StickyNoteWidget({ user }) {
           </div>
 
           {/* Body */}
-          <div
-            onClick={handleBodyClick}
-            style={{
-              padding: '10px 12px',
-              overflowY: 'auto',
-              flex: 1,
-              minHeight: 120,
-              position: 'relative',
-              cursor: 'text',
-            }}
-          >
-            {/* Empty state hint */}
+          <div className={styles.body} onClick={handleBodyClick}>
+            {/* Empty state */}
             {isEmpty && !recording && (
-              <div
-                style={{
-                  position: 'absolute',
-                  top: 12,
-                  left: 14,
-                  right: 14,
-                  pointerEvents: 'none',
-                  userSelect: 'none',
-                  animation: 'sn-fade-in 0.3s ease',
-                }}
-              >
-                <p
-                  style={{
-                    margin: '0 0 8px',
-                    fontSize: 12,
-                    color: 'var(--sn-placeholder)',
-                    lineHeight: 1.6,
-                  }}
-                >
+              <div className={styles.emptyState}>
+                <p className={styles.emptyPrompt}>
                   Hey {firstName} — jot down shift gaps to fill, staff to chase,
                   ideas for next week's rota. Anything on your mind.
                 </p>
-                <p
-                  style={{
-                    margin: 0,
-                    fontSize: 11,
-                    color: 'var(--sn-placeholder)',
-                    opacity: 0.7,
-                  }}
-                >
-                  Tip: type{' '}
-                  <span
-                    style={{
-                      fontFamily: 'DM Mono, monospace',
-                      background: 'var(--bg-active)',
-                      padding: '1px 4px',
-                      borderRadius: 3,
-                    }}
-                  >
-                    @name
-                  </span>{' '}
-                  to mention and email a colleague
+                <p className={styles.emptyHint}>
+                  Tip: type <span className={styles.inlineCode}>@name</span> to
+                  mention and email a colleague
                 </p>
               </div>
             )}
@@ -1040,36 +791,17 @@ function StickyNoteWidget({ user }) {
                 return (
                   <div
                     key={block.id}
+                    className={styles.dividerRow}
                     style={{
-                      margin: '6px 0',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 6,
                       animation: isRemoving
                         ? 'sn-line-out 0.18s ease forwards'
                         : 'sn-line-in 0.15s ease',
                     }}
                   >
-                    <hr
-                      style={{
-                        flex: 1,
-                        border: 'none',
-                        borderTop: '1px solid var(--sn-divider)',
-                        margin: 0,
-                      }}
-                    />
+                    <hr className={styles.dividerLine} />
                     <button
+                      className={styles.dividerRemoveBtn}
                       onClick={() => removeBlockAnimated(block.id)}
-                      style={{
-                        background: 'none',
-                        border: 'none',
-                        color: 'var(--text-muted)',
-                        cursor: 'pointer',
-                        fontSize: 9,
-                        padding: '0 2px',
-                        opacity: 0.5,
-                        lineHeight: 1,
-                      }}
                     >
                       <FontAwesomeIcon icon={['fas', 'xmark']} />
                     </button>
@@ -1080,15 +812,11 @@ function StickyNoteWidget({ user }) {
               return (
                 <div
                   key={block.id}
+                  className={styles.blockRow}
                   style={{
-                    display: 'flex',
-                    alignItems: 'flex-start',
-                    gap: 7,
-                    marginBottom: 3,
                     animation: isRemoving
                       ? 'sn-line-out 0.18s ease forwards'
                       : 'sn-line-in 0.15s ease',
-                    overflow: 'hidden',
                   }}
                 >
                   {block.type === 'task' && (
@@ -1098,14 +826,7 @@ function StickyNoteWidget({ user }) {
                       onChange={() =>
                         updateBlock(block.id, { done: !block.done })
                       }
-                      style={{
-                        marginTop: 5,
-                        accentColor: 'var(--accent)',
-                        cursor: 'pointer',
-                        flexShrink: 0,
-                        width: 13,
-                        height: 13,
-                      }}
+                      className={styles.blockCheckbox}
                     />
                   )}
                   <textarea
@@ -1146,30 +867,10 @@ function StickyNoteWidget({ user }) {
               )
             })}
 
-            {/* @ mention picker */}
+            {/* Mention picker */}
             {mentionState && (
-              <div
-                style={{
-                  position: 'sticky',
-                  bottom: 0,
-                  left: 0,
-                  right: 0,
-                  background: 'var(--bg-elevated)',
-                  border: '1px solid var(--border-default)',
-                  borderRadius: 'var(--radius-lg)',
-                  boxShadow: 'var(--shadow-md)',
-                  zIndex: 10,
-                  animation: 'sn-picker-in 0.15s ease',
-                  overflow: 'hidden',
-                  marginTop: 6,
-                }}
-              >
-                <div
-                  style={{
-                    padding: '8px 10px 6px',
-                    borderBottom: '1px solid var(--border-subtle)',
-                  }}
-                >
+              <div className={styles.mentionPicker}>
+                <div className={styles.mentionSearchWrap}>
                   <input
                     ref={mentionSearchRef}
                     type='text'
@@ -1182,30 +883,12 @@ function StickyNoteWidget({ user }) {
                         setMentionState(null)
                       }
                     }}
-                    style={{
-                      width: '100%',
-                      border: 'none',
-                      outline: 'none',
-                      background: 'transparent',
-                      fontSize: 12,
-                      color: 'var(--text-primary)',
-                      fontFamily: 'DM Sans, sans-serif',
-                      caretColor: 'var(--accent)',
-                    }}
+                    className={styles.mentionSearchInput}
                   />
                 </div>
-                <div style={{ maxHeight: 160, overflowY: 'auto' }}>
+                <div className={styles.mentionList}>
                   {filteredStaff.length === 0 ? (
-                    <p
-                      style={{
-                        padding: '10px 12px',
-                        margin: 0,
-                        fontSize: 12,
-                        color: 'var(--text-muted)',
-                      }}
-                    >
-                      No staff found
-                    </p>
+                    <p className={styles.mentionEmpty}>No staff found</p>
                   ) : (
                     filteredStaff.map((u) => {
                       const isSelected = selectedRecipients.some(
@@ -1214,37 +897,23 @@ function StickyNoteWidget({ user }) {
                       return (
                         <div
                           key={u.id}
-                          className='sn-staff-row'
+                          className={`sn-staff-row ${styles.mentionRow}`}
                           onClick={() => insertMention(u)}
                           style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 10,
-                            padding: '7px 12px',
-                            cursor: 'pointer',
                             background: isSelected
                               ? 'var(--accent-bg)'
                               : 'transparent',
-                            transition: 'background 0.1s',
                           }}
                         >
                           <div
+                            className={styles.mentionAvatar}
                             style={{
-                              width: 28,
-                              height: 28,
-                              borderRadius: '50%',
-                              flexShrink: 0,
                               background: isSelected
                                 ? 'var(--accent)'
                                 : 'var(--bg-overlay)',
                               color: isSelected
                                 ? '#fff'
                                 : 'var(--text-secondary)',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              fontSize: 10,
-                              fontWeight: 700,
                             }}
                           >
                             {u.name
@@ -1253,27 +922,9 @@ function StickyNoteWidget({ user }) {
                               .join('')
                               .slice(0, 2)}
                           </div>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <p
-                              style={{
-                                margin: 0,
-                                fontSize: 12,
-                                fontWeight: 500,
-                                color: 'var(--text-primary)',
-                                whiteSpace: 'nowrap',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                              }}
-                            >
-                              {u.name}
-                            </p>
-                            <p
-                              style={{
-                                margin: 0,
-                                fontSize: 10,
-                                color: 'var(--text-muted)',
-                              }}
-                            >
+                          <div className={styles.mentionInfo}>
+                            <p className={styles.mentionName}>{u.name}</p>
+                            <p className={styles.mentionRole}>
                               {getRoleLabel(u.role)}
                             </p>
                           </div>
@@ -1288,19 +939,8 @@ function StickyNoteWidget({ user }) {
                     })
                   )}
                 </div>
-                <div
-                  style={{
-                    padding: '6px 12px',
-                    borderTop: '1px solid var(--border-subtle)',
-                  }}
-                >
-                  <p
-                    style={{
-                      margin: 0,
-                      fontSize: 10,
-                      color: 'var(--text-muted)',
-                    }}
-                  >
+                <div className={styles.mentionFooter}>
+                  <p className={styles.mentionFooterText}>
                     Click to mention · selected recipients will be emailed
                   </p>
                 </div>
@@ -1310,50 +950,16 @@ function StickyNoteWidget({ user }) {
 
           {/* Recipients row */}
           {selectedRecipients.length > 0 && (
-            <div
-              style={{
-                padding: '6px 12px',
-                borderTop: '1px solid var(--sn-border)',
-                display: 'flex',
-                flexWrap: 'wrap',
-                gap: 5,
-                flexShrink: 0,
-                background: 'var(--bg-raised)',
-                animation: 'sn-line-in 0.15s ease',
-              }}
-            >
+            <div className={styles.recipientsRow}>
               {selectedRecipients.map((r) => (
                 <span
                   key={r.id}
-                  className='sn-recipient'
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 4,
-                    background: 'var(--accent-bg)',
-                    color: 'var(--accent)',
-                    fontSize: 11,
-                    fontWeight: 500,
-                    padding: '3px 8px',
-                    borderRadius: 'var(--radius-full)',
-                    border: '1px solid var(--accent-border)',
-                  }}
+                  className={`sn-recipient ${styles.recipientChip}`}
                 >
                   {r.name}
                   <button
+                    className={styles.recipientRemoveBtn}
                     onClick={() => removeRecipient(r.id)}
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      cursor: 'pointer',
-                      color: 'var(--accent)',
-                      fontSize: 9,
-                      padding: 0,
-                      opacity: 0.6,
-                      display: 'flex',
-                      alignItems: 'center',
-                      lineHeight: 1,
-                    }}
                   >
                     <FontAwesomeIcon icon={['fas', 'xmark']} />
                   </button>
@@ -1363,64 +969,22 @@ function StickyNoteWidget({ user }) {
           )}
 
           {/* Footer */}
-          <div
-            style={{
-              padding: '7px 12px',
-              borderTop: '1px solid var(--sn-border)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              flexShrink: 0,
-              background: 'var(--sn-footer)',
-              gap: 8,
-            }}
-          >
-            <span
-              style={{
-                fontSize: 11,
-                color: 'var(--text-muted)',
-                flexShrink: 0,
-              }}
-            >
+          <div className={styles.footer}>
+            <span className={styles.footerMeta}>
               {lastEdited ? (
                 `Edited ${formatEdited(lastEdited)}`
               ) : (
                 <span>
-                  Type{' '}
-                  <span
-                    style={{
-                      fontFamily: 'DM Mono, monospace',
-                      fontSize: 10,
-                      background: 'var(--bg-active)',
-                      padding: '1px 4px',
-                      borderRadius: 3,
-                    }}
-                  >
-                    @
-                  </span>{' '}
-                  to mention
+                  Type <span className={styles.footerMentionHint}>@</span> to
+                  mention
                 </span>
               )}
             </span>
-            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <div className={styles.footerActions}>
               {selectedRecipients.length > 0 && (
                 <button
+                  className={styles.sendEmailBtn}
                   onClick={handleSendEmail}
-                  style={{
-                    background: 'var(--accent)',
-                    color: 'var(--text-inverse)',
-                    border: 'none',
-                    borderRadius: 6,
-                    padding: '3px 10px',
-                    fontSize: 11,
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 5,
-                    fontFamily: 'DM Sans, sans-serif',
-                    animation: 'sn-line-in 0.15s ease',
-                  }}
                 >
                   <FontAwesomeIcon
                     icon={['fas', 'pen-to-square']}
@@ -1431,58 +995,23 @@ function StickyNoteWidget({ user }) {
               )}
               {!confirmClear ? (
                 <button
+                  className={styles.clearBtn}
                   onClick={() => setConfirmClear(true)}
-                  style={{
-                    fontSize: 11,
-                    color: 'var(--color-danger)',
-                    background: 'none',
-                    border: 'none',
-                    cursor: 'pointer',
-                    padding: 0,
-                    fontFamily: 'DM Sans, sans-serif',
-                    opacity: 0.7,
-                  }}
                 >
                   Clear
                 </button>
               ) : (
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 5,
-                    animation: 'sn-line-in 0.15s ease',
-                  }}
-                >
-                  <span style={{ fontSize: 11, color: 'var(--color-danger)' }}>
-                    Sure?
-                  </span>
+                <div className={styles.confirmClearRow}>
+                  <span className={styles.confirmClearLabel}>Sure?</span>
                   <button
+                    className={styles.confirmYesBtn}
                     onClick={handleClear}
-                    style={{
-                      background: 'var(--color-danger)',
-                      color: '#fff',
-                      border: 'none',
-                      borderRadius: 4,
-                      padding: '2px 8px',
-                      cursor: 'pointer',
-                      fontSize: 11,
-                      fontWeight: 600,
-                    }}
                   >
                     Yes
                   </button>
                   <button
+                    className={styles.confirmNoBtn}
                     onClick={() => setConfirmClear(false)}
-                    style={{
-                      background: 'var(--bg-active)',
-                      color: 'var(--text-secondary)',
-                      border: 'none',
-                      borderRadius: 4,
-                      padding: '2px 8px',
-                      cursor: 'pointer',
-                      fontSize: 11,
-                    }}
                   >
                     No
                   </button>

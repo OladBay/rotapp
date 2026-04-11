@@ -1,0 +1,233 @@
+.wrap {
+  width: 100%;
+  font-family: 'DM Sans', sans-serif;
+}
+
+/* ── Header ─────────────────────────────────────────────────── */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.monthTitle {
+  font-family: 'Syne', sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.navBtn {
+  background: transparent;
+  border: 1px solid var(--border-default);
+  border-radius: 7px;
+  color: var(--text-secondary);
+  width: 30px;
+  height: 30px;
+  cursor: pointer;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'DM Sans', sans-serif;
+  transition: background 0.15s;
+}
+
+.navBtn:hover {
+  background: var(--bg-hover);
+}
+
+/* ── Day headers ────────────────────────────────────────────── */
+.dayHeaders {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  margin-bottom: 6px;
+}
+
+.dayName {
+  text-align: center;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  padding: 4px 0;
+}
+
+/* ── Grid ───────────────────────────────────────────────────── */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+
+/* ── Base cell ──────────────────────────────────────────────── */
+.cell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 40px;
+  border-radius: 8px;
+  cursor: default;
+  transition: background 0.12s;
+  user-select: none;
+}
+
+/* ── Cell state modifiers ───────────────────────────────────── */
+.cellAvailable {
+  cursor: pointer;
+}
+
+.cellAvailable:hover {
+  background: var(--accent-bg);
+}
+
+.cellSelected {
+  background: var(--accent);
+  border-radius: 50%;
+  width: 36px;
+  height: 36px;
+  margin: 2px auto;
+  cursor: pointer;
+}
+
+.cellApproved {
+  background: var(--color-success-bg);
+  border-radius: 8px;
+  cursor: not-allowed;
+}
+
+.cellPending {
+  background: var(--color-warning-bg);
+  border-radius: 8px;
+  cursor: not-allowed;
+}
+
+/* ── Cell number ────────────────────────────────────────────── */
+.cellNum {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text-primary);
+  line-height: 1;
+}
+
+.cellNumOutside {
+  color: var(--border-subtle);
+}
+
+.cellNumSelected {
+  color: #fff;
+  font-weight: 600;
+}
+
+.cellNumApproved {
+  color: var(--color-success);
+}
+
+.cellNumPending {
+  color: var(--color-warning);
+}
+
+.cellNumPast {
+  color: var(--border-default);
+}
+
+.cellNumToday {
+  color: var(--accent);
+}
+
+/* ── Dots ───────────────────────────────────────────────────── */
+.todayDot {
+  position: absolute;
+  bottom: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.statusDotApproved {
+  position: absolute;
+  bottom: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--color-success);
+}
+
+.statusDotPending {
+  position: absolute;
+  bottom: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--color-warning);
+}
+
+/* ── Legend ─────────────────────────────────────────────────── */
+.legend {
+  display: flex;
+  gap: 16px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-subtle);
+  flex-wrap: wrap;
+}
+
+.legendItem {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.legendDotSelected {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--accent);
+}
+
+.legendDotApproved {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--color-success);
+}
+
+.legendDotPending {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--color-warning);
+}
+
+.legendText {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+/* ── Summary ────────────────────────────────────────────────── */
+.summary {
+  margin-top: 12px;
+  padding: 10px 14px;
+  background: var(--accent-bg);
+  border: 1px solid var(--accent-border);
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--accent);
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  line-height: 1.5;
+}

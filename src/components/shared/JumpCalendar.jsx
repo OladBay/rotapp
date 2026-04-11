@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import styles from './JumpCalendar.module.css'
 
 const DAYS = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su']
 const MONTHS = [
@@ -37,7 +38,6 @@ function JumpCalendar({ onJump, onClose, initialDate }) {
 
   const wrapRef = useRef(null)
 
-  // Close on outside click
   useEffect(() => {
     const handler = (e) => {
       if (wrapRef.current && !wrapRef.current.contains(e.target)) {
@@ -48,7 +48,6 @@ function JumpCalendar({ onJump, onClose, initialDate }) {
     return () => document.removeEventListener('mousedown', handler)
   }, [onClose])
 
-  // Close on Escape
   useEffect(() => {
     const handler = (e) => {
       if (e.key === 'Escape') onClose()
@@ -98,69 +97,69 @@ function JumpCalendar({ onJump, onClose, initialDate }) {
   }, [viewYear, viewMonth])
 
   return (
-    <div ref={wrapRef} style={s.wrap}>
+    <div ref={wrapRef} className={styles.wrap}>
       {/* Header */}
-      <div style={s.header}>
-        <button style={s.navBtn} onClick={prevMonth} type='button'>
+      <div className={styles.header}>
+        <button className={styles.navBtn} onClick={prevMonth} type='button'>
           <FontAwesomeIcon icon='chevron-left' />
         </button>
-        <span style={s.monthTitle}>
+        <span className={styles.monthTitle}>
           {MONTHS[viewMonth]} {viewYear}
         </span>
-        <button style={s.navBtn} onClick={nextMonth} type='button'>
+        <button className={styles.navBtn} onClick={nextMonth} type='button'>
           <FontAwesomeIcon icon='chevron-right' />
         </button>
       </div>
 
       {/* Day headers */}
-      <div style={s.dayHeaders}>
+      <div className={styles.dayHeaders}>
         {DAYS.map((d) => (
-          <div key={d} style={s.dayName}>
+          <div key={d} className={styles.dayName}>
             {d}
           </div>
         ))}
       </div>
 
       {/* Date grid */}
-      <div style={s.grid}>
+      <div className={styles.grid}>
         {calendarDays.map(({ date, dateStr, outside }, i) => {
           const isToday = dateStr === todayStr
-          const isOutside = outside
 
-          let cellStyle = { ...s.cell }
-          let numStyle = { ...s.cellNum }
+          const cellClass = [
+            styles.cell,
+            outside ? '' : isToday ? styles.cellToday : styles.cellAvailable,
+          ].join(' ')
 
-          if (isOutside) {
-            numStyle.color = '#2e3040'
-            cellStyle.cursor = 'default'
-          } else if (isToday) {
-            cellStyle = { ...cellStyle, ...s.cellToday }
-            numStyle = { ...numStyle, color: '#6c8fff', fontWeight: 600 }
-          } else {
-            cellStyle = { ...cellStyle, ...s.cellAvailable }
-          }
+          const numClass = [
+            styles.cellNum,
+            outside
+              ? styles.cellNumOutside
+              : isToday
+                ? styles.cellNumToday
+                : '',
+          ].join(' ')
 
           return (
             <div
               key={i}
-              style={cellStyle}
+              className={cellClass}
               onClick={() => {
-                if (isOutside) return
+                if (outside) return
                 onJump(date)
                 onClose()
               }}
             >
-              <span style={numStyle}>{isOutside ? '' : date.getDate()}</span>
-              {isToday && <span style={s.todayDot} />}
+              <span className={numClass}>{outside ? '' : date.getDate()}</span>
+              {isToday && <span className={styles.todayDot} />}
             </div>
           )
         })}
       </div>
 
       {/* Today shortcut */}
-      <div style={s.footer}>
+      <div className={styles.footer}>
         <button
-          style={s.todayBtn}
+          className={styles.todayBtn}
           type='button'
           onClick={() => {
             onJump(today)
@@ -172,126 +171,6 @@ function JumpCalendar({ onJump, onClose, initialDate }) {
       </div>
     </div>
   )
-}
-
-const s = {
-  wrap: {
-    position: 'absolute',
-    top: 'calc(100% + 8px)',
-    left: 0,
-    zIndex: 200,
-    background: '#161820',
-    border: '1px solid rgba(255,255,255,0.1)',
-    borderRadius: '16px',
-    padding: '16px',
-    width: '280px',
-    boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
-    fontFamily: 'DM Sans, sans-serif',
-  },
-  header: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: '14px',
-  },
-  monthTitle: {
-    fontFamily: 'Syne, sans-serif',
-    fontSize: '14px',
-    fontWeight: 600,
-    color: '#e8eaf0',
-  },
-  navBtn: {
-    background: 'transparent',
-    border: '1px solid rgba(255,255,255,0.1)',
-    borderRadius: '7px',
-    color: '#9499b0',
-    width: '28px',
-    height: '28px',
-    cursor: 'pointer',
-    fontSize: '11px',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontFamily: 'DM Sans, sans-serif',
-  },
-  dayHeaders: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(7, 1fr)',
-    marginBottom: '4px',
-  },
-  dayName: {
-    textAlign: 'center',
-    fontSize: '10px',
-    fontWeight: 500,
-    color: '#5d6180',
-    textTransform: 'uppercase',
-    padding: '3px 0',
-  },
-  grid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(7, 1fr)',
-    gap: '1px',
-  },
-  cell: {
-    position: 'relative',
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: '34px',
-    borderRadius: '7px',
-    cursor: 'default',
-    userSelect: 'none',
-  },
-  cellAvailable: {
-    cursor: 'pointer',
-    transition: 'background 0.1s',
-    ':hover': { background: 'rgba(108,143,255,0.1)' },
-  },
-  cellToday: {
-    background: 'rgba(108,143,255,0.12)',
-    border: '1px solid rgba(108,143,255,0.3)',
-    borderRadius: '50%',
-    width: '32px',
-    height: '32px',
-    margin: '1px auto',
-    cursor: 'pointer',
-  },
-  cellNum: {
-    fontSize: '13px',
-    fontWeight: 500,
-    color: '#e8eaf0',
-    lineHeight: 1,
-  },
-  todayDot: {
-    position: 'absolute',
-    bottom: '3px',
-    left: '50%',
-    transform: 'translateX(-50%)',
-    width: '3px',
-    height: '3px',
-    borderRadius: '50%',
-    background: '#6c8fff',
-  },
-  footer: {
-    marginTop: '12px',
-    paddingTop: '10px',
-    borderTop: '1px solid rgba(255,255,255,0.06)',
-    display: 'flex',
-    justifyContent: 'center',
-  },
-  todayBtn: {
-    background: 'transparent',
-    border: '1px solid rgba(255,255,255,0.1)',
-    borderRadius: '7px',
-    color: '#6c8fff',
-    padding: '6px 16px',
-    fontSize: '12px',
-    fontWeight: 500,
-    cursor: 'pointer',
-    fontFamily: 'DM Sans, sans-serif',
-    width: '100%',
-  },
 }
 
 export default JumpCalendar

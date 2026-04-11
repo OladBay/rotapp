@@ -1,0 +1,533 @@
+/* ── Nudge toast ────────────────────────────────────────────── */
+.nudge {
+  position: fixed;
+  bottom: 72px;
+  right: 24px;
+  max-width: 256px;
+  background: var(--bg-overlay);
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.55;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border-default);
+  z-index: 10001;
+  box-shadow: var(--shadow-md);
+  pointer-events: none;
+  font-family: 'DM Sans', sans-serif;
+  transition:
+    opacity 0.5s ease,
+    transform 0.5s ease;
+}
+
+/* ── Collapsed pill ─────────────────────────────────────────── */
+.pill {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--sn-pill-bg);
+  color: var(--sn-pill-text);
+  padding: 10px 18px 10px 14px;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: 'DM Sans', sans-serif;
+  box-shadow: var(--shadow-md);
+  border: none;
+  z-index: 9998;
+  transition:
+    opacity 0.4s ease,
+    transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* ── Expanded panel ─────────────────────────────────────────── */
+.panel {
+  position: fixed;
+  width: 320px;
+  z-index: 9999;
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--sn-border);
+  background: var(--sn-bg);
+  font-family: 'DM Sans', sans-serif;
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  flex-direction: column;
+  max-height: 540px;
+  overflow: hidden;
+}
+
+/* ── Panel header ───────────────────────────────────────────── */
+.panelHeader {
+  background: var(--sn-header);
+  padding: 11px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: grab;
+  flex-shrink: 0;
+  user-select: none;
+  border-radius: calc(var(--radius-xl) - 1px) calc(var(--radius-xl) - 1px) 0 0;
+}
+
+.panelHeaderLeft {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.panelHeaderTitle {
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.panelHeaderRight {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.panelCollapseBtn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+}
+
+/* ── Recording banner ───────────────────────────────────────── */
+.recordingBanner {
+  background: var(--sn-recording-bg);
+  border-bottom: 1px solid var(--sn-recording-border);
+  padding: 8px 12px;
+  flex-shrink: 0;
+  animation: sn-banner-in 0.2s ease forwards;
+}
+
+.recordingTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.recordingLeft {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.recordingDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-danger);
+  display: inline-block;
+  animation: sn-pulse 1s infinite;
+}
+
+.recordingLabel {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-danger);
+}
+
+.stopBtn {
+  background: var(--color-danger);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.transcriptScroll {
+  max-height: 64px;
+  overflow-y: auto;
+}
+
+.transcriptText {
+  margin: 0;
+  font-size: 12px;
+  color: var(--color-danger);
+  font-style: italic;
+  line-height: 1.5;
+  opacity: 0.9;
+}
+
+.transcriptPlaceholder {
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* ── Voice error ────────────────────────────────────────────── */
+.voiceError {
+  padding: 6px 12px;
+  background: var(--color-danger-bg);
+  border-bottom: 1px solid var(--color-danger-border);
+  font-size: 11px;
+  color: var(--color-danger);
+  flex-shrink: 0;
+}
+
+/* ── Toolbar ────────────────────────────────────────────────── */
+.toolbar {
+  padding: 7px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--sn-border);
+  flex-shrink: 0;
+  background: var(--bg-raised);
+  gap: 4px;
+}
+
+.toolbarLeft {
+  display: flex;
+  gap: 3px;
+}
+
+.toolbarBtn {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    background 0.12s,
+    border-color 0.12s;
+}
+
+/* ── Body ───────────────────────────────────────────────────── */
+.body {
+  padding: 10px 12px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 120px;
+  position: relative;
+  cursor: text;
+}
+
+/* ── Empty state ────────────────────────────────────────────── */
+.emptyState {
+  position: absolute;
+  top: 12px;
+  left: 14px;
+  right: 14px;
+  pointer-events: none;
+  user-select: none;
+  animation: sn-fade-in 0.3s ease;
+}
+
+.emptyPrompt {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--sn-placeholder);
+  line-height: 1.6;
+}
+
+.emptyHint {
+  margin: 0;
+  font-size: 11px;
+  color: var(--sn-placeholder);
+  opacity: 0.7;
+}
+
+.inlineCode {
+  font-family: 'DM Mono', monospace;
+  background: var(--bg-active);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+/* ── Block rows ─────────────────────────────────────────────── */
+.blockRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin-bottom: 3px;
+  overflow: hidden;
+}
+
+.blockCheckbox {
+  margin-top: 5px;
+  cursor: pointer;
+  flex-shrink: 0;
+  width: 13px;
+  height: 13px;
+  accent-color: var(--accent);
+}
+
+.dividerRow {
+  margin: 6px 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dividerLine {
+  flex: 1;
+  border: none;
+  border-top: 1px solid var(--sn-divider);
+  margin: 0;
+}
+
+.dividerRemoveBtn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 9px;
+  padding: 0 2px;
+  opacity: 0.5;
+  line-height: 1;
+}
+
+/* ── Mention picker ─────────────────────────────────────────── */
+.mentionPicker {
+  position: sticky;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  z-index: 10;
+  animation: sn-picker-in 0.15s ease;
+  overflow: hidden;
+  margin-top: 6px;
+}
+
+.mentionSearchWrap {
+  padding: 8px 10px 6px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.mentionSearchInput {
+  width: 100%;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 12px;
+  color: var(--text-primary);
+  font-family: 'DM Sans', sans-serif;
+  caret-color: var(--accent);
+}
+
+.mentionSearchInput::placeholder {
+  color: var(--text-muted);
+}
+
+.mentionList {
+  max-height: 160px;
+  overflow-y: auto;
+}
+
+.mentionEmpty {
+  padding: 10px 12px;
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.mentionRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 12px;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+.mentionAvatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.mentionInfo {
+  flex: 1;
+  min-width: 0;
+}
+
+.mentionName {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mentionRole {
+  margin: 0;
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.mentionFooter {
+  padding: 6px 12px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.mentionFooterText {
+  margin: 0;
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+/* ── Recipients row ─────────────────────────────────────────── */
+.recipientsRow {
+  padding: 6px 12px;
+  border-top: 1px solid var(--sn-border);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  flex-shrink: 0;
+  background: var(--bg-raised);
+  animation: sn-line-in 0.15s ease;
+}
+
+.recipientChip {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--accent-bg);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 500;
+  padding: 3px 8px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--accent-border);
+}
+
+.recipientRemoveBtn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--accent);
+  font-size: 9px;
+  padding: 0;
+  opacity: 0.6;
+  display: flex;
+  align-items: center;
+  line-height: 1;
+}
+
+/* ── Footer ─────────────────────────────────────────────────── */
+.footer {
+  padding: 7px 12px;
+  border-top: 1px solid var(--sn-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  background: var(--sn-footer);
+  gap: 8px;
+}
+
+.footerMeta {
+  font-size: 11px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.footerMentionHint {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  background: var(--bg-active);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+.footerActions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.sendEmailBtn {
+  background: var(--accent);
+  color: var(--text-inverse);
+  border: none;
+  border-radius: 6px;
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-family: 'DM Sans', sans-serif;
+  animation: sn-line-in 0.15s ease;
+}
+
+.clearBtn {
+  font-size: 11px;
+  color: var(--color-danger);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  font-family: 'DM Sans', sans-serif;
+  opacity: 0.7;
+}
+
+.confirmClearRow {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  animation: sn-line-in 0.15s ease;
+}
+
+.confirmClearLabel {
+  font-size: 11px;
+  color: var(--color-danger);
+}
+
+.confirmYesBtn {
+  background: var(--color-danger);
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  padding: 2px 8px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.confirmNoBtn {
+  background: var(--bg-active);
+  color: var(--text-secondary);
+  border: none;
+  border-radius: 4px;
+  padding: 2px 8px;
+  cursor: pointer;
+  font-size: 11px;
+}
