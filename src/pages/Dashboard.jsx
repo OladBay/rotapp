@@ -6,12 +6,19 @@ import InviteModal from '../components/shared/InviteModal'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { fetchHomes } from '../utils/homesData'
 
+// NEW: Import the primitives
+import Button from '../components/ui/Button/Button'
+import Modal from '../components/ui/Modal/Modal'
+
 function Dashboard() {
   const { user } = useAuth()
   const navigate = useNavigate()
   const [showInviteModal, setShowInviteModal] = useState(false)
   const [homes, setHomes] = useState([])
   const [loading, setLoading] = useState(true)
+
+  // NEW: Test state for modal
+  const [testModalOpen, setTestModalOpen] = useState(false)
 
   const isOL = user?.activeRole === 'operationallead'
   const isAdmin = user?.activeRole === 'superadmin'

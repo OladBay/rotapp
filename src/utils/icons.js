@@ -43,6 +43,7 @@ import {
   faHourglass,
   faCopy,
   faEnvelope,
+  faSpinner,
 } from '@fortawesome/free-solid-svg-icons'
 
 library.add(
@@ -88,5 +89,6 @@ library.add(
   faHourglass,
   faCircleInfo,
   faCopy,
-  faEnvelope
+  faEnvelope,
+  faSpinner
 )

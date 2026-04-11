@@ -4,7 +4,7 @@ import { createRoot } from 'react-dom/client'
 import { AuthProvider } from './context/AuthContext'
 import { ThemeProvider } from './context/ThemeContext'
 import { RotaProvider } from './context/RotaContext'
-import './index.css'
+import './styles/globals.css'
 import App from './App'
 import './utils/icons'
 

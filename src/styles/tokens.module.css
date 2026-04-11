@@ -1,0 +1,135 @@
+/* Design tokens exported as CSS variables for JavaScript usage */
+/* These mirror the CSS custom properties in globals.css */
+
+:root {
+  /* Surfaces */
+  --bg-base: #0f1117;
+  --bg-raised: #161820;
+  --bg-elevated: #1d1f2b;
+  --bg-overlay: #222433;
+  --bg-hover: rgba(255, 255, 255, 0.04);
+  --bg-active: rgba(255, 255, 255, 0.08);
+
+  /* Text */
+  --text-primary: #e8eaf0;
+  --text-secondary: #9499b0;
+  --text-muted: #5d6180;
+  --text-inverse: #0f1117;
+
+  /* Accent */
+  --accent: #6c8fff;
+  --accent-bg: rgba(108, 143, 255, 0.12);
+  --accent-border: rgba(108, 143, 255, 0.3);
+
+  /* Semantic */
+  --color-success: #2ecc8a;
+  --color-success-bg: rgba(46, 204, 138, 0.12);
+  --color-success-border: rgba(46, 204, 138, 0.25);
+
+  --color-danger: #e85c3d;
+  --color-danger-bg: rgba(232, 92, 61, 0.12);
+  --color-danger-border: rgba(232, 92, 61, 0.25);
+
+  --color-warning: #c4883a;
+  --color-warning-bg: rgba(196, 136, 58, 0.12);
+  --color-warning-border: rgba(196, 136, 58, 0.25);
+
+  --color-info: #3a8ac4;
+  --color-info-bg: rgba(58, 138, 196, 0.12);
+  --color-info-border: rgba(58, 138, 196, 0.25);
+
+  --color-purple: #7a4fa8;
+  --color-purple-bg: rgba(122, 79, 168, 0.15);
+  --color-purple-border: rgba(122, 79, 168, 0.3);
+
+  /* Borders */
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-default: rgba(255, 255, 255, 0.1);
+  --border-strong: rgba(255, 255, 255, 0.18);
+
+  /* Radius */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-full: 9999px;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 4px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.4);
+
+  /* Spacing */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 32px;
+  --space-8: 40px;
+
+  /* Typography */
+  --font-body: 'DM Sans', sans-serif;
+  --font-heading: 'Syne', sans-serif;
+  --font-mono: 'DM Mono', monospace;
+
+  --text-xs: 10px;
+  --text-sm: 12px;
+  --text-base: 13px;
+  --text-md: 14px;
+  --text-lg: 16px;
+  --text-xl: 20px;
+  --text-2xl: 24px;
+
+  --weight-normal: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+}
+
+[data-theme='light'] {
+  --bg-base: #f5f6fa;
+  --bg-raised: #ffffff;
+  --bg-elevated: #f0f1f7;
+  --bg-overlay: #e8eaf0;
+  --bg-hover: rgba(0, 0, 0, 0.03);
+  --bg-active: rgba(0, 0, 0, 0.06);
+
+  --text-primary: #1a1c2e;
+  --text-secondary: #5d6180;
+  --text-muted: #9499b0;
+  --text-inverse: #ffffff;
+
+  --accent: #3d5ce8;
+  --accent-bg: rgba(61, 92, 232, 0.08);
+  --accent-border: rgba(61, 92, 232, 0.25);
+
+  --color-success: #1a9e65;
+  --color-success-bg: rgba(26, 158, 101, 0.08);
+  --color-success-border: rgba(26, 158, 101, 0.2);
+
+  --color-danger: #c0392b;
+  --color-danger-bg: rgba(192, 57, 43, 0.08);
+  --color-danger-border: rgba(192, 57, 43, 0.2);
+
+  --color-warning: #a0621a;
+  --color-warning-bg: rgba(160, 98, 26, 0.08);
+  --color-warning-border: rgba(160, 98, 26, 0.2);
+
+  --color-info: #1a6fa0;
+  --color-info-bg: rgba(26, 111, 160, 0.08);
+  --color-info-border: rgba(26, 111, 160, 0.2);
+
+  --color-purple: #6b3fa0;
+  --color-purple-bg: rgba(107, 63, 160, 0.08);
+  --color-purple-border: rgba(107, 63, 160, 0.25);
+
+  --border-subtle: rgba(0, 0, 0, 0.05);
+  --border-default: rgba(0, 0, 0, 0.1);
+  --border-strong: rgba(0, 0, 0, 0.18);
+
+  --shadow-sm: 0 1px 4px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.12);
+}

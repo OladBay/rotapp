@@ -1,0 +1,243 @@
+.container {
+  position: relative;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-base);
+  font-family: var(--font-body);
+  overflow: hidden;
+}
+
+/* Subtle grid pattern overlay */
+.container::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.content {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: var(--space-6);
+  max-width: 500px;
+}
+
+.errorCode {
+  font-family: var(--font-heading);
+  font-size: clamp(100px, 20vw, 180px);
+  font-weight: var(--weight-bold);
+  margin: 0;
+  line-height: 1;
+  background: linear-gradient(135deg, var(--accent) 0%, #a07eff 80%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  text-shadow: 0 0 40px rgba(108, 143, 255, 0.4);
+  letter-spacing: -0.02em;
+}
+
+.message {
+  font-family: var(--font-heading);
+  font-size: var(--text-2xl);
+  font-weight: var(--weight-semibold);
+  color: var(--text-primary);
+  margin: var(--space-4) 0 var(--space-2) 0;
+}
+
+.subMessage {
+  font-size: var(--text-base);
+  color: var(--text-secondary);
+  margin-bottom: var(--space-7);
+  line-height: 1.6;
+}
+
+/* Floating shapes — all positioned absolutely */
+.shapeCircle1,
+.shapeCircle2,
+.shapeCross1,
+.shapeCross2,
+.shapeTriangle,
+.shapeSquare {
+  position: absolute;
+  z-index: 2;
+  opacity: 0.15;
+}
+
+/* Circle 1 */
+.shapeCircle1 {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  border: 2px solid var(--accent);
+  top: 15%;
+  left: 10%;
+  animation: float1 18s ease-in-out infinite;
+}
+
+/* Circle 2 */
+.shapeCircle2 {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  border: 2px solid var(--color-purple);
+  bottom: 20%;
+  right: 12%;
+  animation: float2 22s ease-in-out infinite;
+}
+
+/* Cross 1 */
+.shapeCross1 {
+  font-size: 48px;
+  font-weight: 300;
+  color: var(--color-info);
+  top: 25%;
+  right: 18%;
+  animation: float3 15s ease-in-out infinite;
+}
+
+.shapeCross1 span {
+  display: block;
+  transform: rotate(0deg);
+}
+
+/* Cross 2 */
+.shapeCross2 {
+  font-size: 36px;
+  font-weight: 300;
+  color: var(--color-success);
+  bottom: 30%;
+  left: 15%;
+  animation: float1 20s ease-in-out infinite reverse;
+}
+
+.shapeCross2 span {
+  display: block;
+}
+
+/* Triangle — created with borders */
+.shapeTriangle {
+  width: 0;
+  height: 0;
+  border-left: 50px solid transparent;
+  border-right: 50px solid transparent;
+  border-bottom: 90px solid var(--color-warning);
+  opacity: 0.1;
+  top: 60%;
+  right: 8%;
+  animation: float2 25s ease-in-out infinite;
+}
+
+/* Square */
+.shapeSquare {
+  width: 70px;
+  height: 70px;
+  border: 2px solid var(--color-danger);
+  transform: rotate(45deg);
+  top: 70%;
+  left: 8%;
+  animation: float3 17s ease-in-out infinite;
+}
+
+/* Animation keyframes */
+@keyframes float1 {
+  0% {
+    transform: translateY(0) rotate(0deg);
+  }
+  33% {
+    transform: translateY(-30px) rotate(15deg);
+  }
+  66% {
+    transform: translateY(15px) rotate(-10deg);
+  }
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+}
+
+@keyframes float2 {
+  0% {
+    transform: translateY(0) scale(1);
+  }
+  25% {
+    transform: translateY(-25px) scale(1.1);
+  }
+  50% {
+    transform: translateY(10px) scale(0.95);
+  }
+  75% {
+    transform: translateY(-15px) scale(1.05);
+  }
+  100% {
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes float3 {
+  0% {
+    transform: translateX(0) translateY(0);
+  }
+  40% {
+    transform: translateX(-20px) translateY(-20px);
+  }
+  70% {
+    transform: translateX(15px) translateY(10px);
+  }
+  100% {
+    transform: translateX(0) translateY(0);
+  }
+}
+
+/* Reduce motion preference */
+@media (prefers-reduced-motion: reduce) {
+  .shapeCircle1,
+  .shapeCircle2,
+  .shapeCross1,
+  .shapeCross2,
+  .shapeTriangle,
+  .shapeSquare {
+    animation: none;
+  }
+}
+
+/* Responsive adjustments */
+@media (max-width: 600px) {
+  .errorCode {
+    font-size: 120px;
+  }
+
+  .shapeCircle1 {
+    width: 80px;
+    height: 80px;
+  }
+
+  .shapeCircle2 {
+    width: 60px;
+    height: 60px;
+  }
+
+  .shapeCross1 {
+    font-size: 36px;
+  }
+
+  .shapeTriangle {
+    border-left-width: 30px;
+    border-right-width: 30px;
+    border-bottom-width: 60px;
+  }
+
+  .shapeSquare {
+    width: 50px;
+    height: 50px;
+  }
+}

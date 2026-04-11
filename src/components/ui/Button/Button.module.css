@@ -1,0 +1,141 @@
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-family: var(--font-body);
+  font-weight: var(--weight-medium);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition:
+    opacity 0.15s,
+    background 0.15s,
+    border-color 0.15s;
+  border: 1px solid transparent;
+  white-space: nowrap;
+  line-height: 1;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Variants */
+.primary {
+  background: var(--accent);
+  color: var(--text-inverse);
+  border: none;
+}
+
+.primary:hover:not(:disabled) {
+  opacity: 0.88;
+}
+
+.secondary {
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-default);
+}
+
+.secondary:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+
+.danger {
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+  border: 1px solid var(--color-danger-border);
+}
+
+.danger:hover:not(:disabled) {
+  background: rgba(232, 92, 61, 0.2);
+}
+
+.ghost {
+  background: transparent;
+  color: var(--text-secondary);
+  border: none;
+}
+
+.ghost:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+
+.icon {
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-default);
+  padding: 0;
+  justify-content: center;
+  align-items: center;
+  line-height: 1;
+}
+
+.icon:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+
+/* Sizes */
+.sm {
+  padding: 6px 10px;
+  font-size: var(--text-xs);
+  gap: 4px;
+}
+
+.md {
+  padding: 9px 16px;
+  font-size: var(--text-base);
+}
+
+.lg {
+  padding: 11px 20px;
+  font-size: var(--text-md);
+}
+
+.icon.sm {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+}
+
+.icon.md {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+}
+
+.icon.lg {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+}
+
+/* Ensure FontAwesome icons inside icon buttons are centered */
+.icon svg {
+  display: block;
+  margin: 0 auto;
+}
+
+/* Loading spinner */
+.spinner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.loading {
+  cursor: wait;
+}
+
+.iconLeft,
+.iconRight {
+  font-size: 0.9em;
+  line-height: 1;
+}
+
+.content {
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
+}

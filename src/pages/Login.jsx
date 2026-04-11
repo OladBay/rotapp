@@ -2,81 +2,8 @@ import { useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
+import Button from '../components/ui/Button/Button'
 import styles from './Login.module.css'
-
-const ls = {
-  page: {
-    minHeight: '100vh',
-    background: 'var(--bg-base, #0f1117)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: '24px',
-    fontFamily: 'DM Sans, sans-serif',
-  },
-  card: {
-    background: 'var(--bg-card, #161820)',
-    border: '1px solid var(--border-default)',
-    borderRadius: '20px',
-    padding: '40px',
-    width: '100%',
-    maxWidth: '400px',
-  },
-  logo: {
-    fontFamily: 'Syne, sans-serif',
-    fontSize: '24px',
-    fontWeight: 700,
-    color: 'var(--text-primary)',
-    marginBottom: '28px',
-    letterSpacing: '-0.5px',
-  },
-  accent: { color: 'var(--accent)' },
-  blockedWrap: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    textAlign: 'center',
-    gap: '12px',
-  },
-  blockedIcon: { fontSize: '40px' },
-  blockedIconRed: {
-    width: '52px',
-    height: '52px',
-    borderRadius: '50%',
-    background: 'rgba(232,92,61,0.12)',
-    color: '#e85c3d',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: '22px',
-    fontWeight: 700,
-  },
-  blockedTitle: {
-    fontSize: '18px',
-    fontWeight: 600,
-    color: 'var(--text-primary)',
-    fontFamily: 'Syne, sans-serif',
-    margin: 0,
-  },
-  blockedText: {
-    fontSize: '13px',
-    color: 'var(--text-secondary)',
-    lineHeight: 1.6,
-    margin: 0,
-  },
-  blockedBtn: {
-    background: 'var(--accent)',
-    color: '#fff',
-    border: 'none',
-    borderRadius: '8px',
-    padding: '10px 20px',
-    fontSize: '13px',
-    fontWeight: 500,
-    cursor: 'pointer',
-    fontFamily: 'DM Sans, sans-serif',
-    marginTop: '8px',
-  },
-}
 
 function Login() {
   const [email, setEmail] = useState('')
@@ -87,7 +14,6 @@ function Login() {
   const { login, user } = useAuth()
   const navigate = useNavigate()
 
-  // Must be before any early returns — React hook rules
   useEffect(() => {
     if (user && !user.blockedStatus) {
       const role = user.activeRole
@@ -97,7 +23,7 @@ function Login() {
         navigate('/dashboard')
       }
     }
-  }, [user])
+  }, [user, navigate])
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -111,30 +37,30 @@ function Login() {
     }
   }
 
-  // Blocked screens — after hooks, before main render
+  // Blocked screens
   if (user?.blockedStatus === 'pending') {
     return (
-      <div style={ls.page}>
-        <div style={ls.card}>
-          <div style={ls.logo}>
-            Rot<span style={ls.accent}>app</span>
+      <div className={styles.page}>
+        <div className={styles.card}>
+          <div className={styles.logo}>
+            Rot<span className={styles.accent}>app</span>
           </div>
-          <div style={ls.blockedWrap}>
-            <div style={ls.blockedIcon}>⏳</div>
-            <h1 style={ls.blockedTitle}>Account pending approval</h1>
-            <p style={ls.blockedText}>
+          <div className={styles.blockedWrap}>
+            <div className={styles.blockedIcon}>⏳</div>
+            <h1 className={styles.blockedTitle}>Account pending approval</h1>
+            <p className={styles.blockedText}>
               Your account is awaiting approval from your manager. You'll be
               able to log in once it's been approved.
             </p>
-            <button
-              style={ls.blockedBtn}
+            <Button
+              variant='primary'
               onClick={() => {
                 supabase.auth.signOut()
                 window.location.reload()
               }}
             >
               Back to login
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -143,27 +69,27 @@ function Login() {
 
   if (user?.blockedStatus === 'suspended') {
     return (
-      <div style={ls.page}>
-        <div style={ls.card}>
-          <div style={ls.logo}>
-            Rot<span style={ls.accent}>app</span>
+      <div className={styles.page}>
+        <div className={styles.card}>
+          <div className={styles.logo}>
+            Rot<span className={styles.accent}>app</span>
           </div>
-          <div style={ls.blockedWrap}>
-            <div style={ls.blockedIconRed}>✕</div>
-            <h1 style={ls.blockedTitle}>Account suspended</h1>
-            <p style={ls.blockedText}>
+          <div className={styles.blockedWrap}>
+            <div className={styles.blockedIconRed}>✕</div>
+            <h1 className={styles.blockedTitle}>Account suspended</h1>
+            <p className={styles.blockedText}>
               Your account has been suspended. Please contact your manager or
               operational lead.
             </p>
-            <button
-              style={ls.blockedBtn}
+            <Button
+              variant='primary'
               onClick={() => {
                 supabase.auth.signOut()
                 window.location.reload()
               }}
             >
               Back to login
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -174,7 +100,7 @@ function Login() {
     <div className={styles.page}>
       <div className={styles.card}>
         <div className={styles.logo}>
-          Rot<span>app</span>
+          Rot<span className={styles.accent}>app</span>
         </div>
         <h1 className={styles.title}>Welcome back</h1>
         <p className={styles.subtitle}>Sign in to your account</p>
@@ -206,9 +132,14 @@ function Login() {
 
           {error && <div className={styles.error}>{error}</div>}
 
-          <button className={styles.btn} type='submit' disabled={loading}>
+          <Button
+            type='submit'
+            variant='primary'
+            loading={loading}
+            disabled={loading}
+          >
             {loading ? 'Signing in…' : 'Sign in'}
-          </button>
+          </Button>
         </form>
 
         <p className={styles.footer}>
