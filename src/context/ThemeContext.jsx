@@ -8,9 +8,9 @@ const STORAGE_KEY = 'rotapp_theme'
 export function ThemeProvider({ children }) {
   const [theme, setTheme] = useState(() => {
     try {
-      return localStorage.getItem(STORAGE_KEY) || 'dark'
+      return localStorage.getItem(STORAGE_KEY) || 'light'
     } catch {
-      return 'dark'
+      return 'light'
     }
   })
 
