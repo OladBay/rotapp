@@ -30,6 +30,7 @@ import {
   getTimeOffForDateStr,
 } from '../utils/timeOffStorage'
 import LeaveCalendar from '../components/shared/LeaveCalendar'
+import styles from './Calendar.module.css'
 
 const TODAY = new Date()
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
@@ -89,17 +90,41 @@ function Calendar() {
     [monthRota]
   )
 
-  const hasShiftOnDate = useCallback(
+  const getDateState = useCallback(
     (date, sid) => {
-      const rota = getRotaForDate(date)
-      if (!rota) return false
-      const dayOfWeek = (date.getDay() + 6) % 7
-      return (
-        (rota.early?.[dayOfWeek] || []).some((s) => s.id === sid) ||
-        (rota.late?.[dayOfWeek] || []).some((s) => s.id === sid)
+      const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+
+      // Cancelled — approved cancel record
+      const isCancelled = cancelRequests.some(
+        (r) =>
+          r.staff_id === sid &&
+          r.shift_date === dateStr &&
+          r.status === 'approved'
       )
+      if (isCancelled) return 'cancelled'
+
+      // Leave
+      const leaveEntry = myTimeOff.find((e) => e.date === dateStr)
+      if (leaveEntry) {
+        return leaveEntry.status === 'pending' ? 'leave-pending' : 'leave'
+      }
+
+      // Rota shift
+      const rota = getRotaForDate(date)
+      if (!rota) return 'none'
+      const dayOfWeek = (date.getDay() + 6) % 7
+
+      const lateStaff = rota.late?.[dayOfWeek] || []
+      const myLate = lateStaff.find((s) => s.id === sid)
+      if (myLate) return myLate.sleepIn ? 'sleep-in' : 'late'
+
+      const earlyStaff = rota.early?.[dayOfWeek] || []
+      const onEarly = earlyStaff.some((s) => s.id === sid)
+      if (onEarly) return 'early'
+
+      return 'none'
     },
-    [getRotaForDate]
+    [getRotaForDate, cancelRequests, myTimeOff]
   )
 
   const myShiftsForWeek = useMemo(() => {
@@ -138,20 +163,13 @@ function Calendar() {
   }, [currentWeekRota, currentMonday, staffId, user?.home])
 
   // ── getDayState ────────────────────────────────────────────────────────
-  // Single source of truth for what is happening on a given day.
-  // The render loop reads from this — it never does its own lookups.
   const getDayState = useCallback(
-    (dateStr, dayIdx) => {
+    (dateStr) => {
       const shift = myShiftsForWeek.find((s) => s.date === dateStr) || null
-
       const shiftRequest =
         shift && staffId
           ? getShiftRequest(cancelRequests, staffId, shift.date, shift.type)
           : null
-
-      // Look up approved cancellation directly from the cancel record.
-      // This works even when the shift has been removed from the rota —
-      // the cancel record is the source of truth for the cancelled state.
       const approvedCancel =
         cancelRequests.find(
           (r) =>
@@ -159,9 +177,7 @@ function Calendar() {
             r.shift_date === dateStr &&
             r.status === 'approved'
         ) || null
-
       const timeOffEntries = getTimeOffForDateStr(myTimeOff, dateStr)
-
       return {
         shift,
         shiftRequest,
@@ -260,41 +276,36 @@ function Calendar() {
   }
 
   return (
-    <div style={s.page}>
+    <div className={styles.page}>
       <Navbar />
-      <div style={s.body}>
+      <div className={styles.body}>
         {/* Header */}
-        <div style={s.header}>
+        <div className={styles.header}>
           <div>
-            <h1 style={s.title}>My Schedule</h1>
-            <p style={s.subtitle}>
+            <h1 className={styles.title}>My Schedule</h1>
+            <p className={styles.subtitle}>
               {viewMode === 'week'
                 ? `${startLabel} – ${endLabel}`
                 : `${currentYear}`}
             </p>
           </div>
-          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+          <div className={styles.headerRight}>
             {user?.activeRole !== 'relief' && (
               <button
-                style={s.requestTimeOffBtn}
+                className={styles.requestTimeOffBtn}
                 onClick={() => setShowTimeOffModal(true)}
               >
                 <FontAwesomeIcon icon='calendar-plus' /> Request time off
               </button>
             )}
-            <div style={s.viewToggle}>
+            <div className={styles.viewToggle}>
               {[
                 { value: 'week', label: 'Week' },
                 { value: 'month', label: 'Month' },
               ].map((v) => (
                 <button
                   key={v.value}
-                  style={{
-                    ...s.toggleBtn,
-                    background:
-                      viewMode === v.value ? '#6c8fff' : 'transparent',
-                    color: viewMode === v.value ? '#fff' : '#9499b0',
-                  }}
+                  className={`${styles.toggleBtn}${viewMode === v.value ? ` ${styles.toggleBtnActive}` : ''}`}
                   onClick={() => setViewMode(v.value)}
                 >
                   {v.label}
@@ -307,51 +318,47 @@ function Calendar() {
         {/* WEEK VIEW */}
         {viewMode === 'week' && (
           <>
-            <div style={s.weekNav}>
-              <button style={s.navArrow} onClick={prevWeek}>
+            <div className={styles.weekNav}>
+              <button className={styles.navArrow} onClick={prevWeek}>
                 <FontAwesomeIcon icon='chevron-left' />
               </button>
-              <span style={s.weekLabel}>{`${startLabel} – ${endLabel}`}</span>
-              <button style={s.navArrow} onClick={nextWeek}>
+              <span
+                className={styles.weekLabel}
+              >{`${startLabel} – ${endLabel}`}</span>
+              <button className={styles.navArrow} onClick={nextWeek}>
                 <FontAwesomeIcon icon='chevron-right' />
               </button>
               <button
-                style={s.todayBtn}
+                className={styles.todayBtn}
                 onClick={() => setMonday(getMondayOfWeek(TODAY))}
               >
                 Today
               </button>
             </div>
 
-            <div style={s.gridWrap}>
-              <div style={s.grid}>
-                <div style={s.colLabel} />
+            <div className={styles.gridWrap}>
+              <div className={styles.grid}>
+                <div className={styles.colLabel} />
                 {DAYS.map((day, i) => {
                   const date = weekDates[i]
                   const isToday = isSameDay(date, TODAY)
                   return (
                     <div
                       key={i}
+                      className={styles.dayHeader}
                       style={{
-                        ...s.dayHeader,
                         background: isToday
-                          ? 'rgba(108,143,255,0.06)'
+                          ? 'var(--accent-bg)'
                           : 'transparent',
                       }}
                     >
                       <div
-                        style={{
-                          ...s.dayName,
-                          color: isToday ? '#6c8fff' : '#9499b0',
-                        }}
+                        className={`${styles.dayName}${isToday ? ` ${styles.dayNameToday}` : ''}`}
                       >
                         {day}
                       </div>
                       <div
-                        style={{
-                          ...s.dayDate,
-                          color: isToday ? '#6c8fff' : '#e8eaf0',
-                        }}
+                        className={`${styles.dayDate}${isToday ? ` ${styles.dayDateToday}` : ''}`}
                       >
                         {formatShort(date)}
                       </div>
@@ -359,9 +366,9 @@ function Calendar() {
                   )
                 })}
 
-                <div style={s.shiftLabel}>
-                  <div style={s.shiftName}>My Shifts</div>
-                  <div style={s.shiftTime}>Your assigned shifts</div>
+                <div className={styles.shiftLabel}>
+                  <div className={styles.shiftName}>My Shifts</div>
+                  <div className={styles.shiftTime}>Your assigned shifts</div>
                 </div>
 
                 {DAYS.map((_, dayIdx) => {
@@ -373,18 +380,17 @@ function Calendar() {
 
                   const {
                     shift,
-                    shiftRequest,
                     approvedCancel,
                     timeOffEntries,
                     isPending,
                     isCancelled,
-                  } = getDayState(dateStr, dayIdx)
+                  } = getDayState(dateStr)
 
                   return (
                     <div
                       key={dayIdx}
+                      className={styles.cell}
                       style={{
-                        ...s.cell,
                         cursor: shift || isCancelled ? 'pointer' : 'default',
                       }}
                       onClick={() => {
@@ -407,18 +413,20 @@ function Calendar() {
                       {timeOffEntries.map((e) => (
                         <div
                           key={e.id}
+                          className={styles.timeOffBadge}
                           style={{
-                            ...s.timeOffBadge,
                             background:
                               e.status === 'pending'
-                                ? 'rgba(196,136,58,0.15)'
-                                : 'rgba(108,143,255,0.12)',
+                                ? 'var(--color-warning-bg)'
+                                : 'var(--accent-bg)',
                             color:
-                              e.status === 'pending' ? '#c4883a' : '#6c8fff',
+                              e.status === 'pending'
+                                ? 'var(--color-warning)'
+                                : 'var(--accent)',
                             border:
                               e.status === 'pending'
-                                ? '1px solid rgba(196,136,58,0.3)'
-                                : '1px solid rgba(108,143,255,0.25)',
+                                ? '1px solid var(--color-warning-border)'
+                                : '1px solid var(--accent-border)',
                           }}
                         >
                           <FontAwesomeIcon
@@ -433,7 +441,7 @@ function Calendar() {
 
                       {/* Cancelled shift badge */}
                       {isCancelled ? (
-                        <div style={{ ...s.cancelledTag, cursor: 'pointer' }}>
+                        <div className={styles.cancelledTag}>
                           <FontAwesomeIcon
                             icon='circle-xmark'
                             style={{ marginRight: '4px', fontSize: '10px' }}
@@ -442,8 +450,8 @@ function Calendar() {
                         </div>
                       ) : shift ? (
                         <div
+                          className={styles.shiftCard}
                           style={{
-                            ...s.shiftCard,
                             background: isPending
                               ? 'rgba(196,136,58,0.15)'
                               : shift.type === 'early'
@@ -457,10 +465,10 @@ function Calendar() {
                           }}
                         >
                           <div
+                            className={styles.shiftType}
                             style={{
-                              ...s.shiftType,
                               color: isPending
-                                ? '#c4883a'
+                                ? 'var(--color-warning)'
                                 : shift.type === 'early'
                                   ? '#2a7f62'
                                   : '#7a4fa8',
@@ -470,15 +478,15 @@ function Calendar() {
                             {shift.sleepIn && ' · Sleep-in'}
                             {isPending && ' · Pending'}
                           </div>
-                          <div style={s.shiftTime}>
+                          <div className={styles.shiftTime}>
                             {shift.type === 'early'
                               ? '07:00–14:30'
                               : '14:00–23:00'}
                           </div>
-                          <div style={s.shiftHome}>{shift.home}</div>
+                          <div className={styles.shiftHome}>{shift.home}</div>
                         </div>
                       ) : (
-                        <div style={s.offDay}>
+                        <div className={styles.offDay}>
                           {timeOffEntries.length === 0 && '—'}
                         </div>
                       )}
@@ -493,22 +501,22 @@ function Calendar() {
         {/* MONTH VIEW */}
         {viewMode === 'month' && (
           <>
-            <div style={s.monthNav}>
+            <div className={styles.monthNav}>
               <button
-                style={s.navArrow}
+                className={styles.navArrow}
                 onClick={() => setCurrentYear((y) => y - 1)}
               >
                 <FontAwesomeIcon icon='chevron-left' />
               </button>
-              <span style={s.weekLabel}>{currentYear}</span>
+              <span className={styles.weekLabel}>{currentYear}</span>
               <button
-                style={s.navArrow}
+                className={styles.navArrow}
                 onClick={() => setCurrentYear((y) => y + 1)}
               >
                 <FontAwesomeIcon icon='chevron-right' />
               </button>
               <button
-                style={s.todayBtn}
+                className={styles.todayBtn}
                 onClick={() => {
                   setCurrentYear(TODAY.getFullYear())
                   setMonday(getMondayOfWeek(TODAY))
@@ -518,75 +526,150 @@ function Calendar() {
               </button>
             </div>
 
-            <div style={s.yearWrap}>
+            {/* Legend — month view only */}
+            <div className={styles.legend}>
+              <div className={styles.legendItem}>
+                <span
+                  className={`${styles.legendDot} ${styles.legendDotEarly}`}
+                />
+                Early shift
+              </div>
+              <div className={styles.legendItem}>
+                <span
+                  className={`${styles.legendDot} ${styles.legendDotLate}`}
+                />
+                Late shift
+              </div>
+              <div className={styles.legendItem}>
+                <span
+                  className={`${styles.legendDot} ${styles.legendDotSleepIn}`}
+                />
+                Sleep-in
+              </div>
+              <div className={styles.legendItem}>
+                <span
+                  className={`${styles.legendDot} ${styles.legendDotPending}`}
+                />
+                Cancellation pending
+              </div>
+              <div className={styles.legendItem}>
+                <span
+                  className={`${styles.legendDot} ${styles.legendDotCancelled}`}
+                />
+                Cancelled
+              </div>
+              <div className={styles.legendItem}>
+                <span
+                  className={`${styles.legendDot} ${styles.legendDotLeave}`}
+                />
+                On leave
+              </div>
+            </div>
+
+            <div className={styles.yearWrap}>
               {yearMonths.map(({ year, month, label }) => {
                 const monthDates = getMonthDates(year, month)
+
                 const isHovered = hoveredMonth === `${year}-${month}`
                 let shiftCount = 0
                 monthDates.forEach((date) => {
                   if (
                     date.getMonth() === month &&
-                    hasShiftOnDate(date, staffId)
+                    getDateState(date, staffId) !== 'none'
                   )
                     shiftCount++
                 })
+
                 return (
                   <div
                     key={`${year}-${month}`}
+                    className={styles.miniMonth}
                     style={{
-                      ...s.miniMonth,
                       border:
                         shiftCount > 0
-                          ? '1px solid rgba(108,143,255,0.3)'
-                          : '1px solid rgba(255,255,255,0.06)',
+                          ? '1px solid var(--accent-border)'
+                          : '1px solid var(--border-subtle)',
                       background:
-                        shiftCount > 0 ? 'rgba(108,143,255,0.04)' : '#161820',
+                        shiftCount > 0
+                          ? 'var(--accent-bg)'
+                          : 'var(--bg-raised)',
                       transform: isHovered
                         ? 'translateY(-3px)'
                         : 'translateY(0)',
                       boxShadow: isHovered
-                        ? '0 8px 24px rgba(0,0,0,0.35)'
-                        : '0 1px 4px rgba(0,0,0,0.15)',
+                        ? 'var(--shadow-lg)'
+                        : 'var(--shadow-sm)',
                     }}
                     onMouseEnter={() => setHoveredMonth(`${year}-${month}`)}
                     onMouseLeave={() => setHoveredMonth(null)}
                     onClick={() => handleMonthClick(year, month)}
                   >
-                    <div style={s.miniMonthHeader}>
-                      <div style={s.miniMonthTitle}>{label}</div>
+                    <div className={styles.miniMonthHeader}>
+                      <div className={styles.miniMonthTitle}>{label}</div>
                       {shiftCount > 0 && (
-                        <span style={s.shiftCountBadge}>
+                        <span className={styles.shiftCountBadge}>
                           {shiftCount} shift{shiftCount > 1 ? 's' : ''}
                         </span>
                       )}
                     </div>
-                    <div style={s.miniDayHeaders}>
+                    <div className={styles.miniDayHeaders}>
                       {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d, i) => (
-                        <div key={i} style={s.miniDayHead}>
+                        <div key={i} className={styles.miniDayHead}>
                           {d}
                         </div>
                       ))}
                     </div>
-                    <div style={s.miniGrid}>
+                    <div className={styles.miniGrid}>
                       {monthDates.map((date, i) => {
                         const inMonth = date.getMonth() === month
                         const isToday = isSameDay(date, TODAY)
-                        const hasShift =
-                          inMonth && hasShiftOnDate(date, staffId)
+                        const dateState = inMonth
+                          ? getDateState(date, staffId)
+                          : 'none'
+                        const hasShift = dateState !== 'none'
+
+                        const STATE_BG = {
+                          early: 'rgba(42, 127, 98, 0.25)',
+                          late: 'rgba(122, 79, 168, 0.25)',
+                          'sleep-in': 'rgba(196, 136, 58, 0.25)',
+                          'leave-pending': 'rgba(196, 136, 58, 0.15)',
+                          cancelled: 'var(--color-danger-bg)',
+                          leave: 'var(--accent-bg)',
+                          none: 'transparent',
+                        }
+
+                        const STATE_BORDER = {
+                          early: '1px solid rgba(42, 127, 98, 0.5)',
+                          late: '1px solid rgba(122, 79, 168, 0.5)',
+                          'sleep-in': '1px solid rgba(196, 136, 58, 0.5)',
+                          'leave-pending': '1px solid rgba(196, 136, 58, 0.4)',
+                          cancelled: '1px solid var(--color-danger-border)',
+                          leave: '1px solid var(--accent-border)',
+                          none: '1px solid var(--border-subtle)',
+                        }
+
+                        const STATE_COLOR = {
+                          early: 'rgba(42, 127, 98, 0.9)',
+                          late: '#7a4fa8',
+                          'sleep-in': 'var(--color-warning)',
+                          'leave-pending': 'var(--color-warning)',
+                          cancelled: 'var(--color-danger)',
+                          leave: 'var(--accent)',
+                          none: 'var(--text-muted)',
+                        }
+
                         return (
                           <div
                             key={i}
+                            className={styles.miniCell}
                             style={{
-                              ...s.miniCell,
                               opacity: inMonth ? 1 : 0,
-                              background: hasShift
-                                ? 'rgba(108,143,255,0.25)'
-                                : 'transparent',
+                              background: isToday
+                                ? STATE_BG[dateState]
+                                : STATE_BG[dateState],
                               border: isToday
-                                ? '1.5px solid #6c8fff'
-                                : hasShift
-                                  ? '1px solid rgba(108,143,255,0.4)'
-                                  : '1px solid rgba(255,255,255,0.04)',
+                                ? '1.5px solid var(--accent)'
+                                : STATE_BORDER[dateState],
                             }}
                             onClick={(e) => {
                               e.stopPropagation()
@@ -597,15 +680,13 @@ function Calendar() {
                             }}
                           >
                             <span
+                              className={styles.miniDateNum}
                               style={{
-                                ...s.miniDateNum,
                                 color: isToday
-                                  ? '#6c8fff'
-                                  : hasShift
-                                    ? '#6c8fff'
-                                    : inMonth
-                                      ? '#5d6180'
-                                      : 'transparent',
+                                  ? 'var(--accent)'
+                                  : inMonth
+                                    ? STATE_COLOR[dateState]
+                                    : 'transparent',
                                 fontWeight: hasShift ? 600 : 400,
                               }}
                             >
@@ -626,7 +707,7 @@ function Calendar() {
       {/* ── Shift detail modal ── */}
       {selectedShift && (
         <div
-          style={s.overlay}
+          className={styles.overlay}
           onClick={() => {
             setSelectedShift(null)
             setShowReasonForm(false)
@@ -635,11 +716,11 @@ function Calendar() {
             setCancelNote('')
           }}
         >
-          <div style={s.modal} onClick={(e) => e.stopPropagation()}>
-            <div style={s.modalHeader}>
-              <div style={s.modalTitle}>Shift Details</div>
+          <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.modalHeader}>
+              <div className={styles.modalTitle}>Shift Details</div>
               <button
-                style={s.closeBtn}
+                className={styles.closeBtn}
                 onClick={() => {
                   setSelectedShift(null)
                   setShowReasonForm(false)
@@ -652,18 +733,18 @@ function Calendar() {
               </button>
             </div>
 
-            <div style={s.modalBody}>
-              <div style={s.detailRow}>
-                <span style={s.detailLabel}>Day</span>
-                <span style={s.detailVal}>
+            <div className={styles.modalBody}>
+              <div className={styles.detailRow}>
+                <span className={styles.detailLabel}>Day</span>
+                <span className={styles.detailVal}>
                   {selectedShift.dayName}, {selectedShift.date}
                 </span>
               </div>
-              <div style={s.detailRow}>
-                <span style={s.detailLabel}>Shift</span>
+              <div className={styles.detailRow}>
+                <span className={styles.detailLabel}>Shift</span>
                 <span
+                  className={styles.detailVal}
                   style={{
-                    ...s.detailVal,
                     color:
                       selectedShift.type === 'early' ? '#2a7f62' : '#7a4fa8',
                     textTransform: 'capitalize',
@@ -672,26 +753,31 @@ function Calendar() {
                   {selectedShift.type}
                 </span>
               </div>
-              <div style={s.detailRow}>
-                <span style={s.detailLabel}>Time</span>
-                <span style={s.detailVal}>
+              <div className={styles.detailRow}>
+                <span className={styles.detailLabel}>Time</span>
+                <span className={styles.detailVal}>
                   {selectedShift.type === 'early'
                     ? '07:00–14:30'
                     : '14:00–23:00'}
                 </span>
               </div>
-              <div style={s.detailRow}>
-                <span style={s.detailLabel}>Home</span>
-                <span style={s.detailVal}>{selectedShift.home}</span>
+              <div className={styles.detailRow}>
+                <span className={styles.detailLabel}>Home</span>
+                <span className={styles.detailVal}>{selectedShift.home}</span>
               </div>
               {selectedShift.sleepIn && (
-                <div style={s.detailRow}>
-                  <span style={s.detailLabel}>Sleep-in</span>
-                  <span style={{ ...s.detailVal, color: '#c4883a' }}>Yes</span>
+                <div className={styles.detailRow}>
+                  <span className={styles.detailLabel}>Sleep-in</span>
+                  <span
+                    className={styles.detailVal}
+                    style={{ color: 'var(--color-warning)' }}
+                  >
+                    Yes
+                  </span>
                 </div>
               )}
-              <div style={s.detailRow}>
-                <span style={s.detailLabel}>Status</span>
+              <div className={styles.detailRow}>
+                <span className={styles.detailLabel}>Status</span>
                 {(() => {
                   const request = getShiftRequest(
                     cancelRequests,
@@ -701,24 +787,27 @@ function Calendar() {
                   )
                   if (request?.status === 'pending')
                     return (
-                      <span style={{ ...s.detailVal, color: '#c4883a' }}>
+                      <span
+                        className={styles.detailVal}
+                        style={{ color: 'var(--color-warning)' }}
+                      >
                         Cancellation requested
                       </span>
                     )
                   if (request?.status === 'rejected')
                     return (
-                      <span style={{ ...s.detailVal, color: '#9499b0' }}>
+                      <span
+                        className={styles.detailVal}
+                        style={{ color: 'var(--text-secondary)' }}
+                      >
                         Cancellation rejected
                       </span>
                     )
-                  if (request?.status === 'withdrawn')
-                    return (
-                      <span style={{ ...s.detailVal, color: '#2ecc8a' }}>
-                        Confirmed
-                      </span>
-                    )
                   return (
-                    <span style={{ ...s.detailVal, color: '#2ecc8a' }}>
+                    <span
+                      className={styles.detailVal}
+                      style={{ color: 'var(--color-success)' }}
+                    >
                       Confirmed
                     </span>
                   )
@@ -738,20 +827,20 @@ function Calendar() {
                 const pingInfo = getPingInfo(request)
                 return (
                   <>
-                    <div style={s.pendingWarning}>
+                    <div className={styles.pendingWarning}>
                       <FontAwesomeIcon icon='clock' /> Cancellation request
                       pending manager approval
                     </div>
-                    <div style={s.buttonGroup}>
+                    <div className={styles.buttonGroup}>
                       <button
-                        style={s.withdrawBtn}
+                        className={styles.withdrawBtn}
                         onClick={() => handleWithdraw(request.id)}
                       >
                         Withdraw request
                       </button>
                       {pingInfo.canPing ? (
                         <button
-                          style={s.pingBtn}
+                          className={styles.pingBtn}
                           onClick={async () => {
                             await pingRequest(
                               request.id,
@@ -764,7 +853,7 @@ function Calendar() {
                           Ping ({pingInfo.remainingPings})
                         </button>
                       ) : (
-                        <button style={s.pingBtnDisabled} disabled>
+                        <button className={styles.pingBtnDisabled} disabled>
                           Ping limit reached
                         </button>
                       )}
@@ -775,16 +864,9 @@ function Calendar() {
 
               if (!showReasonForm) {
                 return (
-                  <div
-                    style={{
-                      padding: '0 20px 16px',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '8px',
-                    }}
-                  >
+                  <div className={styles.cancelShiftWrap}>
                     <button
-                      style={s.cancelShiftBtn}
+                      className={styles.cancelShiftBtn}
                       onClick={() => setShowReasonForm(true)}
                     >
                       Request cancellation
@@ -800,15 +882,17 @@ function Calendar() {
                 selectedShift.type
               )
               return (
-                <div style={s.reasonForm}>
+                <div className={styles.reasonForm}>
                   {shouldWarn && (
-                    <div style={s.warningNoteInline}>
+                    <div className={styles.warningNoteInline}>
                       <FontAwesomeIcon icon='triangle-exclamation' /> {message}
                     </div>
                   )}
-                  <div style={s.reasonLabel}>Reason for cancellation:</div>
+                  <div className={styles.reasonLabel}>
+                    Reason for cancellation:
+                  </div>
                   <select
-                    style={s.reasonSelect}
+                    className={styles.reasonSelect}
                     value={cancelReason}
                     onChange={(e) => setCancelReason(e.target.value)}
                   >
@@ -820,12 +904,12 @@ function Calendar() {
                   </select>
 
                   {cancelReason === 'Other' && (
-                    <div style={s.field}>
-                      <label style={s.reasonLabel}>
+                    <div className={styles.field}>
+                      <label className={styles.reasonLabel}>
                         Please specify your reason
                       </label>
                       <textarea
-                        style={s.reasonTextarea}
+                        className={styles.reasonTextarea}
                         placeholder='Describe your reason...'
                         value={customReasonText}
                         onChange={(e) => setCustomReasonText(e.target.value)}
@@ -833,30 +917,26 @@ function Calendar() {
                       />
                     </div>
                   )}
-                  <div
-                    style={{
-                      ...s.field,
-                      borderTop: '1px solid rgba(255,255,255,0.06)',
-                      paddingTop: '12px',
-                    }}
-                  >
-                    <label style={s.reasonLabel}>
+
+                  <div className={styles.fieldDivided}>
+                    <label className={styles.reasonLabel}>
                       Additional note{' '}
-                      <span style={{ color: '#5d6180', fontWeight: 400 }}>
+                      <span className={styles.reasonLabelOptional}>
                         (optional)
                       </span>
                     </label>
                     <textarea
-                      style={s.reasonTextarea}
+                      className={styles.reasonTextarea}
                       placeholder='Anything else your manager should know...'
                       value={cancelNote}
                       onChange={(e) => setCancelNote(e.target.value)}
                       rows='2'
                     />
                   </div>
-                  <div style={s.reasonActions}>
+
+                  <div className={styles.reasonActions}>
                     <button
-                      style={s.cancelReasonBtn}
+                      className={styles.cancelReasonBtn}
                       onClick={() => {
                         setShowReasonForm(false)
                         setCancelReason('')
@@ -867,8 +947,8 @@ function Calendar() {
                       Back
                     </button>
                     <button
+                      className={styles.submitReasonBtn}
                       style={{
-                        ...s.submitReasonBtn,
                         opacity:
                           !cancelReason ||
                           (cancelReason === 'Other' && !customReasonText.trim())
@@ -898,29 +978,32 @@ function Calendar() {
 
       {/* ── Cancelled shift detail modal ── */}
       {cancelledShiftDetail && (
-        <div style={s.overlay} onClick={() => setCancelledShiftDetail(null)}>
-          <div style={s.modal} onClick={(e) => e.stopPropagation()}>
-            <div style={s.modalHeader}>
-              <div style={s.modalTitle}>Cancelled Shift</div>
+        <div
+          className={styles.overlay}
+          onClick={() => setCancelledShiftDetail(null)}
+        >
+          <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.modalHeader}>
+              <div className={styles.modalTitle}>Cancelled Shift</div>
               <button
-                style={s.closeBtn}
+                className={styles.closeBtn}
                 onClick={() => setCancelledShiftDetail(null)}
               >
                 <FontAwesomeIcon icon='xmark' />
               </button>
             </div>
-            <div style={s.modalBody}>
-              <div style={s.detailRow}>
-                <span style={s.detailLabel}>Day</span>
-                <span style={s.detailVal}>
+            <div className={styles.modalBody}>
+              <div className={styles.detailRow}>
+                <span className={styles.detailLabel}>Day</span>
+                <span className={styles.detailVal}>
                   {cancelledShiftDetail.dayName}, {cancelledShiftDetail.date}
                 </span>
               </div>
-              <div style={s.detailRow}>
-                <span style={s.detailLabel}>Shift</span>
+              <div className={styles.detailRow}>
+                <span className={styles.detailLabel}>Shift</span>
                 <span
+                  className={styles.detailVal}
                   style={{
-                    ...s.detailVal,
                     color:
                       cancelledShiftDetail.type === 'early'
                         ? '#2a7f62'
@@ -931,30 +1014,38 @@ function Calendar() {
                   {cancelledShiftDetail.type}
                 </span>
               </div>
-              <div style={s.detailRow}>
-                <span style={s.detailLabel}>Time</span>
-                <span style={s.detailVal}>
+              <div className={styles.detailRow}>
+                <span className={styles.detailLabel}>Time</span>
+                <span className={styles.detailVal}>
                   {cancelledShiftDetail.type === 'early'
                     ? '07:00–14:30'
                     : '14:00–23:00'}
                 </span>
               </div>
               {cancelledShiftDetail.sleepIn && (
-                <div style={s.detailRow}>
-                  <span style={s.detailLabel}>Sleep-in</span>
-                  <span style={{ ...s.detailVal, color: '#c4883a' }}>Yes</span>
+                <div className={styles.detailRow}>
+                  <span className={styles.detailLabel}>Sleep-in</span>
+                  <span
+                    className={styles.detailVal}
+                    style={{ color: 'var(--color-warning)' }}
+                  >
+                    Yes
+                  </span>
                 </div>
               )}
-              <div style={s.detailRow}>
-                <span style={s.detailLabel}>Status</span>
-                <span style={{ ...s.detailVal, color: '#e85c3d' }}>
+              <div className={styles.detailRow}>
+                <span className={styles.detailLabel}>Status</span>
+                <span
+                  className={styles.detailVal}
+                  style={{ color: 'var(--color-danger)' }}
+                >
                   Cancelled
                 </span>
               </div>
               {cancelledShiftDetail.cancelRecord?.reason && (
-                <div style={s.detailRow}>
-                  <span style={s.detailLabel}>Reason</span>
-                  <span style={s.detailVal}>
+                <div className={styles.detailRow}>
+                  <span className={styles.detailLabel}>Reason</span>
+                  <span className={styles.detailVal}>
                     {cancelledShiftDetail.cancelRecord.reason === 'Other'
                       ? cancelledShiftDetail.cancelRecord.custom_reason
                       : cancelledShiftDetail.cancelRecord.reason}
@@ -962,9 +1053,9 @@ function Calendar() {
                 </div>
               )}
               {cancelledShiftDetail.cancelRecord?.reviewed_at && (
-                <div style={s.detailRow}>
-                  <span style={s.detailLabel}>Approved on</span>
-                  <span style={s.detailVal}>
+                <div className={styles.detailRow}>
+                  <span className={styles.detailLabel}>Approved on</span>
+                  <span className={styles.detailVal}>
                     {new Date(
                       cancelledShiftDetail.cancelRecord.reviewed_at
                     ).toLocaleDateString('en-GB', {
@@ -976,25 +1067,8 @@ function Calendar() {
                 </div>
               )}
             </div>
-            <div
-              style={{
-                padding: '16px 24px',
-                borderTop: '1px solid rgba(255,255,255,0.07)',
-              }}
-            >
-              <div
-                style={{
-                  background: 'rgba(232,92,61,0.08)',
-                  border: '1px solid rgba(232,92,61,0.2)',
-                  borderRadius: '8px',
-                  padding: '10px 14px',
-                  fontSize: '12px',
-                  color: '#e85c3d',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                }}
-              >
+            <div className={styles.cancelledNoteWrap}>
+              <div className={styles.cancelledNote}>
                 <FontAwesomeIcon icon='triangle-exclamation' />
                 This shift has been removed from the rota. Contact your manager
                 if this was a mistake.
@@ -1006,33 +1080,36 @@ function Calendar() {
 
       {/* ── Time-off modal ── */}
       {showTimeOffModal && (
-        <div style={s.overlay} onClick={closeTimeOffModal}>
-          <div style={s.modal} onClick={(e) => e.stopPropagation()}>
-            <div style={s.modalHeader}>
-              <div style={s.modalTitle}>Request Time Off</div>
-              <button style={s.closeBtn} onClick={closeTimeOffModal}>
+        <div className={styles.overlay} onClick={closeTimeOffModal}>
+          <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.modalHeader}>
+              <div className={styles.modalTitle}>Request Time Off</div>
+              <button className={styles.closeBtn} onClick={closeTimeOffModal}>
                 <FontAwesomeIcon icon='xmark' />
               </button>
             </div>
             {timeOffSubmitted ? (
-              <div style={s.confirmWrap}>
-                <div style={s.confirmIcon}>
+              <div className={styles.confirmWrap}>
+                <div className={styles.confirmIcon}>
                   <FontAwesomeIcon icon='circle-check' />
                 </div>
-                <div style={s.confirmTitle}>Request submitted</div>
-                <div style={s.confirmBody}>
+                <div className={styles.confirmTitle}>Request submitted</div>
+                <div className={styles.confirmBody}>
                   Your manager has been notified and will review your request.
                   You'll see a pending badge on your calendar until it's
                   approved.
                 </div>
-                <button style={s.submitReasonBtn} onClick={closeTimeOffModal}>
+                <button
+                  className={styles.submitReasonBtn}
+                  onClick={closeTimeOffModal}
+                >
                   Close
                 </button>
               </div>
             ) : (
               <>
-                <div style={s.modalBody}>
-                  <p style={s.modalNote}>
+                <div className={styles.modalBody}>
+                  <p className={styles.modalNote}>
                     Tap days below to select. Days with existing leave are not
                     available.
                   </p>
@@ -1041,10 +1118,10 @@ function Calendar() {
                     selectedDates={timeOffSelectedDates}
                     onSelectionChange={setTimeOffSelectedDates}
                   />
-                  <div style={s.field}>
-                    <label style={s.detailLabel}>Leave type</label>
+                  <div className={styles.field}>
+                    <label className={styles.detailLabel}>Leave type</label>
                     <select
-                      style={{ ...s.reasonSelect, marginTop: '6px' }}
+                      className={styles.reasonSelect}
                       value={timeOffType}
                       onChange={(e) => setTimeOffType(e.target.value)}
                     >
@@ -1054,10 +1131,12 @@ function Calendar() {
                       <option value='other'>Other</option>
                     </select>
                   </div>
-                  <div style={s.field}>
-                    <label style={s.detailLabel}>Note (optional)</label>
+                  <div className={styles.field}>
+                    <label className={styles.detailLabel}>
+                      Note (optional)
+                    </label>
                     <input
-                      style={{ ...s.reasonSelect, marginTop: '6px' }}
+                      className={styles.reasonSelect}
                       type='text'
                       placeholder='e.g. holiday, appointment'
                       value={timeOffNote}
@@ -1065,13 +1144,16 @@ function Calendar() {
                     />
                   </div>
                 </div>
-                <div style={s.reasonActions}>
-                  <button style={s.cancelReasonBtn} onClick={closeTimeOffModal}>
+                <div className={styles.reasonActions}>
+                  <button
+                    className={styles.cancelReasonBtn}
+                    onClick={closeTimeOffModal}
+                  >
                     Cancel
                   </button>
                   <button
+                    className={styles.submitReasonBtn}
                     style={{
-                      ...s.submitReasonBtn,
                       opacity: timeOffSelectedDates.length > 0 ? 1 : 0.5,
                       cursor:
                         timeOffSelectedDates.length > 0
@@ -1091,482 +1173,6 @@ function Calendar() {
       )}
     </div>
   )
-}
-
-const s = {
-  page: {
-    minHeight: '100vh',
-    background: '#0f1117',
-    color: '#e8eaf0',
-    fontFamily: 'DM Sans, sans-serif',
-  },
-  body: { padding: '24px', maxWidth: '900px', margin: '0 auto' },
-  header: {
-    display: 'flex',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    marginBottom: '20px',
-  },
-  title: {
-    fontFamily: 'Syne, sans-serif',
-    fontSize: '22px',
-    fontWeight: 600,
-    margin: 0,
-  },
-  subtitle: { fontSize: '13px', color: '#9499b0', marginTop: '4px' },
-  requestTimeOffBtn: {
-    background: 'rgba(108,143,255,0.12)',
-    border: '1px solid rgba(108,143,255,0.25)',
-    borderRadius: '8px',
-    padding: '8px 14px',
-    fontSize: '13px',
-    fontWeight: 500,
-    color: '#6c8fff',
-    cursor: 'pointer',
-    fontFamily: 'DM Sans, sans-serif',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '6px',
-    whiteSpace: 'nowrap',
-  },
-  viewToggle: {
-    display: 'flex',
-    background: '#1d1f2b',
-    border: '1px solid rgba(255,255,255,0.08)',
-    borderRadius: '8px',
-    padding: '3px',
-    gap: '2px',
-  },
-  toggleBtn: {
-    border: 'none',
-    borderRadius: '6px',
-    padding: '6px 14px',
-    fontSize: '12px',
-    fontWeight: 500,
-    cursor: 'pointer',
-    fontFamily: 'DM Sans, sans-serif',
-    transition: 'all 0.15s',
-  },
-  weekNav: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    marginBottom: '20px',
-    flexWrap: 'wrap',
-  },
-  monthNav: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    marginBottom: '20px',
-    flexWrap: 'wrap',
-  },
-  navArrow: {
-    background: 'transparent',
-    border: '1px solid rgba(255,255,255,0.1)',
-    borderRadius: '7px',
-    color: '#9499b0',
-    width: '32px',
-    height: '32px',
-    cursor: 'pointer',
-    fontSize: '13px',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  weekLabel: {
-    fontSize: '14px',
-    fontWeight: 500,
-    color: '#e8eaf0',
-    minWidth: '180px',
-    textAlign: 'center',
-    fontFamily: 'Syne, sans-serif',
-  },
-  todayBtn: {
-    background: 'transparent',
-    border: '1px solid rgba(255,255,255,0.1)',
-    borderRadius: '7px',
-    color: '#9499b0',
-    padding: '6px 12px',
-    fontSize: '12px',
-    cursor: 'pointer',
-    fontFamily: 'DM Sans, sans-serif',
-  },
-  gridWrap: { overflowX: 'auto' },
-  grid: {
-    display: 'grid',
-    gridTemplateColumns: '120px repeat(7, 1fr)',
-    minWidth: '700px',
-    border: '1px solid rgba(255,255,255,0.07)',
-    borderRadius: '14px',
-    overflow: 'visible',
-  },
-  colLabel: {
-    background: '#1d1f2b',
-    borderBottom: '1px solid rgba(255,255,255,0.07)',
-    borderRight: '1px solid rgba(255,255,255,0.07)',
-  },
-  dayHeader: {
-    padding: '10px 8px',
-    textAlign: 'center',
-    borderBottom: '1px solid rgba(255,255,255,0.07)',
-    borderRight: '1px solid rgba(255,255,255,0.05)',
-  },
-  dayName: { fontSize: '11px', fontWeight: 500, textTransform: 'uppercase' },
-  dayDate: {
-    fontSize: '16px',
-    fontWeight: 600,
-    fontFamily: 'Syne, sans-serif',
-    marginTop: '2px',
-  },
-  shiftLabel: {
-    padding: '12px 14px',
-    borderRight: '1px solid rgba(255,255,255,0.07)',
-    borderBottom: '1px solid rgba(255,255,255,0.05)',
-    display: 'flex',
-    flexDirection: 'column',
-    justifyContent: 'center',
-    background: '#1d1f2b',
-  },
-  shiftName: { fontSize: '12px', fontWeight: 600, color: '#e8eaf0' },
-  shiftTime: {
-    fontSize: '10px',
-    color: '#5d6180',
-    marginTop: '2px',
-    fontFamily: 'DM Mono, monospace',
-  },
-  cell: {
-    padding: '8px',
-    borderRight: '1px solid rgba(255,255,255,0.05)',
-    borderBottom: '1px solid rgba(255,255,255,0.05)',
-    minHeight: '80px',
-  },
-  shiftCard: { borderRadius: '8px', padding: '8px', height: '100%' },
-  shiftType: { fontSize: '12px', fontWeight: 600 },
-  shiftHome: { fontSize: '11px', color: '#5d6180', marginTop: '4px' },
-  offDay: {
-    fontSize: '12px',
-    color: '#5d6180',
-    textAlign: 'center',
-    marginTop: '8px',
-  },
-  timeOffBadge: {
-    borderRadius: '6px',
-    padding: '4px 8px',
-    fontSize: '11px',
-    fontWeight: 500,
-    display: 'flex',
-    alignItems: 'center',
-    marginBottom: '3px',
-  },
-  cancelledTag: {
-    fontSize: '11px',
-    color: '#e85c3d',
-    background: 'rgba(232,92,61,0.1)',
-    border: '1px solid rgba(232,92,61,0.25)',
-    borderRadius: '6px',
-    padding: '6px 8px',
-    display: 'flex',
-    alignItems: 'center',
-    fontWeight: 500,
-  },
-  yearWrap: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(3, 1fr)',
-    gap: '20px',
-  },
-  miniMonth: {
-    borderRadius: '14px',
-    padding: '20px',
-    cursor: 'pointer',
-    transition: 'transform 0.18s ease, box-shadow 0.18s ease',
-    position: 'relative',
-  },
-  miniMonthHeader: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: '10px',
-  },
-  miniMonthTitle: {
-    fontFamily: 'Syne, sans-serif',
-    fontSize: '13px',
-    fontWeight: 600,
-    color: '#e8eaf0',
-  },
-  shiftCountBadge: {
-    fontSize: '10px',
-    fontWeight: 500,
-    padding: '2px 7px',
-    borderRadius: '5px',
-    background: 'rgba(108,143,255,0.15)',
-    color: '#6c8fff',
-  },
-  miniDayHeaders: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(7, 1fr)',
-    marginBottom: '4px',
-  },
-  miniDayHead: {
-    fontSize: '9px',
-    color: '#5d6180',
-    textAlign: 'center',
-    fontWeight: 500,
-  },
-  miniGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(7, 1fr)',
-    gap: '2px',
-  },
-  miniCell: {
-    aspectRatio: '1',
-    borderRadius: '4px',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    cursor: 'pointer',
-  },
-  miniDateNum: { fontSize: '9px', fontFamily: 'DM Mono, monospace' },
-  overlay: {
-    position: 'fixed',
-    inset: 0,
-    background: 'rgba(0,0,0,0.7)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 100,
-    padding: '20px',
-  },
-  modal: {
-    background: '#161820',
-    border: '1px solid rgba(255,255,255,0.1)',
-    borderRadius: '16px',
-    width: '100%',
-    maxWidth: '460px',
-    maxHeight: '90vh',
-    display: 'flex',
-    flexDirection: 'column',
-    overflow: 'hidden',
-  },
-  modalHeader: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: '20px 24px',
-    borderBottom: '1px solid rgba(255,255,255,0.07)',
-    flexShrink: 0,
-  },
-  modalTitle: {
-    fontFamily: 'Syne, sans-serif',
-    fontSize: '16px',
-    fontWeight: 600,
-    display: 'flex',
-    alignItems: 'center',
-  },
-  closeBtn: {
-    background: 'transparent',
-    border: '1px solid rgba(255,255,255,0.1)',
-    borderRadius: '6px',
-    color: '#9499b0',
-    width: '28px',
-    height: '28px',
-    cursor: 'pointer',
-    fontSize: '14px',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modalBody: {
-    padding: '20px 24px',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '12px',
-    overflowY: 'auto',
-    flex: 1,
-  },
-  modalNote: { fontSize: '13px', color: '#9499b0', margin: 0 },
-  field: { display: 'flex', flexDirection: 'column' },
-  detailRow: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  detailLabel: { fontSize: '13px', color: '#9499b0' },
-  detailVal: { fontSize: '13px', fontWeight: 500, color: '#e8eaf0' },
-  pendingWarning: {
-    padding: '12px 24px',
-    background: 'rgba(196,136,58,0.1)',
-    borderTop: '1px solid rgba(255,255,255,0.07)',
-    color: '#c4883a',
-    fontSize: '12px',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-  },
-  buttonGroup: {
-    display: 'flex',
-    gap: '10px',
-    padding: '12px 24px 16px 24px',
-    borderTop: '1px solid rgba(255,255,255,0.05)',
-  },
-  withdrawBtn: {
-    flex: 1,
-    background: 'rgba(232,92,61,0.1)',
-    border: '1px solid rgba(232,92,61,0.25)',
-    borderRadius: '8px',
-    color: '#e85c3d',
-    padding: '8px 12px',
-    fontSize: '12px',
-    fontWeight: 500,
-    cursor: 'pointer',
-    fontFamily: 'DM Sans, sans-serif',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: '6px',
-  },
-  pingBtn: {
-    flex: 1,
-    background: 'rgba(108,143,255,0.12)',
-    border: '1px solid rgba(108,143,255,0.3)',
-    borderRadius: '8px',
-    color: '#6c8fff',
-    padding: '8px 12px',
-    fontSize: '12px',
-    fontWeight: 500,
-    cursor: 'pointer',
-    fontFamily: 'DM Sans, sans-serif',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: '6px',
-  },
-  pingBtnDisabled: {
-    flex: 1,
-    background: 'rgba(255,255,255,0.04)',
-    border: '1px solid rgba(255,255,255,0.1)',
-    borderRadius: '8px',
-    color: '#5d6180',
-    padding: '8px 12px',
-    fontSize: '12px',
-    cursor: 'not-allowed',
-    fontFamily: 'DM Sans, sans-serif',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: '6px',
-  },
-  cancelShiftBtn: {
-    width: '100%',
-    background: 'rgba(232,92,61,0.1)',
-    border: '1px solid rgba(232,92,61,0.25)',
-    borderRadius: '8px',
-    color: '#e85c3d',
-    padding: '10px 12px',
-    fontSize: '12px',
-    fontWeight: 500,
-    cursor: 'pointer',
-    fontFamily: 'DM Sans, sans-serif',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: '6px',
-  },
-  reasonForm: {
-    padding: '16px 24px 20px 24px',
-    borderTop: '1px solid rgba(255,255,255,0.07)',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '12px',
-  },
-  reasonLabel: { fontSize: '13px', fontWeight: 500, color: '#9499b0' },
-  reasonSelect: {
-    background: '#1d1f2b',
-    border: '1px solid rgba(255,255,255,0.08)',
-    borderRadius: '8px',
-    padding: '10px 12px',
-    fontSize: '13px',
-    color: '#e8eaf0',
-    fontFamily: 'DM Sans, sans-serif',
-    width: '100%',
-    boxSizing: 'border-box',
-  },
-  reasonTextarea: {
-    background: '#1d1f2b',
-    border: '1px solid rgba(255,255,255,0.08)',
-    borderRadius: '8px',
-    padding: '10px 12px',
-    fontSize: '13px',
-    color: '#e8eaf0',
-    fontFamily: 'DM Sans, sans-serif',
-    width: '100%',
-    resize: 'vertical',
-    minHeight: '70px',
-    maxHeight: '120px',
-    boxSizing: 'border-box',
-  },
-  reasonActions: {
-    display: 'flex',
-    gap: '8px',
-    padding: '16px 24px',
-    borderTop: '1px solid rgba(255,255,255,0.07)',
-  },
-  cancelReasonBtn: {
-    flex: 1,
-    background: 'transparent',
-    border: '1px solid rgba(255,255,255,0.1)',
-    borderRadius: '8px',
-    color: '#9499b0',
-    padding: '8px 12px',
-    fontSize: '12px',
-    cursor: 'pointer',
-    fontFamily: 'DM Sans, sans-serif',
-  },
-  submitReasonBtn: {
-    flex: 1,
-    background: '#6c8fff',
-    border: 'none',
-    borderRadius: '8px',
-    color: '#fff',
-    padding: '8px 12px',
-    fontSize: '12px',
-    fontWeight: 500,
-    cursor: 'pointer',
-    fontFamily: 'DM Sans, sans-serif',
-  },
-  warningNoteInline: {
-    padding: '10px',
-    background: 'rgba(196,136,58,0.08)',
-    border: '1px solid rgba(196,136,58,0.2)',
-    borderRadius: '8px',
-    fontSize: '12px',
-    color: '#c4883a',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-  },
-  confirmWrap: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    textAlign: 'center',
-    padding: '32px 24px',
-    gap: '12px',
-  },
-  confirmIcon: { fontSize: '40px', color: '#2ecc8a' },
-  confirmTitle: {
-    fontFamily: 'Syne, sans-serif',
-    fontSize: '17px',
-    fontWeight: 600,
-    color: '#e8eaf0',
-  },
-  confirmBody: {
-    fontSize: '13px',
-    color: '#9499b0',
-    lineHeight: 1.6,
-    maxWidth: '300px',
-    marginBottom: '8px',
-  },
 }
 
 export default Calendar

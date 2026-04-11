@@ -1,0 +1,397 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  padding: 20px;
+}
+
+.modal {
+  background: var(--bg-raised);
+  border: 1px solid var(--border-default);
+  border-radius: 18px;
+  width: 100%;
+  max-width: 760px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: var(--shadow-lg);
+}
+
+/* ── Header ─────────────────────────────────────────────────── */
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 24px 28px 0;
+}
+
+.headerLeft {
+  flex: 1;
+}
+
+.title {
+  font-family: 'Syne', sans-serif;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.subtitle {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+}
+
+.closeBtn {
+  background: transparent;
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  width: 30px;
+  height: 30px;
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+
+.closeBtn:hover {
+  background: var(--bg-hover);
+}
+
+/* ── Step indicators ────────────────────────────────────────── */
+.steps {
+  display: flex;
+  align-items: center;
+  padding: 20px 28px 0;
+}
+
+.stepItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.stepNum {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+.stepLine {
+  width: 40px;
+  height: 1px;
+  background: var(--border-default);
+  margin: 0 8px;
+}
+
+/* ── Body ───────────────────────────────────────────────────── */
+.body {
+  padding: 24px 28px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+/* ── Step 1 — Generating ────────────────────────────────────── */
+.generatingWrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 16px 0;
+  gap: 16px;
+}
+
+.spinner {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 2px solid var(--border-subtle);
+  border-top-color: var(--accent);
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.doneIcon {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--color-success-bg);
+  border: 1px solid var(--color-success-border);
+  color: var(--color-success);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+}
+
+.genStatus {
+  font-size: 15px;
+  color: var(--text-primary);
+  font-weight: 500;
+  font-family: 'Syne', sans-serif;
+}
+
+.logBox {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  padding: 14px 16px;
+  width: 100%;
+  max-height: 220px;
+  overflow-y: auto;
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+}
+
+.logLine {
+  margin-bottom: 4px;
+  line-height: 1.6;
+}
+
+/* ── Step 2 — Review ────────────────────────────────────────── */
+.reviewStats {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.reviewStat {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  padding: 14px 12px;
+}
+
+.reviewStatVal {
+  font-size: 24px;
+  font-weight: 600;
+  font-family: 'Syne', sans-serif;
+  color: var(--text-primary);
+}
+
+.reviewStatLabel {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+}
+
+.allGood {
+  background: var(--color-success-bg);
+  border: 1px solid var(--color-success-border);
+  border-radius: 10px;
+  padding: 14px 16px;
+  font-size: 13px;
+  color: var(--color-success);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.violationsList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* ── Week accordion ─────────────────────────────────────────── */
+.weekAccordion {
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+
+.weekAccordionHeader {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  cursor: pointer;
+  border: 1px solid;
+  border-radius: 8px;
+  user-select: none;
+}
+
+.weekAccordionTitle {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text-primary);
+  flex: 1;
+}
+
+.weekAccordionBadges {
+  display: flex;
+  gap: 6px;
+}
+
+.weekAccordionBody {
+  padding: 12px 14px;
+  background: var(--bg-hover);
+  border-left: 1px solid var(--border-subtle);
+  border-right: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+  border-radius: 0 0 8px 8px;
+  margin-top: -4px;
+}
+
+/* ── Violation blocks ───────────────────────────────────────── */
+.violationGroupLabel {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--color-danger);
+  margin-bottom: 6px;
+  font-weight: 500;
+}
+
+.violationGroupLabelSoft {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--color-warning);
+  margin-bottom: 6px;
+  font-weight: 500;
+}
+
+.violationCard {
+  background: var(--color-danger-bg);
+  border: 1px solid var(--color-danger-border);
+  border-radius: 8px;
+  padding: 9px 12px;
+  font-size: 12.5px;
+  color: var(--color-danger);
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.softCard {
+  background: var(--color-warning-bg);
+  border: 1px solid var(--color-warning-border);
+  color: var(--color-warning);
+}
+
+.violationIcon {
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+/* ── Badges ─────────────────────────────────────────────────── */
+.badgeHard {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--color-danger);
+  background: var(--color-danger-bg);
+  padding: 2px 7px;
+  border-radius: 4px;
+}
+
+.badgeSoft {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--color-warning);
+  background: var(--color-warning-bg);
+  padding: 2px 7px;
+  border-radius: 4px;
+}
+
+.badgeOk {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--color-success);
+  background: var(--color-success-bg);
+  padding: 2px 7px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* ── Override row ───────────────────────────────────────────── */
+.overrideRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: var(--color-danger-bg);
+  border: 1px solid var(--color-danger-border);
+  border-radius: 8px;
+  padding: 12px;
+  margin-top: 16px;
+}
+
+.overrideLabel {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  line-height: 1.5;
+}
+
+/* ── Footer ─────────────────────────────────────────────────── */
+.footer {
+  padding: 16px 28px;
+  border-top: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--bg-elevated);
+}
+
+.footerActions {
+  display: flex;
+  gap: 8px;
+}
+
+.primaryBtn {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 9px 18px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: opacity 0.15s;
+}
+
+.secondaryBtn {
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 13px;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: background 0.15s;
+}
+
+.secondaryBtn:hover {
+  background: var(--bg-hover);
+}
