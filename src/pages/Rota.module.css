@@ -1,0 +1,896 @@
+.page {
+  min-height: 100vh;
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-family: 'DM Sans', sans-serif;
+}
+
+.body {
+  padding: 24px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+/* ── Header ─────────────────────────────────────────────────── */
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.breadcrumb {
+  font-size: 12px;
+  color: var(--accent);
+  cursor: pointer;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: opacity 0.15s;
+}
+
+.breadcrumb:hover {
+  opacity: 0.8;
+}
+
+.title {
+  font-family: 'Syne', sans-serif;
+  font-size: 22px;
+  font-weight: 600;
+  margin: 0;
+  color: var(--text-primary);
+}
+
+.subtitle {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+}
+
+.headerRight {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.headerActions {
+  display: flex;
+  gap: 8px;
+}
+
+/* ── View toggle ────────────────────────────────────────────── */
+.viewToggle {
+  display: flex;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  padding: 3px;
+  gap: 2px;
+}
+
+.toggleBtn {
+  border: none;
+  border-radius: 6px;
+  padding: 6px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  background: transparent;
+  color: var(--text-secondary);
+  transition:
+    background 0.15s,
+    color 0.15s;
+}
+
+.toggleBtnActive {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* ── Buttons ────────────────────────────────────────────────── */
+.primaryBtn {
+  background: var(--accent);
+  color: var(--text-inverse);
+  border: none;
+  border-radius: 8px;
+  padding: 9px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: opacity 0.15s;
+}
+
+.primaryBtn:hover {
+  opacity: 0.88;
+}
+
+.secondaryBtn {
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 13px;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  transition: background 0.15s;
+}
+
+.secondaryBtn:hover {
+  background: var(--bg-hover);
+}
+
+.batchBtn {
+  background: var(--accent-bg);
+  color: var(--accent);
+  border: 1px solid var(--accent-border);
+  border-radius: 7px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: opacity 0.15s;
+}
+
+.batchBtn:hover {
+  opacity: 0.85;
+}
+
+/* ── Compliance strip ───────────────────────────────────────── */
+.compStrip {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.chip {
+  font-size: 12px;
+  padding: 5px 10px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.chipOk {
+  background: var(--color-success-bg);
+  color: var(--color-success);
+  border: 1px solid var(--color-success-border);
+}
+
+.chipWarn {
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+  border: 1px solid var(--color-danger-border);
+}
+
+.chipInfo {
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-subtle);
+}
+
+/* ── Week nav ───────────────────────────────────────────────── */
+.weekNav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  transition: all 0.2s ease;
+}
+
+.weekNavPinned {
+  position: sticky;
+  top: 56px;
+  background: var(--bg-base);
+  z-index: 10;
+  padding: 10px 24px;
+  margin: 0 -24px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.navArrow {
+  background: transparent;
+  border: 1px solid var(--border-default);
+  border-radius: 7px;
+  color: var(--text-secondary);
+  width: 32px;
+  height: 32px;
+  cursor: pointer;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+}
+
+.navArrow:hover {
+  background: var(--bg-hover);
+}
+
+.weekLabel {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+  min-width: 180px;
+  text-align: center;
+  font-family: 'Syne', sans-serif;
+}
+
+.jumpBtnWrap {
+  position: relative;
+}
+
+.jumpBtn {
+  background: transparent;
+  border: 1px solid var(--border-default);
+  border-radius: 7px;
+  color: var(--text-secondary);
+  padding: 6px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition:
+    background 0.15s,
+    color 0.15s,
+    border-color 0.15s;
+}
+
+.jumpBtnActive {
+  background: var(--accent-bg);
+  color: var(--accent);
+  border-color: var(--accent-border);
+}
+
+.legend {
+  display: flex;
+  gap: 12px;
+  margin-left: auto;
+}
+
+.legendItem {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.pinBtn {
+  background: transparent;
+  border: 1px solid var(--border-default);
+  border-radius: 7px;
+  width: 32px;
+  height: 32px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  transition: all 0.2s ease;
+  margin-left: 4px;
+}
+
+.pinBtnActive {
+  color: var(--accent);
+  background: var(--accent-bg);
+  border-color: var(--accent-border);
+}
+
+/* ── Month view ─────────────────────────────────────────────── */
+.yearWrap {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+}
+
+.miniMonth {
+  background: var(--bg-raised);
+  border: 1px solid var(--border-default);
+  border-radius: 14px;
+  padding: 20px;
+  cursor: pointer;
+  transition:
+    transform 0.18s ease,
+    box-shadow 0.18s ease;
+  position: relative;
+}
+
+.miniMonth:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.miniMonthHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.miniMonthTitle {
+  font-family: 'Syne', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.rotaBadge {
+  font-size: 10px;
+  font-weight: 500;
+  padding: 2px 7px;
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.miniDayHeaders {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  margin-bottom: 4px;
+}
+
+.miniDayHead {
+  font-size: 9px;
+  color: var(--text-muted);
+  text-align: center;
+  font-weight: 500;
+}
+
+.miniGrid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+
+.miniCell {
+  aspect-ratio: 1;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.miniDateNum {
+  font-size: 9px;
+  font-family: 'DM Mono', monospace;
+}
+
+.miniFooter {
+  margin-top: 10px;
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+  min-height: 26px;
+  align-items: center;
+}
+
+.miniChip {
+  font-size: 10px;
+  font-weight: 500;
+  padding: 2px 7px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.generateBtn {
+  border-radius: 7px;
+  padding: 5px 12px;
+  font-size: 11.5px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  width: 100%;
+  justify-content: center;
+  transition: opacity 0.15s;
+}
+
+/* ── Week view grid ─────────────────────────────────────────── */
+.gridWrap {
+  overflow-x: auto;
+}
+
+.grid {
+  display: grid;
+  min-width: 700px;
+  border: 1px solid var(--border-default);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.colLabel {
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border-default);
+  border-right: 1px solid var(--border-default);
+}
+
+.dayHeader {
+  padding: 10px 8px;
+  text-align: center;
+  border-bottom: 1px solid var(--border-default);
+  border-right: 1px solid var(--border-subtle);
+}
+
+.dayName {
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.dayNameToday {
+  color: var(--accent);
+}
+
+.dayDate {
+  font-size: 16px;
+  font-weight: 600;
+  font-family: 'Syne', sans-serif;
+  margin-top: 2px;
+  color: var(--text-primary);
+}
+
+.dayDateToday {
+  color: var(--accent);
+}
+
+.violationDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-danger);
+  margin: 4px auto 0;
+}
+
+.shiftLabel {
+  padding: 12px 14px;
+  border-right: 1px solid var(--border-default);
+  border-bottom: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  background: var(--bg-elevated);
+}
+
+.shiftName {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.shiftTime {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: 2px;
+  font-family: 'DM Mono', monospace;
+}
+
+.cell {
+  padding: 8px;
+  border-right: 1px solid var(--border-subtle);
+  border-bottom: 1px solid var(--border-subtle);
+  min-height: 80px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  position: relative;
+}
+
+/* ── Staff chips ────────────────────────────────────────────── */
+.chipEarly {
+  background: rgba(42, 127, 98, 0.15);
+  border: 1px solid rgba(42, 127, 98, 0.3);
+  border-radius: 5px;
+  padding: 3px 6px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.chipLate {
+  background: rgba(122, 79, 168, 0.15);
+  border: 1px solid rgba(122, 79, 168, 0.3);
+  border-radius: 5px;
+  padding: 3px 6px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.chipOncall {
+  background: var(--color-info-bg);
+  border: 1px solid var(--color-info-border);
+  border-radius: 5px;
+  padding: 3px 6px;
+  font-size: 11px;
+  color: var(--color-info);
+}
+
+.chipName {
+  font-size: 11px;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.chipRole {
+  font-size: 9px;
+  color: var(--text-secondary);
+  font-family: 'DM Mono', monospace;
+}
+
+.gapTag {
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--color-danger);
+  background: var(--color-danger-bg);
+  border: 1px solid var(--color-danger-border);
+  border-radius: 4px;
+  padding: 2px 5px;
+  align-self: flex-start;
+}
+
+.sleepWarn {
+  font-size: 10px;
+  color: var(--color-warning);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.addBtn {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-top: auto;
+  cursor: pointer;
+}
+
+/* ── Overwrite warning modal ────────────────────────────────── */
+.overlayWarn {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 300;
+  padding: 20px;
+}
+
+.warnModal {
+  background: var(--bg-raised);
+  border: 1px solid var(--color-danger-border);
+  border-radius: 16px;
+  width: 100%;
+  max-width: 420px;
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 12px;
+}
+
+.warnIcon {
+  font-size: 32px;
+  color: var(--color-danger);
+  background: var(--color-danger-bg);
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.warnTitle {
+  font-family: 'Syne', sans-serif;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.warnBody {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  max-width: 340px;
+}
+
+.warnActions {
+  display: flex;
+  gap: 10px;
+  margin-top: 8px;
+  width: 100%;
+}
+
+.warnCancelBtn {
+  flex: 1;
+  background: transparent;
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  padding: 10px;
+  font-size: 13px;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  transition: background 0.15s;
+}
+
+.warnCancelBtn:hover {
+  background: var(--bg-hover);
+}
+
+.warnConfirmBtn {
+  flex: 1;
+  background: var(--color-danger-bg);
+  border: 1px solid var(--color-danger-border);
+  border-radius: 8px;
+  color: var(--color-danger);
+  padding: 10px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: opacity 0.15s;
+}
+
+.warnConfirmBtn:hover {
+  opacity: 0.85;
+}
+
+.hintText {
+  font-size: 12px;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+/* ── Hours summary ──────────────────────────────────────────── */
+.summarySection {
+  margin-top: 24px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.summaryHeaderBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  background: var(--bg-elevated);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.15s;
+  margin-top: 12px;
+}
+
+.summaryHeaderBar:hover {
+  background: var(--bg-overlay);
+}
+
+.summaryTitle {
+  font-family: 'Syne', sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.summaryHint {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.summaryControls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 12px;
+  margin-bottom: 16px;
+}
+
+.summarySubtitle {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.toggleZeroBtn {
+  background: var(--accent-bg);
+  border: 1px solid var(--accent-border);
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-size: 11px;
+  color: var(--accent);
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: opacity 0.15s;
+}
+
+.toggleZeroBtn:hover {
+  opacity: 0.85;
+}
+
+.tableWrap {
+  overflow-x: auto;
+  border-radius: 12px;
+  border: 1px solid var(--border-default);
+  background: var(--bg-raised);
+}
+
+.summaryTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  min-width: 700px;
+}
+
+.tableHeaderRow {
+  border-bottom: 1px solid var(--border-default);
+  background: var(--bg-elevated);
+}
+
+.tableHeader {
+  text-align: left;
+  padding: 12px 16px;
+  color: var(--text-secondary);
+  font-weight: 500;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.tableRow {
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.tableCell {
+  padding: 10px 16px;
+  color: var(--text-primary);
+}
+
+.staffCell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.staffAvatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 600;
+  font-family: 'Syne', sans-serif;
+  flex-shrink: 0;
+}
+
+.staffCellName {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.staffCellRole {
+  font-size: 10px;
+  color: var(--text-secondary);
+  font-family: 'DM Mono', monospace;
+  margin-top: 2px;
+}
+
+.hoursValue {
+  font-weight: 500;
+  color: var(--text-primary);
+  font-family: 'DM Mono', monospace;
+}
+
+.contractedValue {
+  color: var(--text-muted);
+  font-family: 'DM Mono', monospace;
+}
+
+.varianceValue {
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: 'DM Mono', monospace;
+}
+
+.emptyTableMessage {
+  text-align: center;
+  padding: 32px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+.pinBtn {
+  background: transparent;
+  border: 1px solid var(--border-default);
+  border-radius: 7px;
+  width: 32px;
+  height: 32px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  transition:
+    color 0.2s ease,
+    background 0.2s ease,
+    border-color 0.2s ease,
+    transform 0.2s ease;
+  margin-left: 4px;
+}
+
+/* When active, the pin button changes color and rotates the icon */
+.pinBtn:hover {
+  background: var(--bg-hover);
+}
+
+.pinBtn svg {
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transform: rotate(-45deg);
+}
+
+.pinBtnActive {
+  color: var(--accent);
+  background: var(--accent-bg);
+  border-color: var(--accent-border);
+}
+
+.pinBtnActive svg {
+  transform: rotate(0deg);
+}
+/* Animation for the week nav pinning effect */
+@keyframes navPin {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.weekNavPinned {
+  position: sticky;
+  top: 56px;
+  background: var(--bg-base);
+  z-index: 10;
+  padding: 10px 24px;
+  margin: 0 -24px;
+  border-bottom: 1px solid var(--border-subtle);
+  animation: navPin 0.25s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import Button from '../components/ui/Button/Button'
 import styles from './Login.module.css'
 
@@ -43,10 +44,12 @@ function Login() {
       <div className={styles.page}>
         <div className={styles.card}>
           <div className={styles.logo}>
-            Rot<span className={styles.accent}>app</span>
+            Rot<span className={styles.logoAccent}>app</span>
           </div>
           <div className={styles.blockedWrap}>
-            <div className={styles.blockedIcon}>⏳</div>
+            <div className={styles.blockedIcon}>
+              <FontAwesomeIcon icon='hourglass' />
+            </div>
             <h1 className={styles.blockedTitle}>Account pending approval</h1>
             <p className={styles.blockedText}>
               Your account is awaiting approval from your manager. You'll be
@@ -72,10 +75,12 @@ function Login() {
       <div className={styles.page}>
         <div className={styles.card}>
           <div className={styles.logo}>
-            Rot<span className={styles.accent}>app</span>
+            Rot<span className={styles.logoAccent}>app</span>
           </div>
           <div className={styles.blockedWrap}>
-            <div className={styles.blockedIconRed}>✕</div>
+            <div className={styles.blockedIconRed}>
+              <FontAwesomeIcon icon='xmark' />
+            </div>
             <h1 className={styles.blockedTitle}>Account suspended</h1>
             <p className={styles.blockedText}>
               Your account has been suspended. Please contact your manager or
@@ -100,7 +105,7 @@ function Login() {
     <div className={styles.page}>
       <div className={styles.card}>
         <div className={styles.logo}>
-          Rot<span className={styles.accent}>app</span>
+          Rot<span className={styles.logoAccent}>app</span>
         </div>
         <h1 className={styles.title}>Welcome back</h1>
         <p className={styles.subtitle}>Sign in to your account</p>

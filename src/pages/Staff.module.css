@@ -1,0 +1,938 @@
+.page {
+  min-height: 100vh;
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-family: 'DM Sans', sans-serif;
+}
+
+.body {
+  padding: 24px;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+/* ── Header ─────────────────────────────────────────────────── */
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.title {
+  font-family: 'Syne', sans-serif;
+  font-size: 22px;
+  font-weight: 600;
+  margin: 0;
+  color: var(--text-primary);
+}
+
+.subtitle {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+}
+
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* ── Buttons ────────────────────────────────────────────────── */
+.inviteBtn {
+  background: var(--accent);
+  color: var(--text-inverse);
+  border: none;
+  border-radius: 8px;
+  padding: 9px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: opacity 0.15s;
+}
+
+.inviteBtn:hover {
+  opacity: 0.88;
+}
+
+.primaryBtn {
+  background: var(--accent);
+  color: var(--text-inverse);
+  border: none;
+  border-radius: 8px;
+  padding: 9px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  transition: opacity 0.15s;
+}
+
+.primaryBtn:hover {
+  opacity: 0.88;
+}
+
+.secondaryBtn {
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 13px;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  transition: background 0.15s;
+}
+
+.secondaryBtn:hover {
+  background: var(--bg-hover);
+}
+
+/* ── Home filter ────────────────────────────────────────────── */
+.homeFilterRow {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.homeFilterBtn {
+  background: transparent;
+  border: 1px solid var(--border-default);
+  border-radius: 20px;
+  color: var(--text-secondary);
+  padding: 5px 14px;
+  font-size: 12px;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  transition:
+    background 0.15s,
+    color 0.15s,
+    border-color 0.15s;
+}
+
+.homeFilterBtnActive {
+  background: var(--accent-bg);
+  border-color: var(--accent-border);
+  color: var(--accent);
+}
+
+/* ── Error banner ───────────────────────────────────────────── */
+.errorBanner {
+  background: var(--color-danger-bg);
+  border: 1px solid var(--color-danger-border);
+  border-radius: 8px;
+  padding: 12px;
+  font-size: 13px;
+  color: var(--color-danger);
+  margin-bottom: 16px;
+}
+
+/* ── Tabs ───────────────────────────────────────────────────── */
+.tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border-subtle);
+  flex-wrap: wrap;
+  flex: 1;
+}
+
+.tabBtn {
+  position: relative;
+  padding: 10px 14px;
+  font-size: 13px;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  margin-bottom: -1px;
+  transition:
+    color 0.15s,
+    border-color 0.15s;
+}
+
+.tabBtnActive {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.tabBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 6px;
+  background: var(--color-danger);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 600;
+  padding: 2px 5px;
+  border-radius: 10px;
+  min-width: 16px;
+}
+
+/* ── Staff list ─────────────────────────────────────────────── */
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.empty {
+  text-align: center;
+  color: var(--text-muted);
+  padding: 40px;
+  font-size: 13px;
+}
+
+.staffRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-radius: 12px;
+  padding: 14px 16px;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.staffRow:hover {
+  opacity: 0.85;
+}
+
+.staffRowPending {
+  background: var(--color-warning-bg);
+  border: 1px solid var(--color-warning-border);
+}
+
+.staffRowDefault {
+  background: var(--bg-raised);
+  border: 1px solid var(--border-default);
+}
+
+.avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 600;
+  flex-shrink: 0;
+  font-family: 'Syne', sans-serif;
+}
+
+.staffInfo {
+  flex: 1;
+  min-width: 0;
+}
+
+.staffName {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.staffMeta {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+.staffRole {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-family: 'DM Mono', monospace;
+}
+
+.staffTags {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.tag {
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 5px;
+  background: var(--bg-active);
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.pendingActions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.approveBtn {
+  background: var(--color-success-bg);
+  color: var(--color-success);
+  border: 1px solid var(--color-success-border);
+  border-radius: 7px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  transition: opacity 0.15s;
+}
+
+.approveBtn:hover {
+  opacity: 0.85;
+}
+
+.declineBtn {
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
+  border: 1px solid var(--color-danger-border);
+  border-radius: 7px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  transition: opacity 0.15s;
+}
+
+.declineBtn:hover {
+  opacity: 0.85;
+}
+
+.chevron {
+  color: var(--text-muted);
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+/* ── Modals ─────────────────────────────────────────────────── */
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 20px;
+  backdrop-filter: blur(2px);
+}
+
+.modal {
+  background: var(--bg-raised);
+  border: 1px solid var(--border-default);
+  border-radius: 16px;
+  width: 100%;
+  max-width: 400px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: var(--shadow-lg);
+}
+
+.modalHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.modalTitle {
+  font-family: 'Syne', sans-serif;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.closeBtn {
+  background: transparent;
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  color: var(--text-secondary);
+  width: 28px;
+  height: 28px;
+  cursor: pointer;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+}
+
+.closeBtn:hover {
+  background: var(--bg-hover);
+}
+
+.modalBody {
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.profileTop {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.profileAvatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 600;
+  font-family: 'Syne', sans-serif;
+  flex-shrink: 0;
+}
+
+.profileName {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  font-family: 'Syne', sans-serif;
+}
+
+.profileRole {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+.divider {
+  height: 1px;
+  background: var(--border-subtle);
+}
+
+.detailRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.detailLabel {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.detailVal {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.detailValMuted {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.input {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: 10px;
+  padding: 11px 14px;
+  font-size: 14px;
+  color: var(--text-primary);
+  outline: none;
+  font-family: 'DM Sans', sans-serif;
+  width: 100%;
+  transition: border-color 0.15s;
+}
+
+.input:focus {
+  border-color: var(--accent);
+}
+
+.textarea {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 13px;
+  color: var(--text-primary);
+  outline: none;
+  font-family: 'DM Sans', sans-serif;
+  width: 100%;
+  resize: vertical;
+  min-height: 60px;
+  max-height: 100px;
+  box-sizing: border-box;
+  transition: border-color 0.15s;
+}
+
+.textarea:focus {
+  border-color: var(--accent);
+}
+
+.modalFooter {
+  padding: 16px 24px;
+  border-top: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+
+.modalFooterRow {
+  padding: 16px 24px;
+  border-top: 1px solid var(--border-subtle);
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.modalButtonGroup {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+}
+
+.modalActions {
+  display: flex;
+  gap: 8px;
+}
+
+.modalNote {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+  line-height: 1.6;
+}
+
+.moveBtn {
+  width: 100%;
+  background: transparent;
+  color: var(--accent);
+  border: 1px solid var(--accent-border);
+  border-radius: 8px;
+  padding: 10px;
+  font-size: 13px;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  transition: background 0.15s;
+}
+
+.moveBtn:hover {
+  background: var(--accent-bg);
+}
+
+.cancelModalBtn {
+  flex: 1;
+  background: transparent;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  padding: 10px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  transition: background 0.15s;
+}
+
+.cancelModalBtn:hover {
+  background: var(--bg-hover);
+}
+
+.approveModalBtn {
+  flex: 1;
+  background: var(--color-success);
+  border: none;
+  border-radius: 8px;
+  color: #fff;
+  padding: 10px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: opacity 0.15s;
+}
+
+.approveModalBtn:hover {
+  opacity: 0.88;
+}
+
+.rejectModalBtn {
+  flex: 1;
+  background: var(--color-danger-bg);
+  border: 1px solid var(--color-danger-border);
+  border-radius: 8px;
+  color: var(--color-danger);
+  padding: 10px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: opacity 0.15s;
+}
+
+.rejectModalBtn:hover {
+  opacity: 0.85;
+}
+
+/* ── Leave tab ──────────────────────────────────────────────── */
+.leaveWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.leaveNote {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  background: var(--accent-bg);
+  border: 1px solid var(--accent-border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-bottom: 8px;
+}
+
+.leaveRow {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border-default);
+  border-radius: 12px;
+  padding: 14px 16px;
+  flex-wrap: wrap;
+}
+
+.leaveStaffInfo {
+  min-width: 120px;
+}
+
+.leaveDates {
+  flex: 1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.noLeave {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.leaveTag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.leaveTagLabel {
+  font-weight: 500;
+  font-size: 11px;
+}
+
+.leaveTagDate {
+  font-size: 11px;
+  font-family: 'DM Mono', monospace;
+  opacity: 0.8;
+  margin-left: 4px;
+}
+
+.removeLeave {
+  background: transparent;
+  border: none;
+  color: var(--color-danger);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 0;
+  line-height: 1;
+}
+
+.approveLeaveBtn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--color-success);
+  padding: 0 2px;
+  font-size: 11px;
+  margin-left: 4px;
+}
+
+.addLeaveBtn {
+  background: transparent;
+  border: 1px solid var(--border-default);
+  border-radius: 7px;
+  color: var(--text-secondary);
+  padding: 6px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+
+.addLeaveBtn:hover {
+  background: var(--bg-hover);
+}
+
+/* ── Cancellations tab ──────────────────────────────────────── */
+.requestsWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.sectionLabel {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--text-muted);
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+
+.requestCard {
+  background: var(--bg-raised);
+  border: 1px solid var(--color-warning-border);
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.requestCardHistory {
+  background: var(--bg-raised);
+  border: 1px solid var(--border-default);
+  border-radius: 12px;
+  padding: 16px;
+}
+
+.requestHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.requestHeaderRight {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.requestStaff {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.requestStatus {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 3px 10px;
+  border-radius: 5px;
+  background: var(--color-warning-bg);
+  color: var(--color-warning);
+  text-transform: uppercase;
+}
+
+.requestDetails {
+  font-size: 13px;
+  color: var(--text-secondary);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.requestTime {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+.requestNote {
+  font-size: 12px;
+  color: var(--text-secondary);
+  background: var(--bg-hover);
+  border: 1px solid var(--border-subtle);
+  border-radius: 6px;
+  padding: 6px 10px;
+  margin-top: 2px;
+}
+
+.requestNoteLabel {
+  color: var(--text-muted);
+  margin-right: 4px;
+}
+
+.requestActions {
+  display: flex;
+  gap: 8px;
+}
+
+.approveRequestBtn {
+  flex: 1;
+  background: var(--color-success-bg);
+  border: 1px solid var(--color-success-border);
+  border-radius: 8px;
+  color: var(--color-success);
+  padding: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: opacity 0.15s;
+}
+
+.approveRequestBtn:hover {
+  opacity: 0.85;
+}
+
+.rejectRequestBtn {
+  flex: 1;
+  background: var(--color-danger-bg);
+  border: 1px solid var(--color-danger-border);
+  border-radius: 8px;
+  color: var(--color-danger);
+  padding: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: opacity 0.15s;
+}
+
+.rejectRequestBtn:hover {
+  opacity: 0.85;
+}
+
+.warningNote {
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: var(--color-danger-bg);
+  border: 1px solid var(--color-danger-border);
+  border-radius: 8px;
+  font-size: 11px;
+  color: var(--color-danger);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.clickableDate {
+  color: var(--accent);
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 2px;
+}
+
+.pingBadge {
+  font-size: 10px;
+  padding: 3px 8px;
+  border-radius: 5px;
+  background: var(--bg-overlay);
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+/* ── Tabs pin bar ───────────────────────────────────────────── */
+.tabsBar {
+  display: flex;
+  align-items: center;
+  margin-bottom: 16px;
+  transition: all 0.2s ease;
+}
+
+.tabsBarPinned {
+  position: sticky;
+  top: 56px;
+  background: var(--bg-base);
+  z-index: 10;
+  padding: 0 24px;
+  margin: 0 -24px 16px -24px;
+  border-bottom: 1px solid var(--border-subtle);
+  animation: tabsPin 0.25s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+@keyframes tabsPin {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.tabsPinBtn {
+  margin-left: auto;
+  flex-shrink: 0;
+  background: transparent;
+  border: 1px solid var(--border-default);
+  border-radius: 7px;
+  width: 32px;
+  height: 32px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  transition:
+    color 0.2s ease,
+    background 0.2s ease,
+    border-color 0.2s ease;
+  margin-bottom: -1px;
+}
+
+.tabsPinBtn:hover {
+  background: var(--bg-hover);
+}
+
+.tabsPinBtnActive {
+  color: var(--accent);
+  background: var(--accent-bg);
+  border-color: var(--accent-border);
+}
+
+.tabsPinBtn svg {
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transform: rotate(-45deg);
+}
+
+.tabsPinBtnActive svg {
+  transform: rotate(0deg);
+}

@@ -5,10 +5,7 @@ import Navbar from '../components/layout/Navbar'
 import InviteModal from '../components/shared/InviteModal'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { fetchHomes } from '../utils/homesData'
-
-// NEW: Import the primitives
-import Button from '../components/ui/Button/Button'
-import Modal from '../components/ui/Modal/Modal'
+import styles from './Dashboard.module.css'
 
 function Dashboard() {
   const { user } = useAuth()
@@ -16,9 +13,6 @@ function Dashboard() {
   const [showInviteModal, setShowInviteModal] = useState(false)
   const [homes, setHomes] = useState([])
   const [loading, setLoading] = useState(true)
-
-  // NEW: Test state for modal
-  const [testModalOpen, setTestModalOpen] = useState(false)
 
   const isOL = user?.activeRole === 'operationallead'
   const isAdmin = user?.activeRole === 'superadmin'
@@ -42,38 +36,41 @@ function Dashboard() {
 
   if (loading) {
     return (
-      <div style={styles.page}>
+      <div className={styles.page}>
         <Navbar />
-        <div style={styles.loadingWrap}>Loading…</div>
+        <div className={styles.loadingWrap}>Loading…</div>
       </div>
     )
   }
 
   return (
-    <div style={styles.page}>
+    <div className={styles.page}>
       <Navbar />
 
-      <div style={styles.body}>
+      <div className={styles.body}>
         {/* Header */}
-        <div style={styles.header}>
+        <div className={styles.header}>
           <div>
-            <h1 style={styles.title}>
+            <h1 className={styles.title}>
               {isOL || isAdmin ? 'All Homes' : homes[0]?.name || 'Your Home'}
             </h1>
-            <p style={styles.subtitle}>
+            <p className={styles.subtitle}>
               {isOL || isAdmin
                 ? `${homes.length} home${homes.length !== 1 ? 's' : ''}`
                 : `Coventry City Council`}
             </p>
           </div>
           {!isOL && !isAdmin && (
-            <button style={styles.primaryBtn} onClick={() => navigate('/rota')}>
+            <button
+              className={styles.primaryBtn}
+              onClick={() => navigate('/rota')}
+            >
               View Rota →
             </button>
           )}
           {(isOL || isAdmin) && (
             <button
-              style={styles.primaryBtn}
+              className={styles.primaryBtn}
               onClick={() => setShowInviteModal(true)}
             >
               <FontAwesomeIcon icon='envelope' /> Onboard staff
@@ -83,81 +80,84 @@ function Dashboard() {
 
         {/* Summary stats — OL and admin only */}
         {(isOL || isAdmin) && (
-          <div style={styles.statsRow}>
-            <div style={styles.statCard}>
-              <div style={styles.statVal}>{homes.length}</div>
-              <div style={styles.statLabel}>Total homes</div>
+          <div className={styles.statsRow}>
+            <div className={styles.statCard}>
+              <div className={styles.statVal}>{homes.length}</div>
+              <div className={styles.statLabel}>Total homes</div>
             </div>
-            <div style={styles.statCard}>
-              <div style={styles.statVal}>{totalGaps}</div>
+            <div className={styles.statCard}>
+              <div className={styles.statVal}>{totalGaps}</div>
               <div
+                className={styles.statLabel}
                 style={{
-                  ...styles.statLabel,
-                  color: totalGaps > 0 ? '#e85c3d' : '#2ecc8a',
+                  color:
+                    totalGaps > 0
+                      ? 'var(--color-danger)'
+                      : 'var(--color-success)',
                 }}
               >
                 Open gaps
               </div>
             </div>
-            <div style={styles.statCard}>
+            <div className={styles.statCard}>
               <div
+                className={styles.statVal}
                 style={{
-                  ...styles.statVal,
                   color:
                     avgCompliance === null
-                      ? '#9499b0'
+                      ? 'var(--text-secondary)'
                       : avgCompliance < 80
-                        ? '#e85c3d'
-                        : '#2ecc8a',
+                        ? 'var(--color-danger)'
+                        : 'var(--color-success)',
                 }}
               >
                 {avgCompliance !== null ? `${avgCompliance}%` : '—'}
               </div>
-              <div style={styles.statLabel}>Avg compliance</div>
+              <div className={styles.statLabel}>Avg compliance</div>
             </div>
-            <div style={styles.statCard}>
-              <div style={styles.statVal}>
+            <div className={styles.statCard}>
+              <div className={styles.statVal}>
                 {homes.reduce((a, h) => a + (h.totalStaff || 0), 0)}
               </div>
-              <div style={styles.statLabel}>Total staff</div>
+              <div className={styles.statLabel}>Total staff</div>
             </div>
           </div>
         )}
 
         {/* Homes list */}
-        <div style={styles.sectionLabel}>
+        <div className={styles.sectionLabel}>
           {isOL || isAdmin ? 'Homes Overview' : 'Your Home'}
         </div>
 
-        <div style={styles.homesList}>
+        <div className={styles.homesList}>
           {homes.map((home) => (
-            <div key={home.id} style={styles.homeCard}>
-              <div style={styles.homeTop}>
+            <div key={home.id} className={styles.homeCard}>
+              <div className={styles.homeTop}>
                 <div>
-                  <div style={styles.homeName}>{home.name}</div>
-                  <div style={styles.homeMeta}>
+                  <div className={styles.homeName}>{home.name}</div>
+                  <div className={styles.homeMeta}>
                     {home.manager} · {home.deputy}
                   </div>
                 </div>
                 <div
+                  className={styles.compBadge}
                   style={{
-                    ...styles.compBadge,
                     background:
                       home.compliance === null
-                        ? 'rgba(148,153,176,0.1)'
+                        ? 'var(--bg-overlay)'
                         : home.compliance >= 90
-                          ? 'rgba(46,204,138,0.12)'
+                          ? 'var(--color-success-bg)'
                           : home.compliance >= 75
-                            ? 'rgba(196,136,58,0.12)'
-                            : 'rgba(232,92,61,0.12)',
+                            ? 'var(--color-warning-bg)'
+                            : 'var(--color-danger-bg)',
                     color:
                       home.compliance === null
-                        ? '#9499b0'
+                        ? 'var(--text-secondary)'
                         : home.compliance >= 90
-                          ? '#2ecc8a'
+                          ? 'var(--color-success)'
                           : home.compliance >= 75
-                            ? '#c4883a'
-                            : '#e85c3d',
+                            ? 'var(--color-warning)'
+                            : 'var(--color-danger)',
                   }}
                 >
                   {home.compliance !== null
@@ -166,38 +166,43 @@ function Dashboard() {
                 </div>
               </div>
 
-              <div style={styles.homeStats}>
-                <div style={styles.homeStat}>
-                  <span style={styles.homeStatVal}>{home.totalStaff}</span>
-                  <span style={styles.homeStatLabel}>Staff</span>
+              <div className={styles.homeStats}>
+                <div className={styles.homeStat}>
+                  <span className={styles.homeStatVal}>{home.totalStaff}</span>
+                  <span className={styles.homeStatLabel}>Staff</span>
                 </div>
-                <div style={styles.homeStat}>
-                  <span style={styles.homeStatVal}>{home.shiftsThisWeek}</span>
-                  <span style={styles.homeStatLabel}>Shifts this week</span>
+                <div className={styles.homeStat}>
+                  <span className={styles.homeStatVal}>
+                    {home.shiftsThisWeek}
+                  </span>
+                  <span className={styles.homeStatLabel}>Shifts this week</span>
                 </div>
-                <div style={styles.homeStat}>
+                <div className={styles.homeStat}>
                   <span
+                    className={styles.homeStatVal}
                     style={{
-                      ...styles.homeStatVal,
-                      color: home.gaps > 0 ? '#e85c3d' : '#2ecc8a',
+                      color:
+                        home.gaps > 0
+                          ? 'var(--color-danger)'
+                          : 'var(--color-success)',
                     }}
                   >
                     {home.gaps}
                   </span>
-                  <span style={styles.homeStatLabel}>Open gaps</span>
+                  <span className={styles.homeStatLabel}>Open gaps</span>
                 </div>
               </div>
 
-              <div style={styles.homeActions}>
+              <div className={styles.homeActions}>
                 <button
-                  style={styles.secondaryBtn}
+                  className={styles.secondaryBtn}
                   onClick={() => navigate('/rota')}
                 >
                   View rota
                 </button>
                 {(isOL || isAdmin) && (
                   <button
-                    style={styles.ghostBtn}
+                    className={styles.ghostBtn}
                     onClick={() => navigate('/rota')}
                   >
                     Step in as manager →
@@ -218,135 +223,6 @@ function Dashboard() {
       )}
     </div>
   )
-}
-
-const styles = {
-  page: {
-    minHeight: '100vh',
-    background: '#0f1117',
-    color: '#e8eaf0',
-    fontFamily: 'DM Sans, sans-serif',
-  },
-  loadingWrap: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: '60vh',
-    color: '#9499b0',
-    fontSize: '14px',
-  },
-  body: { padding: '28px 24px', maxWidth: '960px', margin: '0 auto' },
-  header: {
-    display: 'flex',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    marginBottom: '28px',
-  },
-  title: {
-    fontFamily: 'Syne, sans-serif',
-    fontSize: '22px',
-    fontWeight: 600,
-    letterSpacing: '-0.3px',
-    margin: 0,
-  },
-  subtitle: { fontSize: '13px', color: '#9499b0', marginTop: '4px' },
-  statsRow: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(4, 1fr)',
-    gap: '12px',
-    marginBottom: '28px',
-  },
-  statCard: {
-    background: '#161820',
-    border: '1px solid rgba(255,255,255,0.07)',
-    borderRadius: '12px',
-    padding: '16px',
-  },
-  statVal: {
-    fontSize: '26px',
-    fontWeight: 600,
-    fontFamily: 'Syne, sans-serif',
-    color: '#e8eaf0',
-  },
-  statLabel: { fontSize: '12px', color: '#9499b0', marginTop: '4px' },
-  sectionLabel: {
-    fontSize: '11px',
-    textTransform: 'uppercase',
-    letterSpacing: '1px',
-    color: '#5d6180',
-    marginBottom: '12px',
-    fontWeight: 500,
-  },
-  homesList: { display: 'flex', flexDirection: 'column', gap: '12px' },
-  homeCard: {
-    background: '#161820',
-    border: '1px solid rgba(255,255,255,0.07)',
-    borderRadius: '14px',
-    padding: '20px',
-  },
-  homeTop: {
-    display: 'flex',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    marginBottom: '16px',
-  },
-  homeName: { fontSize: '15px', fontWeight: 500, color: '#e8eaf0' },
-  homeMeta: { fontSize: '12px', color: '#9499b0', marginTop: '3px' },
-  compBadge: {
-    fontSize: '12px',
-    fontWeight: 500,
-    padding: '4px 10px',
-    borderRadius: '6px',
-  },
-  homeStats: {
-    display: 'flex',
-    gap: '24px',
-    marginBottom: '16px',
-    paddingBottom: '16px',
-    borderBottom: '1px solid rgba(255,255,255,0.06)',
-  },
-  homeStat: { display: 'flex', flexDirection: 'column', gap: '2px' },
-  homeStatVal: {
-    fontSize: '18px',
-    fontWeight: 600,
-    fontFamily: 'Syne, sans-serif',
-    color: '#e8eaf0',
-  },
-  homeStatLabel: { fontSize: '11px', color: '#9499b0' },
-  homeActions: { display: 'flex', gap: '8px' },
-  primaryBtn: {
-    background: '#6c8fff',
-    color: '#fff',
-    border: 'none',
-    borderRadius: '8px',
-    padding: '9px 16px',
-    fontSize: '13px',
-    fontWeight: 500,
-    cursor: 'pointer',
-    fontFamily: 'DM Sans, sans-serif',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-  },
-  secondaryBtn: {
-    background: 'transparent',
-    color: '#9499b0',
-    border: '1px solid rgba(255,255,255,0.1)',
-    borderRadius: '8px',
-    padding: '7px 14px',
-    fontSize: '13px',
-    cursor: 'pointer',
-    fontFamily: 'DM Sans, sans-serif',
-  },
-  ghostBtn: {
-    background: 'transparent',
-    color: '#6c8fff',
-    border: 'none',
-    padding: '7px 0',
-    fontSize: '13px',
-    cursor: 'pointer',
-    fontFamily: 'DM Sans, sans-serif',
-  },
 }
 
 export default Dashboard

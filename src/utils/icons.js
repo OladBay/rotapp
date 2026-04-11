@@ -44,6 +44,7 @@ import {
   faCopy,
   faEnvelope,
   faSpinner,
+  faBell,
 } from '@fortawesome/free-solid-svg-icons'
 
 library.add(
@@ -90,5 +91,6 @@ library.add(
   faCircleInfo,
   faCopy,
   faEnvelope,
-  faSpinner
+  faSpinner,
+  faBell
 )

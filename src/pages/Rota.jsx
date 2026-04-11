@@ -21,10 +21,8 @@ import {
   isSameDay,
   dateKey,
 } from '../utils/dateUtils'
-import {
-  calculateStaffHoursForWeek,
-  getWeeksInMonth,
-} from '../utils/hoursCalculator'
+import { calculateStaffHoursForWeek } from '../utils/hoursCalculator'
+import styles from './Rota.module.css'
 
 const TODAY = new Date()
 const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
@@ -86,8 +84,7 @@ function Rota() {
   const [hideZeroHours, setHideZeroHours] = useState(false)
   const [isNavPinned, setIsNavPinned] = useState(() => {
     try {
-      const pinned = localStorage.getItem('rotapp_month_nav_pinned')
-      return pinned === 'true'
+      return localStorage.getItem('rotapp_month_nav_pinned') === 'true'
     } catch {
       return false
     }
@@ -110,7 +107,6 @@ function Rota() {
   const [currentMonday, setMonday] = useState(getMondayOfWeek(TODAY))
   const [currentYear, setCurrentYear] = useState(TODAY.getFullYear())
   const [hoveredMonth, setHoveredMonth] = useState(null)
-
   const [overwriteTarget, setOverwriteTarget] = useState(null)
 
   const { staff, staffMap, monthRota, setMonthRota, timeOff } = useRota()
@@ -130,7 +126,6 @@ function Rota() {
   const yearMonths = useMemo(() => getYearMonths(currentYear), [currentYear])
 
   const canEdit = ['manager', 'deputy', 'superadmin'].includes(user?.activeRole)
-
   const canSeeGaps = [
     'manager',
     'deputy',
@@ -140,7 +135,6 @@ function Rota() {
   ].includes(user?.activeRole)
 
   const currentRotaForWeek = monthRota[dateKey(currentMonday)] || weekRota
-
   const startLabel = formatDate(weekDates[0])
   const endLabel = formatDate(weekDates[6])
 
@@ -192,9 +186,6 @@ function Rota() {
     )
   }
 
-  // Uses Monday-ownership rule — a week belongs to the month its Monday
-  // falls in. Prevents boundary weeks from making the next month appear
-  // as already having a rota.
   const monthHasRota = (year, month) => {
     const weeks = getMonthWeeks(year, month)
     return weeks.some((monday) => !!monthRota[dateKey(monday)])
@@ -235,40 +226,38 @@ function Rota() {
   }
 
   return (
-    <div style={s.page}>
+    <div className={styles.page}>
       <Navbar />
 
-      <div style={s.body}>
+      <div className={styles.body}>
         {/* Header */}
-        <div style={s.header}>
+        <div className={styles.header}>
           <div>
-            <div style={s.breadcrumb} onClick={() => navigate('/dashboard')}>
+            <div
+              className={styles.breadcrumb}
+              onClick={() => navigate('/dashboard')}
+            >
               <FontAwesomeIcon icon='chevron-left' /> Dashboard
             </div>
-            <h1 style={s.title}>
+            <h1 className={styles.title}>
               {viewMode === 'week' ? 'Weekly Rota' : 'Rota Planner'}
             </h1>
-            <p style={s.subtitle}>
+            <p className={styles.subtitle}>
               Meadowview House ·{' '}
               {viewMode === 'week'
                 ? `${startLabel} – ${endLabel}`
                 : `${currentYear}`}
             </p>
           </div>
-          <div style={s.headerRight}>
-            <div style={s.viewToggle}>
+          <div className={styles.headerRight}>
+            <div className={styles.viewToggle}>
               {[
                 { value: 'month', label: 'Month' },
                 { value: 'week', label: 'Week' },
               ].map((v) => (
                 <button
                   key={v.value}
-                  style={{
-                    ...s.toggleBtn,
-                    background:
-                      viewMode === v.value ? '#6c8fff' : 'transparent',
-                    color: viewMode === v.value ? '#fff' : '#9499b0',
-                  }}
+                  className={`${styles.toggleBtn}${viewMode === v.value ? ` ${styles.toggleBtnActive}` : ''}`}
                   onClick={() => setViewMode(v.value)}
                 >
                   {v.label}
@@ -276,8 +265,8 @@ function Rota() {
               ))}
             </div>
             {canEdit && viewMode === 'week' && (
-              <div style={s.headerActions}>
-                <button style={s.secondaryBtn}>Publish</button>
+              <div className={styles.headerActions}>
+                <button className={styles.secondaryBtn}>Publish</button>
               </div>
             )}
           </div>
@@ -285,68 +274,49 @@ function Rota() {
 
         {/* Compliance strip — week view only */}
         {viewMode === 'week' && canSeeGaps && (
-          <div style={s.compStrip}>
+          <div className={styles.compStrip}>
             {totalViolations === 0 ? (
-              <span style={{ ...s.chip, ...s.chipOk }}>
+              <span className={`${styles.chip} ${styles.chipOk}`}>
                 <FontAwesomeIcon icon='check' /> All shifts compliant
               </span>
             ) : (
-              <span style={{ ...s.chip, ...s.chipWarn }}>
+              <span className={`${styles.chip} ${styles.chipWarn}`}>
                 <FontAwesomeIcon icon='triangle-exclamation' />{' '}
                 {totalViolations} violation{totalViolations > 1 ? 's' : ''} this
                 week
               </span>
             )}
-            <span style={{ ...s.chip, ...s.chipInfo }}>
+            <span className={`${styles.chip} ${styles.chipInfo}`}>
               2 sleep-ins checked nightly
             </span>
-            <span style={{ ...s.chip, ...s.chipInfo }}>On-call: 7/7 days</span>
+            <span className={`${styles.chip} ${styles.chipInfo}`}>
+              On-call: 7/7 days
+            </span>
           </div>
         )}
 
         {/* Navigation bar */}
         <div
-          style={{
-            ...s.weekNav,
-            position: isNavPinned ? 'sticky' : 'static',
-            top: isNavPinned ? '56px' : 'auto',
-            background: isNavPinned ? '#0f1117' : 'transparent',
-            zIndex: isNavPinned ? 100 : 'auto',
-            padding: isNavPinned ? '10px 24px' : '0',
-            margin: isNavPinned ? '0 -24px' : '0',
-            borderBottom: isNavPinned
-              ? '1px solid rgba(255,255,255,0.07)'
-              : 'none',
-          }}
+          className={`${styles.weekNav}${isNavPinned ? ` ${styles.weekNavPinned}` : ''}`}
         >
           {viewMode === 'week' ? (
             <>
-              <button style={s.navArrow} onClick={prevWeek}>
+              <button className={styles.navArrow} onClick={prevWeek}>
                 <FontAwesomeIcon icon='chevron-left' />
               </button>
-              <span style={s.weekLabel}>{`${startLabel} – ${endLabel}`}</span>
-              <button style={s.navArrow} onClick={nextWeek}>
+              <span
+                className={styles.weekLabel}
+              >{`${startLabel} – ${endLabel}`}</span>
+              <button className={styles.navArrow} onClick={nextWeek}>
                 <FontAwesomeIcon icon='chevron-right' />
               </button>
 
-              <div style={{ position: 'relative' }}>
+              <div className={styles.jumpBtnWrap}>
                 <button
-                  style={{
-                    ...s.jumpBtn,
-                    background: showJump
-                      ? 'rgba(108,143,255,0.1)'
-                      : 'transparent',
-                    color: showJump ? '#6c8fff' : '#9499b0',
-                    border: showJump
-                      ? '1px solid rgba(108,143,255,0.3)'
-                      : '1px solid rgba(255,255,255,0.1)',
-                  }}
+                  className={`${styles.jumpBtn}${showJump ? ` ${styles.jumpBtnActive}` : ''}`}
                   onClick={() => setShowJump((v) => !v)}
                 >
-                  <FontAwesomeIcon
-                    icon='calendar-days'
-                    style={{ marginRight: '6px' }}
-                  />
+                  <FontAwesomeIcon icon='calendar-days' />
                   Jump to date
                 </button>
                 {showJump && (
@@ -357,14 +327,24 @@ function Rota() {
                   />
                 )}
               </div>
-              <div style={s.legend}>
-                <span style={{ ...s.legendItem, color: '#2a7f62' }}>
+
+              <div className={styles.legend}>
+                <span
+                  className={styles.legendItem}
+                  style={{ color: '#2a7f62' }}
+                >
                   ■ Early
                 </span>
-                <span style={{ ...s.legendItem, color: '#7a4fa8' }}>
+                <span
+                  className={styles.legendItem}
+                  style={{ color: '#7a4fa8' }}
+                >
                   ■ Late
                 </span>
-                <span style={{ ...s.legendItem, color: '#c4883a' }}>
+                <span
+                  className={styles.legendItem}
+                  style={{ color: '#c4883a' }}
+                >
                   ■ Sleep-in
                 </span>
               </div>
@@ -372,20 +352,20 @@ function Rota() {
           ) : (
             <>
               <button
-                style={s.navArrow}
+                className={styles.navArrow}
                 onClick={() => setCurrentYear((y) => y - 1)}
               >
                 <FontAwesomeIcon icon='chevron-left' />
               </button>
-              <span style={s.weekLabel}>{currentYear}</span>
+              <span className={styles.weekLabel}>{currentYear}</span>
               <button
-                style={s.navArrow}
+                className={styles.navArrow}
                 onClick={() => setCurrentYear((y) => y + 1)}
               >
                 <FontAwesomeIcon icon='chevron-right' />
               </button>
               <button
-                style={s.jumpBtn}
+                className={styles.jumpBtn}
                 onClick={() => {
                   setCurrentYear(TODAY.getFullYear())
                   setMonday(getMondayOfWeek(TODAY))
@@ -394,57 +374,50 @@ function Rota() {
                 Today
               </button>
 
-              {/* Batch generate button — month view only, managers/deputies only */}
               {canEdit && (
                 <button
-                  style={s.batchBtn}
+                  className={styles.batchBtn}
                   onClick={() => setShowBatchModal(true)}
                 >
                   <FontAwesomeIcon icon='bolt' /> Batch generate
                 </button>
               )}
 
-              <div style={s.legend}>
-                <span style={{ ...s.legendItem, color: HEALTH_COLOURS.ok }}>
+              <div className={styles.legend}>
+                <span
+                  className={styles.legendItem}
+                  style={{ color: HEALTH_COLOURS.ok }}
+                >
                   ■ Compliant
                 </span>
-                <span style={{ ...s.legendItem, color: HEALTH_COLOURS.breach }}>
+                <span
+                  className={styles.legendItem}
+                  style={{ color: HEALTH_COLOURS.breach }}
+                >
                   ■ Breach
                 </span>
-                <span style={{ ...s.legendItem, color: HEALTH_COLOURS.gap }}>
+                <span
+                  className={styles.legendItem}
+                  style={{ color: HEALTH_COLOURS.gap }}
+                >
                   ■ Gap
                 </span>
-                <span style={{ ...s.legendItem, color: '#5d6180' }}>
+                <span
+                  className={styles.legendItem}
+                  style={{ color: 'var(--text-muted)' }}
+                >
                   ■ Not planned
                 </span>
               </div>
 
-              {/* Pin button - only in month view */}
               <button
-                style={{
-                  ...s.pinBtn,
-                  color: isNavPinned ? '#6c8fff' : '#5d6180',
-                  background: isNavPinned
-                    ? 'rgba(108,143,255,0.1)'
-                    : 'transparent',
-                  border: isNavPinned
-                    ? '1px solid rgba(108,143,255,0.3)'
-                    : '1px solid rgba(255,255,255,0.1)',
-                }}
+                className={`${styles.pinBtn}${isNavPinned ? ` ${styles.pinBtnActive}` : ''}`}
                 onClick={togglePinNav}
                 title={
-                  isNavPinned
-                    ? 'Unpin navigation bar'
-                    : 'Pin navigation bar (stays while scrolling)'
+                  isNavPinned ? 'Unpin navigation bar' : 'Pin navigation bar'
                 }
               >
-                <FontAwesomeIcon
-                  icon='thumbtack'
-                  style={{
-                    transform: isNavPinned ? 'rotate(45deg)' : 'none',
-                    transition: 'transform 0.2s',
-                  }}
-                />
+                <FontAwesomeIcon icon='thumbtack' />
               </button>
             </>
           )}
@@ -453,105 +426,88 @@ function Rota() {
         {/* MONTH VIEW */}
         {viewMode === 'month' && (
           <>
-            <div style={s.hintText}>
-              <FontAwesomeIcon icon='circle-info' /> Click any date to jump to
-              that week
-            </div>
-            <div style={s.yearWrap}>
+            <div className={styles.yearWrap}>
               {yearMonths.map(({ year, month, label }) => {
                 const monthDates = getMonthDates(year, month)
                 const hasRota = monthHasRota(year, month)
-
+                const isHovered = hoveredMonth === label
                 const monthHealth = getMonthHealth(
                   monthDates,
                   month,
                   getRotaForDate,
                   staffMap
                 )
-                const isHovered = hoveredMonth === `${year}-${month}`
 
                 return (
                   <div
-                    key={`${year}-${month}`}
-                    style={{
-                      ...s.miniMonth,
-                      border: hasRota
-                        ? `1px solid ${HEALTH_COLOURS[monthHealth]}44`
-                        : '1px solid rgba(255,255,255,0.06)',
-                      background: hasRota
-                        ? `${HEALTH_COLOURS[monthHealth]}08`
-                        : '#161820',
-                      transform: isHovered
-                        ? 'translateY(-3px)'
-                        : 'translateY(0)',
-                      boxShadow: isHovered
-                        ? '0 8px 24px rgba(0,0,0,0.35)'
-                        : '0 1px 4px rgba(0,0,0,0.15)',
-                    }}
-                    onMouseEnter={() => setHoveredMonth(`${year}-${month}`)}
+                    key={label}
+                    className={styles.miniMonth}
+                    onMouseEnter={() => setHoveredMonth(label)}
                     onMouseLeave={() => setHoveredMonth(null)}
                     onClick={() => {
-                      const firstOfMonth = new Date(year, month, 1)
-                      setMonday(getMondayOfWeek(firstOfMonth))
+                      setMonday(getMondayOfWeek(new Date(year, month, 1)))
                       setCurrentYear(year)
                       setViewMode('week')
                     }}
                   >
-                    {/* Month title row */}
-                    <div style={s.miniMonthHeader}>
-                      <div style={s.miniMonthTitle}>{label}</div>
+                    <div className={styles.miniMonthHeader}>
+                      <span className={styles.miniMonthTitle}>{label}</span>
                       {hasRota && (
                         <span
+                          className={styles.rotaBadge}
                           style={{
-                            ...s.rotaBadge,
-                            color: HEALTH_COLOURS[monthHealth],
-                            background: `${HEALTH_COLOURS[monthHealth]}15`,
-                            border: `1px solid ${HEALTH_COLOURS[monthHealth]}30`,
+                            background:
+                              monthHealth === 'ok'
+                                ? 'var(--color-success-bg)'
+                                : monthHealth === 'breach'
+                                  ? 'var(--color-warning-bg)'
+                                  : monthHealth === 'gap'
+                                    ? 'var(--color-danger-bg)'
+                                    : 'var(--bg-overlay)',
+                            color:
+                              monthHealth === 'ok'
+                                ? 'var(--color-success)'
+                                : monthHealth === 'breach'
+                                  ? 'var(--color-warning)'
+                                  : monthHealth === 'gap'
+                                    ? 'var(--color-danger)'
+                                    : 'var(--text-muted)',
                           }}
                         >
                           {monthHealth === 'ok' && (
-                            <FontAwesomeIcon icon='check' />
+                            <>
+                              <FontAwesomeIcon icon='check' /> Compliant
+                            </>
                           )}
-                          {monthHealth === 'gap' && (
-                            <FontAwesomeIcon icon='triangle-exclamation' />
-                          )}
-                          {monthHealth === 'breach' && (
-                            <FontAwesomeIcon icon='triangle-exclamation' />
-                          )}
-                          {monthHealth === 'ok'
-                            ? ' Rota set'
-                            : monthHealth === 'gap'
-                              ? ' Has gaps'
-                              : ' Has breaches'}
+                          {monthHealth === 'breach' && ' Has breaches'}
+                          {monthHealth === 'gap' && ' Has gaps'}
                         </span>
                       )}
                     </div>
 
-                    {/* Day headers */}
-                    <div style={s.miniDayHeaders}>
+                    <div className={styles.miniDayHeaders}>
                       {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((d, i) => (
-                        <div key={i} style={s.miniDayHead}>
+                        <div key={i} className={styles.miniDayHead}>
                           {d}
                         </div>
                       ))}
                     </div>
 
-                    {/* Date grid */}
-                    <div style={s.miniGrid}>
+                    <div className={styles.miniGrid}>
                       {monthDates.map((date, i) => {
                         const inMonth = date.getMonth() === month
                         const isToday = isSameDay(date, TODAY)
                         const dayOfWeek = (date.getDay() + 6) % 7
                         const rota = inMonth ? getRotaForDate(date) : null
-
                         const health = inMonth
                           ? getDayHealth(rota, dayOfWeek, staffMap)
                           : null
+
                         return (
                           <div
                             key={i}
+                            className={styles.miniCell}
                             style={{
-                              ...s.miniCell,
                               opacity: inMonth ? 1 : 0,
                               background: inMonth
                                 ? health === 'unplanned'
@@ -559,10 +515,10 @@ function Rota() {
                                   : `${HEALTH_COLOURS[health]}22`
                                 : 'transparent',
                               border: isToday
-                                ? '1.5px solid #6c8fff'
+                                ? '1.5px solid var(--accent)'
                                 : inMonth && health !== 'unplanned'
                                   ? `1px solid ${HEALTH_COLOURS[health]}55`
-                                  : '1px solid rgba(255,255,255,0.04)',
+                                  : '1px solid var(--border-subtle)',
                             }}
                             onClick={(e) => {
                               e.stopPropagation()
@@ -573,10 +529,10 @@ function Rota() {
                             }}
                           >
                             <span
+                              className={styles.miniDateNum}
                               style={{
-                                ...s.miniDateNum,
                                 color: isToday
-                                  ? '#6c8fff'
+                                  ? 'var(--accent)'
                                   : inMonth
                                     ? health === 'unplanned'
                                       ? HEALTH_TEXT.unplanned
@@ -592,19 +548,20 @@ function Rota() {
                       })}
                     </div>
 
-                    {/* Footer — stats or generate button */}
-                    <div style={s.miniFooter}>
+                    <div className={styles.miniFooter}>
                       {isHovered && canEdit ? (
                         <button
+                          className={styles.generateBtn}
                           style={{
-                            ...s.generateBtn,
                             background: hasRota
-                              ? 'rgba(196,136,58,0.15)'
-                              : 'rgba(108,143,255,0.15)',
-                            color: hasRota ? '#c4883a' : '#6c8fff',
+                              ? 'var(--color-warning-bg)'
+                              : 'var(--accent-bg)',
+                            color: hasRota
+                              ? 'var(--color-warning)'
+                              : 'var(--accent)',
                             border: hasRota
-                              ? '1px solid rgba(196,136,58,0.3)'
-                              : '1px solid rgba(108,143,255,0.3)',
+                              ? '1px solid var(--color-warning-border)'
+                              : '1px solid var(--accent-border)',
                           }}
                           onClick={(e) =>
                             handleGenerateClick(year, month, label, e)
@@ -632,10 +589,10 @@ function Rota() {
                             <>
                               {counts.gap > 0 && (
                                 <span
+                                  className={styles.miniChip}
                                   style={{
-                                    ...s.miniChip,
-                                    color: '#e85c3d',
-                                    background: 'rgba(232,92,61,0.12)',
+                                    color: 'var(--color-danger)',
+                                    background: 'var(--color-danger-bg)',
                                   }}
                                 >
                                   {counts.gap} gap{counts.gap > 1 ? 's' : ''}
@@ -643,10 +600,10 @@ function Rota() {
                               )}
                               {counts.breach > 0 && (
                                 <span
+                                  className={styles.miniChip}
                                   style={{
-                                    ...s.miniChip,
-                                    color: '#c4883a',
-                                    background: 'rgba(196,136,58,0.12)',
+                                    color: 'var(--color-warning)',
+                                    background: 'var(--color-warning-bg)',
                                   }}
                                 >
                                   {counts.breach} breach
@@ -657,10 +614,10 @@ function Rota() {
                                 counts.breach === 0 &&
                                 counts.unplanned === 0 && (
                                   <span
+                                    className={styles.miniChip}
                                     style={{
-                                      ...s.miniChip,
-                                      color: '#2ecc8a',
-                                      background: 'rgba(46,204,138,0.1)',
+                                      color: 'var(--color-success)',
+                                      background: 'var(--color-success-bg)',
                                     }}
                                   >
                                     <FontAwesomeIcon icon='check' /> All clear
@@ -670,10 +627,10 @@ function Rota() {
                                 counts.gap === 0 &&
                                 counts.breach === 0 && (
                                   <span
+                                    className={styles.miniChip}
                                     style={{
-                                      ...s.miniChip,
-                                      color: '#5d6180',
-                                      background: 'rgba(255,255,255,0.05)',
+                                      color: 'var(--text-muted)',
+                                      background: 'var(--bg-hover)',
                                     }}
                                   >
                                     Not planned
@@ -694,58 +651,49 @@ function Rota() {
         {/* WEEK VIEW */}
         {viewMode === 'week' && (
           <>
-            <div style={s.gridWrap}>
+            <div className={styles.gridWrap}>
               <div
-                style={{
-                  ...s.grid,
-                  gridTemplateColumns: '120px repeat(7, 1fr)',
-                }}
+                className={styles.grid}
+                style={{ gridTemplateColumns: '120px repeat(7, 1fr)' }}
               >
                 {/* Header row */}
-                <div style={s.colLabel} />
-                {DAYS.map((day, i) => (
-                  <div
-                    key={i}
-                    style={{
-                      ...s.dayHeader,
-                      background: isSameDay(weekDates[i], TODAY)
-                        ? 'rgba(108,143,255,0.06)'
-                        : 'transparent',
-                    }}
-                  >
+                <div className={styles.colLabel} />
+                {DAYS.map((day, i) => {
+                  const isToday = isSameDay(weekDates[i], TODAY)
+                  return (
                     <div
+                      key={i}
+                      className={styles.dayHeader}
                       style={{
-                        ...s.dayName,
-                        color: isSameDay(weekDates[i], TODAY)
-                          ? '#6c8fff'
-                          : '#9499b0',
+                        background: isToday
+                          ? 'var(--accent-bg)'
+                          : 'transparent',
                       }}
                     >
-                      {day}
-                    </div>
-                    <div
-                      style={{
-                        ...s.dayDate,
-                        color: isSameDay(weekDates[i], TODAY)
-                          ? '#6c8fff'
-                          : '#e8eaf0',
-                      }}
-                    >
-                      {formatShort(weekDates[i])}
-                    </div>
-                    {canSeeGaps && getViolations(i).length > 0 && (
                       <div
-                        style={s.violationDot}
-                        title={getViolations(i).join(', ')}
-                      />
-                    )}
-                  </div>
-                ))}
+                        className={`${styles.dayName}${isToday ? ` ${styles.dayNameToday}` : ''}`}
+                      >
+                        {day}
+                      </div>
+                      <div
+                        className={`${styles.dayDate}${isToday ? ` ${styles.dayDateToday}` : ''}`}
+                      >
+                        {formatShort(weekDates[i])}
+                      </div>
+                      {canSeeGaps && getViolations(i).length > 0 && (
+                        <div
+                          className={styles.violationDot}
+                          title={getViolations(i).join(', ')}
+                        />
+                      )}
+                    </div>
+                  )
+                })}
 
                 {/* Early row */}
-                <div style={s.shiftLabel}>
-                  <div style={s.shiftName}>Early</div>
-                  <div style={s.shiftTime}>07:00–14:30</div>
+                <div className={styles.shiftLabel}>
+                  <div className={styles.shiftName}>Early</div>
+                  <div className={styles.shiftTime}>07:00–14:30</div>
                 </div>
                 {DAYS.map((_, dayIdx) => {
                   const staffList = currentRotaForWeek.early[dayIdx] || []
@@ -753,10 +701,10 @@ function Rota() {
                   return (
                     <div
                       key={dayIdx}
+                      className={styles.cell}
                       style={{
-                        ...s.cell,
                         background: isGap
-                          ? 'rgba(232,92,61,0.06)'
+                          ? 'var(--color-danger-bg)'
                           : 'transparent',
                         cursor: canEdit ? 'pointer' : 'default',
                       }}
@@ -768,24 +716,26 @@ function Rota() {
                         const st = staffMap[entry.id]
                         if (!st) return null
                         return (
-                          <div key={entry.id} style={s.chipEarly}>
-                            <span style={s.chipName}>
+                          <div key={entry.id} className={styles.chipEarly}>
+                            <span className={styles.chipName}>
                               {st.name.split(' ')[0]}
                             </span>
-                            <span style={s.chipRole}>{st.roleCode}</span>
+                            <span className={styles.chipRole}>
+                              {st.roleCode}
+                            </span>
                           </div>
                         )
                       })}
-                      {isGap && <div style={s.gapTag}>GAP</div>}
-                      {canEdit && <div style={s.addBtn}>+ Add</div>}
+                      {isGap && <div className={styles.gapTag}>GAP</div>}
+                      {canEdit && <div className={styles.addBtn}>+ Add</div>}
                     </div>
                   )
                 })}
 
                 {/* Late row */}
-                <div style={s.shiftLabel}>
-                  <div style={s.shiftName}>Late</div>
-                  <div style={s.shiftTime}>14:00–23:00</div>
+                <div className={styles.shiftLabel}>
+                  <div className={styles.shiftName}>Late</div>
+                  <div className={styles.shiftTime}>14:00–23:00</div>
                 </div>
                 {DAYS.map((_, dayIdx) => {
                   const staffList = currentRotaForWeek.late[dayIdx] || []
@@ -794,10 +744,10 @@ function Rota() {
                   return (
                     <div
                       key={dayIdx}
+                      className={styles.cell}
                       style={{
-                        ...s.cell,
                         background: isGap
-                          ? 'rgba(232,92,61,0.06)'
+                          ? 'var(--color-danger-bg)'
                           : 'transparent',
                         cursor: canEdit ? 'pointer' : 'default',
                       }}
@@ -809,11 +759,13 @@ function Rota() {
                         const st = staffMap[entry.id]
                         if (!st) return null
                         return (
-                          <div key={entry.id} style={s.chipLate}>
-                            <span style={s.chipName}>
+                          <div key={entry.id} className={styles.chipLate}>
+                            <span className={styles.chipName}>
                               {st.name.split(' ')[0]}
                             </span>
-                            <span style={s.chipRole}>{st.roleCode}</span>
+                            <span className={styles.chipRole}>
+                              {st.roleCode}
+                            </span>
                             {entry.sleepIn && (
                               <FontAwesomeIcon
                                 icon='moon'
@@ -824,39 +776,41 @@ function Rota() {
                         )
                       })}
                       {canSeeGaps && sleepCount < 2 && (
-                        <div style={s.sleepWarn}>
+                        <div className={styles.sleepWarn}>
                           <FontAwesomeIcon icon='triangle-exclamation' />{' '}
                           {sleepCount}/2 sleep-ins
                         </div>
                       )}
-                      {isGap && <div style={s.gapTag}>GAP</div>}
-                      {canEdit && <div style={s.addBtn}>+ Add</div>}
+                      {isGap && <div className={styles.gapTag}>GAP</div>}
+                      {canEdit && <div className={styles.addBtn}>+ Add</div>}
                     </div>
                   )
                 })}
 
                 {/* On-call row */}
                 <div
-                  style={{
-                    ...s.shiftLabel,
-                    background: 'rgba(58,138,196,0.06)',
-                  }}
+                  className={styles.shiftLabel}
+                  style={{ background: 'var(--color-info-bg)' }}
                 >
-                  <div style={{ ...s.shiftName, color: '#3a8ac4' }}>
+                  <div
+                    className={styles.shiftName}
+                    style={{ color: 'var(--color-info)' }}
+                  >
                     On-call
                   </div>
-                  <div style={s.shiftTime}>parallel</div>
+                  <div className={styles.shiftTime}>parallel</div>
                 </div>
                 {DAYS.map((_, dayIdx) => (
                   <div
                     key={dayIdx}
-                    style={{ ...s.cell, background: 'rgba(58,138,196,0.04)' }}
+                    className={styles.cell}
+                    style={{ background: 'var(--color-info-bg)' }}
                   >
                     {(currentRotaForWeek.onCall[dayIdx] || []).map((id) => {
                       const st = staffMap[id]
                       if (!st) return null
                       return (
-                        <div key={id} style={s.chipOncall}>
+                        <div key={id} className={styles.chipOncall}>
                           {st.name.split(' ')[0]}
                         </div>
                       )
@@ -866,32 +820,32 @@ function Rota() {
               </div>
             </div>
 
-            {/* Staff Hours Summary Table - Collapsible */}
-            <div style={s.summarySection}>
+            {/* Staff Hours Summary */}
+            <div className={styles.summarySection}>
               <div
-                style={s.summaryHeaderBar}
+                className={styles.summaryHeaderBar}
                 onClick={() => setSummaryExpanded(!summaryExpanded)}
               >
-                <div style={s.summaryTitle}>
+                <div className={styles.summaryTitle}>
                   <FontAwesomeIcon
                     icon={summaryExpanded ? 'chevron-down' : 'chevron-right'}
                   />
                   Staff Hours Summary
                 </div>
-                <div style={s.summaryHint}>
+                <div className={styles.summaryHint}>
                   Click to {summaryExpanded ? 'collapse' : 'expand'}
                 </div>
               </div>
 
               {summaryExpanded && (
                 <>
-                  <div style={s.summaryControls}>
-                    <div style={s.summarySubtitle}>
+                  <div className={styles.summaryControls}>
+                    <div className={styles.summarySubtitle}>
                       Permanent staff (RCW + Senior) · Sorted by hours this week
                       (highest to lowest)
                     </div>
                     <button
-                      style={s.toggleZeroBtn}
+                      className={styles.toggleZeroBtn}
                       onClick={() => setHideZeroHours(!hideZeroHours)}
                     >
                       <FontAwesomeIcon
@@ -901,14 +855,14 @@ function Rota() {
                     </button>
                   </div>
 
-                  <div style={s.tableWrap}>
-                    <table style={s.summaryTable}>
+                  <div className={styles.tableWrap}>
+                    <table className={styles.summaryTable}>
                       <thead>
-                        <tr style={s.tableHeaderRow}>
-                          <th style={s.tableHeader}>Staff</th>
-                          <th style={s.tableHeader}>This week</th>
-                          <th style={s.tableHeader}>Contracted</th>
-                          <th style={s.tableHeader}>Variance</th>
+                        <tr className={styles.tableHeaderRow}>
+                          <th className={styles.tableHeader}>Staff</th>
+                          <th className={styles.tableHeader}>This week</th>
+                          <th className={styles.tableHeader}>Contracted</th>
+                          <th className={styles.tableHeader}>Variance</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -941,7 +895,10 @@ function Rota() {
                           if (sortedStaff.length === 0) {
                             return (
                               <tr>
-                                <td colSpan='4' style={s.emptyTableMessage}>
+                                <td
+                                  colSpan='4'
+                                  className={styles.emptyTableMessage}
+                                >
                                   No staff scheduled this week
                                 </td>
                               </tr>
@@ -952,12 +909,12 @@ function Rota() {
                             const isUnderWeek = member.weekVariance < 0
                             const isOverWeek = member.weekVariance > 0
                             return (
-                              <tr key={member.id} style={s.tableRow}>
-                                <td style={s.tableCell}>
-                                  <div style={s.staffCell}>
+                              <tr key={member.id} className={styles.tableRow}>
+                                <td className={styles.tableCell}>
+                                  <div className={styles.staffCell}>
                                     <div
+                                      className={styles.staffAvatar}
                                       style={{
-                                        ...s.staffAvatar,
                                         background:
                                           member.gender === 'F'
                                             ? 'rgba(122,79,168,0.2)'
@@ -974,34 +931,36 @@ function Rota() {
                                         .join('')}
                                     </div>
                                     <div>
-                                      <div style={s.staffCellName}>
+                                      <div className={styles.staffCellName}>
                                         {member.name}
                                       </div>
-                                      <div style={s.staffCellRole}>
+                                      <div className={styles.staffCellRole}>
                                         {member.role}
                                       </div>
                                     </div>
                                   </div>
                                 </td>
-                                <td style={s.tableCell}>
-                                  <span style={s.hoursValue}>
+                                <td className={styles.tableCell}>
+                                  <span className={styles.hoursValue}>
                                     {member.weekHours.toFixed(1)}h
                                   </span>
                                 </td>
-                                <td style={s.tableCell}>
-                                  <span style={s.contractedValue}>37h</span>
+                                <td className={styles.tableCell}>
+                                  <span className={styles.contractedValue}>
+                                    37h
+                                  </span>
                                 </td>
-                                <td style={s.tableCell}>
+                                <td className={styles.tableCell}>
                                   <span
+                                    className={styles.varianceValue}
                                     style={{
-                                      ...s.varianceValue,
                                       color: isUnderWeek
-                                        ? '#e85c3d'
+                                        ? 'var(--color-danger)'
                                         : isOverWeek
-                                          ? '#2ecc8a'
-                                          : '#9499b0',
+                                          ? 'var(--color-success)'
+                                          : 'var(--text-secondary)',
                                       background: isUnderWeek
-                                        ? 'rgba(232,92,61,0.1)'
+                                        ? 'var(--color-danger-bg)'
                                         : 'transparent',
                                       padding: isUnderWeek ? '2px 8px' : '0',
                                       borderRadius: '4px',
@@ -1036,28 +995,32 @@ function Rota() {
 
       {/* Overwrite warning modal */}
       {overwriteTarget && (
-        <div style={s.overlayWarn} onClick={() => setOverwriteTarget(null)}>
-          <div style={s.warnModal} onClick={(e) => e.stopPropagation()}>
-            <div style={s.warnIcon}>
+        <div
+          className={styles.overlayWarn}
+          onClick={() => setOverwriteTarget(null)}
+        >
+          <div
+            className={styles.warnModal}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className={styles.warnIcon}>
               <FontAwesomeIcon icon='triangle-exclamation' />
             </div>
-            <div style={s.warnTitle}>Rota already exists</div>
-            <div style={s.warnBody}>
-              <strong style={{ color: '#e8eaf0' }}>
-                {overwriteTarget.label}
-              </strong>{' '}
-              already has a generated rota. Regenerating will overwrite all
-              existing shifts for this month. Any manual edits will be lost.
+            <div className={styles.warnTitle}>Rota already exists</div>
+            <div className={styles.warnBody}>
+              <strong>{overwriteTarget.label}</strong> already has a generated
+              rota. Regenerating will overwrite all existing shifts for this
+              month. Any manual edits will be lost.
             </div>
-            <div style={s.warnActions}>
+            <div className={styles.warnActions}>
               <button
-                style={s.warnCancelBtn}
+                className={styles.warnCancelBtn}
                 onClick={() => setOverwriteTarget(null)}
               >
                 Cancel
               </button>
               <button
-                style={s.warnConfirmBtn}
+                className={styles.warnConfirmBtn}
                 onClick={() => {
                   setGenerateTarget(overwriteTarget)
                   setOverwriteTarget(null)
@@ -1069,8 +1032,6 @@ function Rota() {
           </div>
         </div>
       )}
-
-      {/* Single month generate modal */}
 
       {generateTarget && (
         <GenerateModal
@@ -1084,7 +1045,6 @@ function Rota() {
         />
       )}
 
-      {/* Batch generate modal */}
       {showBatchModal && (
         <BatchGenerateModal
           onClose={() => setShowBatchModal(false)}
@@ -1114,604 +1074,6 @@ function Rota() {
       )}
     </div>
   )
-}
-
-const s = {
-  page: {
-    minHeight: '100vh',
-    background: '#0f1117',
-    color: '#e8eaf0',
-    fontFamily: 'DM Sans, sans-serif',
-  },
-  body: { padding: '24px', maxWidth: '1200px', margin: '0 auto' },
-  header: {
-    display: 'flex',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    marginBottom: '16px',
-  },
-  breadcrumb: {
-    fontSize: '12px',
-    color: '#6c8fff',
-    cursor: 'pointer',
-    marginBottom: '8px',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '6px',
-  },
-  title: {
-    fontFamily: 'Syne, sans-serif',
-    fontSize: '22px',
-    fontWeight: 600,
-    margin: 0,
-  },
-  subtitle: { fontSize: '13px', color: '#9499b0', marginTop: '4px' },
-  headerRight: { display: 'flex', alignItems: 'center', gap: '12px' },
-  headerActions: { display: 'flex', gap: '8px' },
-  viewToggle: {
-    display: 'flex',
-    background: '#1d1f2b',
-    border: '1px solid rgba(255,255,255,0.08)',
-    borderRadius: '8px',
-    padding: '3px',
-    gap: '2px',
-  },
-  toggleBtn: {
-    border: 'none',
-    borderRadius: '6px',
-    padding: '6px 14px',
-    fontSize: '12px',
-    fontWeight: 500,
-    cursor: 'pointer',
-    fontFamily: 'DM Sans, sans-serif',
-    transition: 'all 0.15s',
-  },
-  primaryBtn: {
-    background: '#6c8fff',
-    color: '#fff',
-    border: 'none',
-    borderRadius: '8px',
-    padding: '9px 16px',
-    fontSize: '13px',
-    fontWeight: 500,
-    cursor: 'pointer',
-    fontFamily: 'DM Sans, sans-serif',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '6px',
-  },
-  secondaryBtn: {
-    background: 'transparent',
-    color: '#9499b0',
-    border: '1px solid rgba(255,255,255,0.1)',
-    borderRadius: '8px',
-    padding: '8px 14px',
-    fontSize: '13px',
-    cursor: 'pointer',
-    fontFamily: 'DM Sans, sans-serif',
-  },
-  batchBtn: {
-    background: 'rgba(108,143,255,0.1)',
-    color: '#6c8fff',
-    border: '1px solid rgba(108,143,255,0.25)',
-    borderRadius: '7px',
-    padding: '6px 12px',
-    fontSize: '12px',
-    fontWeight: 500,
-    cursor: 'pointer',
-    fontFamily: 'DM Sans, sans-serif',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '6px',
-  },
-  compStrip: {
-    display: 'flex',
-    gap: '8px',
-    marginBottom: '16px',
-    flexWrap: 'wrap',
-  },
-  chip: {
-    fontSize: '12px',
-    padding: '5px 10px',
-    borderRadius: '6px',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '6px',
-  },
-  chipOk: {
-    background: 'rgba(46,204,138,0.1)',
-    color: '#2ecc8a',
-    border: '1px solid rgba(46,204,138,0.2)',
-  },
-  chipWarn: {
-    background: 'rgba(232,92,61,0.1)',
-    color: '#e85c3d',
-    border: '1px solid rgba(232,92,61,0.2)',
-  },
-  chipInfo: {
-    background: 'rgba(255,255,255,0.04)',
-    color: '#9499b0',
-    border: '1px solid rgba(255,255,255,0.08)',
-  },
-  weekNav: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    marginBottom: '20px',
-    flexWrap: 'wrap',
-    transition: 'all 0.2s ease',
-  },
-  navArrow: {
-    background: 'transparent',
-    border: '1px solid rgba(255,255,255,0.1)',
-    borderRadius: '7px',
-    color: '#9499b0',
-    width: '32px',
-    height: '32px',
-    cursor: 'pointer',
-    fontSize: '13px',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  weekLabel: {
-    fontSize: '14px',
-    fontWeight: 500,
-    color: '#e8eaf0',
-    minWidth: '180px',
-    textAlign: 'center',
-    fontFamily: 'Syne, sans-serif',
-  },
-  jumpBtn: {
-    background: 'transparent',
-    border: '1px solid rgba(255,255,255,0.1)',
-    borderRadius: '7px',
-    color: '#9499b0',
-    padding: '6px 12px',
-    fontSize: '12px',
-    cursor: 'pointer',
-    fontFamily: 'DM Sans, sans-serif',
-  },
-  legend: { display: 'flex', gap: '12px', marginLeft: 'auto' },
-  legendItem: { fontSize: '11px' },
-  pinBtn: {
-    background: 'transparent',
-    border: '1px solid rgba(255,255,255,0.1)',
-    borderRadius: '7px',
-    width: '32px',
-    height: '32px',
-    cursor: 'pointer',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    transition: 'all 0.2s ease',
-    marginLeft: '4px',
-  },
-  yearWrap: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(3, 1fr)',
-    gap: '20px',
-  },
-  miniMonth: {
-    borderRadius: '14px',
-    padding: '20px',
-    cursor: 'pointer',
-    transition: 'transform 0.18s ease, box-shadow 0.18s ease',
-    position: 'relative',
-  },
-  miniMonthHeader: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: '10px',
-  },
-  miniMonthTitle: {
-    fontFamily: 'Syne, sans-serif',
-    fontSize: '13px',
-    fontWeight: 600,
-    color: '#e8eaf0',
-  },
-  rotaBadge: {
-    fontSize: '10px',
-    fontWeight: 500,
-    padding: '2px 7px',
-    borderRadius: '5px',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '4px',
-  },
-  miniDayHeaders: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(7, 1fr)',
-    marginBottom: '4px',
-  },
-  miniDayHead: {
-    fontSize: '9px',
-    color: '#5d6180',
-    textAlign: 'center',
-    fontWeight: 500,
-  },
-  miniGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(7, 1fr)',
-    gap: '2px',
-  },
-  miniCell: {
-    aspectRatio: '1',
-    borderRadius: '4px',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    cursor: 'pointer',
-  },
-  miniDateNum: {
-    fontSize: '9px',
-    fontFamily: 'DM Mono, monospace',
-  },
-  miniFooter: {
-    marginTop: '10px',
-    display: 'flex',
-    gap: '5px',
-    flexWrap: 'wrap',
-    minHeight: '26px',
-    alignItems: 'center',
-  },
-  miniChip: {
-    fontSize: '10px',
-    fontWeight: 500,
-    padding: '2px 7px',
-    borderRadius: '4px',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '4px',
-  },
-  generateBtn: {
-    borderRadius: '7px',
-    padding: '5px 12px',
-    fontSize: '11.5px',
-    fontWeight: 500,
-    cursor: 'pointer',
-    fontFamily: 'DM Sans, sans-serif',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '5px',
-    width: '100%',
-    justifyContent: 'center',
-  },
-  gridWrap: { overflowX: 'auto' },
-  grid: {
-    display: 'grid',
-    minWidth: '700px',
-    border: '1px solid rgba(255,255,255,0.07)',
-    borderRadius: '14px',
-    overflow: 'hidden',
-  },
-  colLabel: {
-    background: '#1d1f2b',
-    borderBottom: '1px solid rgba(255,255,255,0.07)',
-    borderRight: '1px solid rgba(255,255,255,0.07)',
-  },
-  dayHeader: {
-    padding: '10px 8px',
-    textAlign: 'center',
-    borderBottom: '1px solid rgba(255,255,255,0.07)',
-    borderRight: '1px solid rgba(255,255,255,0.05)',
-  },
-  dayName: { fontSize: '11px', fontWeight: 500, textTransform: 'uppercase' },
-  dayDate: {
-    fontSize: '16px',
-    fontWeight: 600,
-    fontFamily: 'Syne, sans-serif',
-    marginTop: '2px',
-  },
-  violationDot: {
-    width: '6px',
-    height: '6px',
-    borderRadius: '50%',
-    background: '#e85c3d',
-    margin: '4px auto 0',
-  },
-  shiftLabel: {
-    padding: '12px 14px',
-    borderRight: '1px solid rgba(255,255,255,0.07)',
-    borderBottom: '1px solid rgba(255,255,255,0.05)',
-    display: 'flex',
-    flexDirection: 'column',
-    justifyContent: 'center',
-    background: '#1d1f2b',
-  },
-  shiftName: { fontSize: '12px', fontWeight: 600, color: '#e8eaf0' },
-  shiftTime: {
-    fontSize: '10px',
-    color: '#5d6180',
-    marginTop: '2px',
-    fontFamily: 'DM Mono, monospace',
-  },
-  cell: {
-    padding: '8px',
-    borderRight: '1px solid rgba(255,255,255,0.05)',
-    borderBottom: '1px solid rgba(255,255,255,0.05)',
-    minHeight: '80px',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '4px',
-    position: 'relative',
-  },
-  chipEarly: {
-    background: 'rgba(42,127,98,0.15)',
-    border: '1px solid rgba(42,127,98,0.3)',
-    borderRadius: '5px',
-    padding: '3px 6px',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '4px',
-  },
-  chipLate: {
-    background: 'rgba(122,79,168,0.15)',
-    border: '1px solid rgba(122,79,168,0.3)',
-    borderRadius: '5px',
-    padding: '3px 6px',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '4px',
-  },
-  chipOncall: {
-    background: 'rgba(58,138,196,0.12)',
-    border: '1px solid rgba(58,138,196,0.25)',
-    borderRadius: '5px',
-    padding: '3px 6px',
-    fontSize: '11px',
-    color: '#3a8ac4',
-  },
-  chipName: { fontSize: '11px', color: '#e8eaf0', fontWeight: 500 },
-  chipRole: {
-    fontSize: '9px',
-    color: '#9499b0',
-    fontFamily: 'DM Mono, monospace',
-  },
-  gapTag: {
-    fontSize: '9px',
-    fontWeight: 700,
-    color: '#e85c3d',
-    background: 'rgba(232,92,61,0.15)',
-    border: '1px solid rgba(232,92,61,0.3)',
-    borderRadius: '4px',
-    padding: '2px 5px',
-    alignSelf: 'flex-start',
-  },
-  sleepWarn: {
-    fontSize: '10px',
-    color: '#c4883a',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '4px',
-  },
-  addBtn: {
-    fontSize: '10px',
-    color: '#5d6180',
-    marginTop: 'auto',
-    cursor: 'pointer',
-  },
-  overlayWarn: {
-    position: 'fixed',
-    inset: 0,
-    background: 'rgba(0,0,0,0.85)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 300,
-    padding: '20px',
-  },
-  warnModal: {
-    background: '#161820',
-    border: '1px solid rgba(232,92,61,0.3)',
-    borderRadius: '16px',
-    width: '100%',
-    maxWidth: '420px',
-    padding: '28px',
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    textAlign: 'center',
-    gap: '12px',
-  },
-  warnIcon: {
-    fontSize: '32px',
-    color: '#e85c3d',
-    background: 'rgba(232,92,61,0.12)',
-    width: '60px',
-    height: '60px',
-    borderRadius: '50%',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  warnTitle: {
-    fontFamily: 'Syne, sans-serif',
-    fontSize: '18px',
-    fontWeight: 600,
-    color: '#e8eaf0',
-  },
-  warnBody: {
-    fontSize: '13px',
-    color: '#9499b0',
-    lineHeight: 1.6,
-    maxWidth: '340px',
-  },
-  warnActions: {
-    display: 'flex',
-    gap: '10px',
-    marginTop: '8px',
-    width: '100%',
-  },
-  warnCancelBtn: {
-    flex: 1,
-    background: 'transparent',
-    border: '1px solid rgba(255,255,255,0.1)',
-    borderRadius: '8px',
-    color: '#9499b0',
-    padding: '10px',
-    fontSize: '13px',
-    cursor: 'pointer',
-    fontFamily: 'DM Sans, sans-serif',
-  },
-  warnConfirmBtn: {
-    flex: 1,
-    background: 'rgba(232,92,61,0.15)',
-    border: '1px solid rgba(232,92,61,0.35)',
-    borderRadius: '8px',
-    color: '#e85c3d',
-    padding: '10px',
-    fontSize: '13px',
-    fontWeight: 500,
-    cursor: 'pointer',
-    fontFamily: 'DM Sans, sans-serif',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: '6px',
-  },
-  hintText: {
-    fontSize: '12px',
-    color: '#5d6180',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '6px',
-    marginBottom: '16px',
-  },
-  summarySection: {
-    marginTop: '24px',
-    borderTop: '1px solid rgba(255,255,255,0.07)',
-  },
-  summaryHeaderBar: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: '14px 16px',
-    background: '#1d1f2b',
-    borderRadius: '10px',
-    cursor: 'pointer',
-    transition: 'background 0.15s',
-  },
-  summaryTitle: {
-    fontFamily: 'Syne, sans-serif',
-    fontSize: '14px',
-    fontWeight: 600,
-    color: '#e8eaf0',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '10px',
-  },
-  summaryHint: {
-    fontSize: '11px',
-    color: '#5d6180',
-  },
-  summaryControls: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: '12px',
-    marginBottom: '16px',
-  },
-  summarySubtitle: {
-    fontSize: '11px',
-    color: '#5d6180',
-  },
-  toggleZeroBtn: {
-    background: 'rgba(108,143,255,0.1)',
-    border: '1px solid rgba(108,143,255,0.2)',
-    borderRadius: '6px',
-    padding: '5px 10px',
-    fontSize: '11px',
-    color: '#6c8fff',
-    cursor: 'pointer',
-    fontFamily: 'DM Sans, sans-serif',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '6px',
-  },
-  tableWrap: {
-    overflowX: 'auto',
-    borderRadius: '12px',
-    border: '1px solid rgba(255,255,255,0.07)',
-    background: '#161820',
-  },
-  summaryTable: {
-    width: '100%',
-    borderCollapse: 'collapse',
-    fontSize: '13px',
-    minWidth: '700px',
-  },
-  tableHeaderRow: {
-    borderBottom: '1px solid rgba(255,255,255,0.07)',
-    background: '#1d1f2b',
-  },
-  tableHeader: {
-    textAlign: 'left',
-    padding: '12px 16px',
-    color: '#9499b0',
-    fontWeight: 500,
-    fontSize: '11px',
-    textTransform: 'uppercase',
-    letterSpacing: '0.5px',
-  },
-  tableRow: {
-    borderBottom: '1px solid rgba(255,255,255,0.05)',
-  },
-  tableCell: {
-    padding: '10px 16px',
-    color: '#e8eaf0',
-  },
-  staffCell: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '10px',
-  },
-  staffAvatar: {
-    width: '30px',
-    height: '30px',
-    borderRadius: '50%',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: '10px',
-    fontWeight: 600,
-    fontFamily: 'Syne, sans-serif',
-    flexShrink: 0,
-  },
-  staffCellName: {
-    fontSize: '13px',
-    fontWeight: 500,
-    color: '#e8eaf0',
-  },
-  staffCellRole: {
-    fontSize: '10px',
-    color: '#9499b0',
-    fontFamily: 'DM Mono, monospace',
-    marginTop: '2px',
-  },
-  hoursValue: {
-    fontWeight: 500,
-    color: '#e8eaf0',
-    fontFamily: 'DM Mono, monospace',
-  },
-  contractedValue: {
-    color: '#5d6180',
-    fontFamily: 'DM Mono, monospace',
-  },
-  varianceValue: {
-    fontWeight: 500,
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: '4px',
-    fontFamily: 'DM Mono, monospace',
-  },
-  emptyTableMessage: {
-    textAlign: 'center',
-    padding: '32px',
-    color: '#5d6180',
-    fontSize: '13px',
-  },
 }
 
 export default Rota

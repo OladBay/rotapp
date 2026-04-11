@@ -23,6 +23,7 @@ import {
 import { removeStaffFromShift } from '../utils/rotaMutations'
 import LeaveCalendar from '../components/shared/LeaveCalendar'
 import { fetchHomes } from '../utils/homesData'
+import styles from './Staff.module.css'
 
 const ROLE_LABELS = {
   manager: 'Manager',
@@ -33,9 +34,9 @@ const ROLE_LABELS = {
 }
 
 const STATUS_COLORS = {
-  active: { bg: 'rgba(46,204,138,0.12)', color: '#2ecc8a' },
-  pending: { bg: 'rgba(196,136,58,0.12)', color: '#c4883a' },
-  off: { bg: 'rgba(108,143,255,0.12)', color: '#6c8fff' },
+  active: { bg: 'var(--color-success-bg)', color: 'var(--color-success)' },
+  pending: { bg: 'var(--color-warning-bg)', color: 'var(--color-warning)' },
+  off: { bg: 'var(--accent-bg)', color: 'var(--accent)' },
 }
 
 const TYPE_LABELS = {
@@ -47,24 +48,24 @@ const TYPE_LABELS = {
 
 const TYPE_STYLES = {
   annual_leave: {
-    background: 'rgba(108,143,255,0.12)',
-    color: '#6c8fff',
-    border: '1px solid rgba(108,143,255,0.25)',
+    background: 'var(--accent-bg)',
+    color: 'var(--accent)',
+    border: '1px solid var(--accent-border)',
   },
   sick: {
-    background: 'rgba(232,92,61,0.12)',
-    color: '#e85c3d',
-    border: '1px solid rgba(232,92,61,0.25)',
+    background: 'var(--color-danger-bg)',
+    color: 'var(--color-danger)',
+    border: '1px solid var(--color-danger-border)',
   },
   training: {
-    background: 'rgba(46,204,138,0.12)',
-    color: '#2ecc8a',
-    border: '1px solid rgba(46,204,138,0.25)',
+    background: 'var(--color-success-bg)',
+    color: 'var(--color-success)',
+    border: '1px solid var(--color-success-border)',
   },
   other: {
-    background: 'rgba(148,153,176,0.12)',
-    color: '#9499b0',
-    border: '1px solid rgba(148,153,176,0.25)',
+    background: 'var(--bg-active)',
+    color: 'var(--text-secondary)',
+    border: '1px solid var(--border-default)',
   },
 }
 
@@ -110,6 +111,19 @@ function Staff() {
   const [rejectionReason, setRejectionReason] = useState('')
   const [managerNotes, setManagerNotes] = useState('')
   const [showRejectModal, setShowRejectModal] = useState(false)
+  const [isTabsPinned, setIsTabsPinned] = useState(() => {
+    try {
+      return localStorage.getItem('rotapp_staff_tabs_pinned') === 'true'
+    } catch {
+      return false
+    }
+  })
+
+  const toggleTabsPin = () => {
+    const newValue = !isTabsPinned
+    setIsTabsPinned(newValue)
+    localStorage.setItem('rotapp_staff_tabs_pinned', String(newValue))
+  }
 
   // ── Fetch homes ──
   useEffect(() => {
@@ -212,7 +226,6 @@ function Staff() {
         reviewedBy: user?.name,
         managerNotes: managerNotes || null,
       })
-      // fromLeave is false here — cancellation approval does not supersede leave
       await removeStaffFromShift(
         request.staff_id,
         request.shift_date,
@@ -245,22 +258,22 @@ function Staff() {
   }
 
   return (
-    <div style={s.page}>
+    <div className={styles.page}>
       <Navbar />
-      <div style={s.body}>
+      <div className={styles.body}>
         {/* Header */}
-        <div style={s.header}>
+        <div className={styles.header}>
           <div>
-            <h1 style={s.title}>Staff</h1>
-            <p style={s.subtitle}>
+            <h1 className={styles.title}>Staff</h1>
+            <p className={styles.subtitle}>
               {isOLorAdmin
                 ? `All homes · ${allStaff.length} staff members`
                 : `${user?.home ? user.home.charAt(0).toUpperCase() + user.home.slice(1) : ''} · ${visibleStaff.filter((s) => s.status !== 'declined' && !EXCLUDED_ROLES.includes(s.role)).length} staff members`}
             </p>
           </div>
-          <div style={s.headerActions}>
+          <div className={styles.headerActions}>
             <button
-              style={s.inviteBtn}
+              className={styles.inviteBtn}
               onClick={() => setShowInviteModal(true)}
             >
               <FontAwesomeIcon icon='envelope' /> Onboard staff
@@ -270,12 +283,9 @@ function Staff() {
 
         {/* OL home filter */}
         {isOLorAdmin && (
-          <div style={s.homeFilterRow}>
+          <div className={styles.homeFilterRow}>
             <button
-              style={{
-                ...s.homeFilterBtn,
-                ...(homeFilter === 'all' ? s.homeFilterActive : {}),
-              }}
+              className={`${styles.homeFilterBtn}${homeFilter === 'all' ? ` ${styles.homeFilterBtnActive}` : ''}`}
               onClick={() => setHomeFilter('all')}
             >
               All homes
@@ -283,10 +293,7 @@ function Staff() {
             {uniqueHomes.map((h) => (
               <button
                 key={h}
-                style={{
-                  ...s.homeFilterBtn,
-                  ...(homeFilter === h ? s.homeFilterActive : {}),
-                }}
+                className={`${styles.homeFilterBtn}${homeFilter === h ? ` ${styles.homeFilterBtnActive}` : ''}`}
                 onClick={() => setHomeFilter(h)}
               >
                 {h.charAt(0).toUpperCase() + h.slice(1)}
@@ -295,81 +302,79 @@ function Staff() {
           </div>
         )}
 
-        {staffLoading && <div style={s.empty}>Loading staff…</div>}
-        {staffError && <div style={s.errorBanner}>{staffError}</div>}
+        {staffLoading && <div className={styles.empty}>Loading staff…</div>}
+        {staffError && <div className={styles.errorBanner}>{staffError}</div>}
 
         {/* Tabs */}
         {!staffLoading && (
           <div
-            style={s.tabs}
-            key={`tabs-${allStaff.length}-${pendingStaff.length}`}
+            className={`${styles.tabsBar}${isTabsPinned ? ` ${styles.tabsBarPinned}` : ''}`}
           >
-            {[
-              { key: 'active', label: `Active (${activeStaff.length})` },
-              {
-                key: 'pending',
-                label: `Pending (${pendingStaff.length})`,
-                hasBadge: pendingStaff.length > 0,
-                badgeCount: pendingStaff.length,
-              },
-              { key: 'relief', label: `Relief pool (${reliefStaff.length})` },
-              {
-                key: 'leave',
-                label: 'Leave & Absence',
-                hasBadge: getPendingTimeOffCount(timeOff) > 0,
-                badgeCount: getPendingTimeOffCount(timeOff),
-              },
-              {
-                key: 'requests',
-                label: `Cancellations${pendingCancels.length > 0 ? ` (${pendingCancels.length})` : ''}`,
-                hasBadge: pendingCancels.length > 0,
-                badgeCount: pendingCancels.length,
-              },
-            ].map((t) => (
-              <button
-                key={t.key}
-                style={{
-                  ...s.tabBtn,
-                  color: tab === t.key ? '#6c8fff' : '#9499b0',
-                  borderBottom:
-                    tab === t.key
-                      ? '2px solid #6c8fff'
-                      : '2px solid transparent',
-                }}
-                onClick={() => setTab(t.key)}
-              >
-                {t.label}
-                {t.hasBadge && <span style={s.tabBadge}>{t.badgeCount}</span>}
-              </button>
-            ))}
+            <div
+              className={styles.tabs}
+              key={`tabs-${allStaff.length}-${pendingStaff.length}`}
+            >
+              {[
+                { key: 'active', label: `Active (${activeStaff.length})` },
+                {
+                  key: 'pending',
+                  label: `Pending (${pendingStaff.length})`,
+                  hasBadge: pendingStaff.length > 0,
+                  badgeCount: pendingStaff.length,
+                },
+                { key: 'relief', label: `Relief pool (${reliefStaff.length})` },
+                {
+                  key: 'leave',
+                  label: 'Leave & Absence',
+                  hasBadge: getPendingTimeOffCount(timeOff) > 0,
+                  badgeCount: getPendingTimeOffCount(timeOff),
+                },
+                {
+                  key: 'requests',
+                  label: `Cancellations${pendingCancels.length > 0 ? ` (${pendingCancels.length})` : ''}`,
+                  hasBadge: pendingCancels.length > 0,
+                  badgeCount: pendingCancels.length,
+                },
+              ].map((t) => (
+                <button
+                  key={t.key}
+                  className={`${styles.tabBtn}${tab === t.key ? ` ${styles.tabBtnActive}` : ''}`}
+                  onClick={() => setTab(t.key)}
+                >
+                  {t.label}
+                  {t.hasBadge && (
+                    <span className={styles.tabBadge}>{t.badgeCount}</span>
+                  )}
+                </button>
+              ))}
+            </div>
+            <button
+              className={`${styles.tabsPinBtn}${isTabsPinned ? ` ${styles.tabsPinBtnActive}` : ''}`}
+              onClick={toggleTabsPin}
+              title={
+                isTabsPinned ? 'Unpin tabs' : 'Pin tabs (stays while scrolling)'
+              }
+            >
+              <FontAwesomeIcon icon='thumbtack' />
+            </button>
           </div>
         )}
 
         {/* Staff list */}
         {!staffLoading && tab !== 'leave' && tab !== 'requests' && (
-          <div style={s.list}>
+          <div className={styles.list}>
             {displayed.length === 0 && (
-              <div style={s.empty}>No staff in this category</div>
+              <div className={styles.empty}>No staff in this category</div>
             )}
             {displayed.map((member) => (
               <div
                 key={member.id}
-                style={{
-                  ...s.staffRow,
-                  background:
-                    member.status === 'pending'
-                      ? 'rgba(196,136,58,0.04)'
-                      : 'var(--bg-card, #161820)',
-                  border:
-                    member.status === 'pending'
-                      ? '1px solid rgba(196,136,58,0.2)'
-                      : '1px solid rgba(255,255,255,0.07)',
-                }}
+                className={`${styles.staffRow} ${member.status === 'pending' ? styles.staffRowPending : styles.staffRowDefault}`}
                 onClick={() => setSelectedStaff(member)}
               >
                 <div
+                  className={styles.avatar}
                   style={{
-                    ...s.avatar,
                     background:
                       member.gender === 'F'
                         ? 'rgba(122,79,168,0.2)'
@@ -384,9 +389,9 @@ function Staff() {
                         .join('')
                     : '?'}
                 </div>
-                <div style={s.staffInfo}>
-                  <div style={s.staffName}>{member.name || '—'}</div>
-                  <div style={s.staffMeta}>
+                <div className={styles.staffInfo}>
+                  <div className={styles.staffName}>{member.name || '—'}</div>
+                  <div className={styles.staffMeta}>
                     {ROLE_LABELS[member.role] || member.role}
                     {member.driver && ' · Driver'}
                     {member.home === null && ' · Relief pool'}
@@ -395,9 +400,9 @@ function Staff() {
                       ` · ${member.home.charAt(0).toUpperCase() + member.home.slice(1)}`}
                   </div>
                 </div>
-                <div style={s.staffTags}>
+                <div className={styles.staffTags}>
                   {member.gender && (
-                    <span style={s.tag}>
+                    <span className={styles.tag}>
                       {member.gender === 'F'
                         ? 'Female'
                         : member.gender === 'M'
@@ -406,12 +411,13 @@ function Staff() {
                     </span>
                   )}
                   <span
+                    className={styles.tag}
                     style={{
-                      ...s.tag,
                       background:
-                        STATUS_COLORS[member.status]?.bg ||
-                        'rgba(255,255,255,0.06)',
-                      color: STATUS_COLORS[member.status]?.color || '#9499b0',
+                        STATUS_COLORS[member.status]?.bg || 'var(--bg-active)',
+                      color:
+                        STATUS_COLORS[member.status]?.color ||
+                        'var(--text-secondary)',
                     }}
                   >
                     {member.status}
@@ -419,24 +425,24 @@ function Staff() {
                 </div>
                 {member.status === 'pending' && (
                   <div
-                    style={s.pendingActions}
+                    className={styles.pendingActions}
                     onClick={(e) => e.stopPropagation()}
                   >
                     <button
-                      style={s.approveBtn}
+                      className={styles.approveBtn}
                       onClick={() => handleApprove(member)}
                     >
                       Approve
                     </button>
                     <button
-                      style={s.declineBtn}
+                      className={styles.declineBtn}
                       onClick={() => handleDecline(member)}
                     >
                       Decline
                     </button>
                   </div>
                 )}
-                <div style={s.chevron}>›</div>
+                <div className={styles.chevron}>›</div>
               </div>
             ))}
           </div>
@@ -444,8 +450,8 @@ function Staff() {
 
         {/* Leave tab */}
         {tab === 'leave' && (
-          <div style={s.leaveWrap}>
-            <div style={s.leaveNote}>
+          <div className={styles.leaveWrap}>
+            <div className={styles.leaveNote}>
               Add and manage staff absences. Approved leave is automatically
               excluded from rota generation.
             </div>
@@ -460,23 +466,25 @@ function Staff() {
                 const approved = entries.filter((e) => e.status === 'approved')
                 const pending = entries.filter((e) => e.status === 'pending')
                 return (
-                  <div key={st.id} style={s.leaveRow}>
-                    <div style={s.leaveStaffInfo}>
-                      <div style={s.staffName}>{st.name}</div>
-                      <div style={s.staffRole}>
+                  <div key={st.id} className={styles.leaveRow}>
+                    <div className={styles.leaveStaffInfo}>
+                      <div className={styles.staffName}>{st.name}</div>
+                      <div className={styles.staffRole}>
                         {ROLE_LABELS[st.role] || st.role}
                       </div>
                     </div>
-                    <div style={s.leaveDates}>
+                    <div className={styles.leaveDates}>
                       {approved.length === 0 && pending.length === 0 ? (
-                        <span style={s.noLeave}>No absences recorded</span>
+                        <span className={styles.noLeave}>
+                          No absences recorded
+                        </span>
                       ) : (
                         <>
                           {approved.map((entry) => (
                             <span
                               key={entry.id}
+                              className={styles.leaveTag}
                               style={{
-                                ...s.leaveTag,
                                 ...TYPE_STYLES[entry.type],
                                 cursor: 'pointer',
                               }}
@@ -487,12 +495,14 @@ function Staff() {
                                 })
                               }
                             >
-                              <span style={s.leaveTagLabel}>
+                              <span className={styles.leaveTagLabel}>
                                 {TYPE_LABELS[entry.type]}
                               </span>
-                              <span style={s.leaveTagDate}>{entry.date}</span>
+                              <span className={styles.leaveTagDate}>
+                                {entry.date}
+                              </span>
                               <button
-                                style={s.removeLeave}
+                                className={styles.removeLeave}
                                 onClick={async (e) => {
                                   e.stopPropagation()
                                   await removeTimeOff(entry.id)
@@ -506,11 +516,11 @@ function Staff() {
                           {pending.map((entry) => (
                             <span
                               key={entry.id}
+                              className={styles.leaveTag}
                               style={{
-                                ...s.leaveTag,
-                                background: 'rgba(196,136,58,0.12)',
-                                color: '#c4883a',
-                                border: '1px solid rgba(196,136,58,0.25)',
+                                background: 'var(--color-warning-bg)',
+                                color: 'var(--color-warning)',
+                                border: '1px solid var(--color-warning-border)',
                                 cursor: 'pointer',
                               }}
                               onClick={() =>
@@ -520,17 +530,17 @@ function Staff() {
                                 })
                               }
                             >
-                              <span style={s.leaveTagLabel}>
+                              <span className={styles.leaveTagLabel}>
                                 {TYPE_LABELS[entry.type]} · pending
                               </span>
-                              <span style={s.leaveTagDate}>{entry.date}</span>
+                              <span className={styles.leaveTagDate}>
+                                {entry.date}
+                              </span>
                               <button
-                                style={s.approveLeaveBtn}
+                                className={styles.approveLeaveBtn}
                                 onClick={async (e) => {
                                   e.stopPropagation()
                                   await approveTimeOff(entry.id, user?.name)
-                                  // fromLeave: true supersedes any active cancel
-                                  // record for this date
                                   await removeStaffFromShift(
                                     entry.staff_id,
                                     entry.date,
@@ -545,7 +555,7 @@ function Staff() {
                                 <FontAwesomeIcon icon='check' />
                               </button>
                               <button
-                                style={s.removeLeave}
+                                className={styles.removeLeave}
                                 onClick={async (e) => {
                                   e.stopPropagation()
                                   await removeTimeOff(entry.id)
@@ -560,7 +570,7 @@ function Staff() {
                       )}
                     </div>
                     <button
-                      style={s.addLeaveBtn}
+                      className={styles.addLeaveBtn}
                       onClick={() => setLeaveStaff(st)}
                     >
                       <FontAwesomeIcon icon='plus' /> Add leave
@@ -573,34 +583,36 @@ function Staff() {
 
         {/* Cancellations tab */}
         {tab === 'requests' && (
-          <div style={s.requestsWrap}>
+          <div className={styles.requestsWrap}>
             {pendingCancels.length === 0 && allCancels.length === 0 ? (
-              <div style={s.empty}>No cancellation requests</div>
+              <div className={styles.empty}>No cancellation requests</div>
             ) : (
               <>
                 {pendingCancels.length > 0 && (
                   <>
-                    <div style={s.sectionLabel}>Pending Requests</div>
+                    <div className={styles.sectionLabel}>Pending Requests</div>
                     {pendingCancels.map((request) => (
-                      <div key={request.id} style={s.requestCard}>
-                        <div style={s.requestHeader}>
-                          <div style={s.requestStaff}>{request.staff_name}</div>
-                          <div style={s.requestHeaderRight}>
+                      <div key={request.id} className={styles.requestCard}>
+                        <div className={styles.requestHeader}>
+                          <div className={styles.requestStaff}>
+                            {request.staff_name}
+                          </div>
+                          <div className={styles.requestHeaderRight}>
                             {request.ping_count > 0 && (
-                              <span style={s.pingBadge}>
+                              <span className={styles.pingBadge}>
                                 <FontAwesomeIcon icon='bell' /> Pinged{' '}
                                 {request.ping_count}x
                                 {request.last_pinged_at &&
                                   ` · ${new Date(request.last_pinged_at).toLocaleDateString()}`}
                               </span>
                             )}
-                            <div style={s.requestStatus}>pending</div>
+                            <div className={styles.requestStatus}>pending</div>
                           </div>
                         </div>
-                        <div style={s.requestDetails}>
+                        <div className={styles.requestDetails}>
                           <div>
                             <span
-                              style={s.clickableDate}
+                              className={styles.clickableDate}
                               onClick={() => {
                                 navigate('/rota')
                                 sessionStorage.setItem(
@@ -611,7 +623,7 @@ function Staff() {
                             >
                               {request.shift_date}
                             </span>
-                            <span style={{ color: '#5d6180' }}>
+                            <span style={{ color: 'var(--text-muted)' }}>
                               {' '}
                               · {request.shift_type} shift
                             </span>
@@ -623,42 +635,27 @@ function Staff() {
                               : request.reason}
                           </div>
                           {request.notes && (
-                            <div
-                              style={{
-                                fontSize: '12px',
-                                color: '#9499b0',
-                                background: 'rgba(255,255,255,0.03)',
-                                border: '1px solid rgba(255,255,255,0.07)',
-                                borderRadius: '6px',
-                                padding: '6px 10px',
-                                marginTop: '2px',
-                              }}
-                            >
-                              <span
-                                style={{
-                                  color: '#5d6180',
-                                  marginRight: '4px',
-                                }}
-                              >
+                            <div className={styles.requestNote}>
+                              <span className={styles.requestNoteLabel}>
                                 Note:
                               </span>
                               {request.notes}
                             </div>
                           )}
-                          <div style={s.requestTime}>
+                          <div className={styles.requestTime}>
                             Requested:{' '}
                             {new Date(request.requested_at).toLocaleString()}
                           </div>
                         </div>
-                        <div style={s.requestActions}>
+                        <div className={styles.requestActions}>
                           <button
-                            style={s.approveRequestBtn}
+                            className={styles.approveRequestBtn}
                             onClick={() => setSelectedRequest(request)}
                           >
                             <FontAwesomeIcon icon='check' /> Approve
                           </button>
                           <button
-                            style={s.rejectRequestBtn}
+                            className={styles.rejectRequestBtn}
                             onClick={() => {
                               setSelectedRequest(request)
                               setShowRejectModal(true)
@@ -674,7 +671,10 @@ function Staff() {
                 {allCancels.filter((r) => r.status !== 'pending').length >
                   0 && (
                   <>
-                    <div style={{ ...s.sectionLabel, marginTop: '24px' }}>
+                    <div
+                      className={styles.sectionLabel}
+                      style={{ marginTop: '24px' }}
+                    >
                       History
                     </div>
                     {allCancels
@@ -684,39 +684,42 @@ function Staff() {
                           new Date(b.requested_at) - new Date(a.requested_at)
                       )
                       .map((request) => (
-                        <div key={request.id} style={s.requestCardHistory}>
-                          <div style={s.requestHeader}>
-                            <div style={s.requestStaff}>
+                        <div
+                          key={request.id}
+                          className={styles.requestCardHistory}
+                        >
+                          <div className={styles.requestHeader}>
+                            <div className={styles.requestStaff}>
                               {request.staff_name}
                             </div>
                             <div
+                              className={styles.requestStatus}
                               style={{
-                                ...s.requestStatus,
                                 background:
                                   request.status === 'approved'
-                                    ? 'rgba(46,204,138,0.12)'
+                                    ? 'var(--color-success-bg)'
                                     : request.status === 'rejected'
-                                      ? 'rgba(232,92,61,0.12)'
+                                      ? 'var(--color-danger-bg)'
                                       : request.status === 'superseded'
-                                        ? 'rgba(148,153,176,0.12)'
-                                        : 'rgba(108,143,255,0.12)',
+                                        ? 'var(--bg-active)'
+                                        : 'var(--accent-bg)',
                                 color:
                                   request.status === 'approved'
-                                    ? '#2ecc8a'
+                                    ? 'var(--color-success)'
                                     : request.status === 'rejected'
-                                      ? '#e85c3d'
+                                      ? 'var(--color-danger)'
                                       : request.status === 'superseded'
-                                        ? '#9499b0'
-                                        : '#6c8fff',
+                                        ? 'var(--text-secondary)'
+                                        : 'var(--accent)',
                               }}
                             >
                               {request.status}
                             </div>
                           </div>
-                          <div style={s.requestDetails}>
+                          <div className={styles.requestDetails}>
                             <div>
                               <span
-                                style={s.clickableDate}
+                                className={styles.clickableDate}
                                 onClick={() => {
                                   navigate('/rota')
                                   sessionStorage.setItem(
@@ -727,7 +730,7 @@ function Staff() {
                               >
                                 {request.shift_date}
                               </span>
-                              <span style={{ color: '#5d6180' }}>
+                              <span style={{ color: 'var(--text-muted)' }}>
                                 {' '}
                                 · {request.shift_type} shift
                               </span>
@@ -739,23 +742,8 @@ function Staff() {
                                 : request.reason}
                             </div>
                             {request.notes && (
-                              <div
-                                style={{
-                                  fontSize: '12px',
-                                  color: '#9499b0',
-                                  background: 'rgba(255,255,255,0.03)',
-                                  border: '1px solid rgba(255,255,255,0.07)',
-                                  borderRadius: '6px',
-                                  padding: '6px 10px',
-                                  marginTop: '2px',
-                                }}
-                              >
-                                <span
-                                  style={{
-                                    color: '#5d6180',
-                                    marginRight: '4px',
-                                  }}
-                                >
+                              <div className={styles.requestNote}>
+                                <span className={styles.requestNoteLabel}>
                                   Note:
                                 </span>
                                 {request.notes}
@@ -763,19 +751,25 @@ function Staff() {
                             )}
                             {request.rejection_reason && (
                               <div
-                                style={{ color: '#e85c3d', fontSize: '12px' }}
+                                style={{
+                                  color: 'var(--color-danger)',
+                                  fontSize: '12px',
+                                }}
                               >
                                 Rejection reason: {request.rejection_reason}
                               </div>
                             )}
                             {request.manager_notes && (
                               <div
-                                style={{ color: '#6c8fff', fontSize: '12px' }}
+                                style={{
+                                  color: 'var(--accent)',
+                                  fontSize: '12px',
+                                }}
                               >
                                 Manager notes: {request.manager_notes}
                               </div>
                             )}
-                            <div style={s.requestTime}>
+                            <div className={styles.requestTime}>
                               Requested:{' '}
                               {new Date(request.requested_at).toLocaleString()}
                               {request.reviewed_at &&
@@ -794,19 +788,22 @@ function Staff() {
 
       {/* Staff profile modal */}
       {selectedStaff && (
-        <div style={s.overlay} onClick={() => setSelectedStaff(null)}>
-          <div style={s.modal} onClick={(e) => e.stopPropagation()}>
-            <div style={s.modalHeader}>
-              <div style={s.modalTitle}>Staff Profile</div>
-              <button style={s.closeBtn} onClick={() => setSelectedStaff(null)}>
+        <div className={styles.overlay} onClick={() => setSelectedStaff(null)}>
+          <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.modalHeader}>
+              <div className={styles.modalTitle}>Staff Profile</div>
+              <button
+                className={styles.closeBtn}
+                onClick={() => setSelectedStaff(null)}
+              >
                 <FontAwesomeIcon icon='xmark' />
               </button>
             </div>
-            <div style={s.modalBody}>
-              <div style={s.profileTop}>
+            <div className={styles.modalBody}>
+              <div className={styles.profileTop}>
                 <div
+                  className={styles.profileAvatar}
                   style={{
-                    ...s.profileAvatar,
                     background:
                       selectedStaff.gender === 'F'
                         ? 'rgba(122,79,168,0.2)'
@@ -822,13 +819,13 @@ function Staff() {
                     : '?'}
                 </div>
                 <div>
-                  <div style={s.profileName}>{selectedStaff.name}</div>
-                  <div style={s.profileRole}>
+                  <div className={styles.profileName}>{selectedStaff.name}</div>
+                  <div className={styles.profileRole}>
                     {ROLE_LABELS[selectedStaff.role] || selectedStaff.role}
                   </div>
                 </div>
               </div>
-              <div style={s.divider} />
+              <div className={styles.divider} />
               {[
                 { label: 'Email', val: selectedStaff.email },
                 {
@@ -844,33 +841,30 @@ function Staff() {
                   label: 'Driver',
                   val: selectedStaff.driver ? '✓ Yes' : '✗ No',
                 },
-                {
-                  label: 'Home',
-                  val: selectedStaff.home || 'Relief pool',
-                },
+                { label: 'Home', val: selectedStaff.home || 'Relief pool' },
                 { label: 'Status', val: selectedStaff.status },
                 { label: 'Org', val: selectedStaff.org_id || '—' },
               ].map((row) => (
-                <div key={row.label} style={s.detailRow}>
-                  <span style={s.detailLabel}>{row.label}</span>
-                  <span style={s.detailVal}>{row.val}</span>
+                <div key={row.label} className={styles.detailRow}>
+                  <span className={styles.detailLabel}>{row.label}</span>
+                  <span className={styles.detailVal}>{row.val}</span>
                 </div>
               ))}
             </div>
             {selectedStaff.status === 'pending' && (
-              <div style={s.modalFooter}>
-                <p style={s.modalNote}>
+              <div className={styles.modalFooter}>
+                <p className={styles.modalNote}>
                   Approving will grant this staff member access immediately.
                 </p>
-                <div style={s.modalActions}>
+                <div className={styles.modalActions}>
                   <button
-                    style={s.declineBtn}
+                    className={styles.declineBtn}
                     onClick={() => handleDecline(selectedStaff)}
                   >
                     Decline
                   </button>
                   <button
-                    style={s.approveBtn}
+                    className={styles.approveBtn}
                     onClick={() => handleApprove(selectedStaff)}
                   >
                     Approve
@@ -879,8 +873,10 @@ function Staff() {
               </div>
             )}
             {selectedStaff.status === 'active' && (
-              <div style={s.modalFooter}>
-                <button style={s.moveBtn}>Move to another home →</button>
+              <div className={styles.modalFooter}>
+                <button className={styles.moveBtn}>
+                  Move to another home →
+                </button>
               </div>
             )}
           </div>
@@ -890,7 +886,7 @@ function Staff() {
       {/* Add leave modal */}
       {leaveStaff && (
         <div
-          style={s.overlay}
+          className={styles.overlay}
           onClick={() => {
             setLeaveStaff(null)
             setLeaveSelectedDates([])
@@ -899,13 +895,16 @@ function Staff() {
           }}
         >
           <div
-            style={{ ...s.modal, maxWidth: '460px' }}
+            className={styles.modal}
+            style={{ maxWidth: '460px' }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div style={s.modalHeader}>
-              <div style={s.modalTitle}>Add Leave — {leaveStaff.name}</div>
+            <div className={styles.modalHeader}>
+              <div className={styles.modalTitle}>
+                Add Leave — {leaveStaff.name}
+              </div>
               <button
-                style={s.closeBtn}
+                className={styles.closeBtn}
                 onClick={() => {
                   setLeaveStaff(null)
                   setLeaveSelectedDates([])
@@ -916,16 +915,16 @@ function Staff() {
                 <FontAwesomeIcon icon='xmark' />
               </button>
             </div>
-            <div style={s.modalBody}>
+            <div className={styles.modalBody}>
               <LeaveCalendar
                 staffId={leaveStaff.id}
                 selectedDates={leaveSelectedDates}
                 onSelectionChange={setLeaveSelectedDates}
               />
-              <div style={s.field}>
-                <label style={s.detailLabel}>Leave type</label>
+              <div className={styles.field}>
+                <label className={styles.detailLabel}>Leave type</label>
                 <select
-                  style={{ ...s.input, marginTop: '6px' }}
+                  className={styles.input}
                   value={leaveModalType}
                   onChange={(e) => setLeaveModalType(e.target.value)}
                 >
@@ -935,10 +934,10 @@ function Staff() {
                   <option value='other'>Other</option>
                 </select>
               </div>
-              <div style={s.field}>
-                <label style={s.detailLabel}>Note (optional)</label>
+              <div className={styles.field}>
+                <label className={styles.detailLabel}>Note (optional)</label>
                 <input
-                  style={{ ...s.input, marginTop: '6px' }}
+                  className={styles.input}
                   type='text'
                   placeholder='e.g. holiday, hospital appointment'
                   value={leaveNotes}
@@ -946,9 +945,9 @@ function Staff() {
                 />
               </div>
             </div>
-            <div style={s.modalFooterRow}>
+            <div className={styles.modalFooterRow}>
               <button
-                style={s.secondaryBtn}
+                className={styles.cancelModalBtn}
                 onClick={() => {
                   setLeaveStaff(null)
                   setLeaveSelectedDates([])
@@ -959,8 +958,8 @@ function Staff() {
                 Cancel
               </button>
               <button
+                className={styles.approveModalBtn}
                 style={{
-                  ...s.primaryBtn,
                   opacity: leaveSelectedDates.length > 0 ? 1 : 0.5,
                   cursor:
                     leaveSelectedDates.length > 0 ? 'pointer' : 'not-allowed',
@@ -968,8 +967,6 @@ function Staff() {
                 disabled={leaveSelectedDates.length === 0}
                 onClick={async () => {
                   for (const dateStr of leaveSelectedDates) {
-                    // addTimeOff handles rota removal and cancel supersession
-                    // internally when status is 'approved' — no separate call needed
                     await addTimeOff(
                       {
                         id: generateTimeOffId(),
@@ -1003,18 +1000,21 @@ function Staff() {
 
       {/* Leave detail modal */}
       {selectedLeaveEntry && (
-        <div style={s.overlay} onClick={() => setSelectedLeaveEntry(null)}>
-          <div style={s.modal} onClick={(e) => e.stopPropagation()}>
-            <div style={s.modalHeader}>
-              <div style={s.modalTitle}>Leave Details</div>
+        <div
+          className={styles.overlay}
+          onClick={() => setSelectedLeaveEntry(null)}
+        >
+          <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.modalHeader}>
+              <div className={styles.modalTitle}>Leave Details</div>
               <button
-                style={s.closeBtn}
+                className={styles.closeBtn}
                 onClick={() => setSelectedLeaveEntry(null)}
               >
                 <FontAwesomeIcon icon='xmark' />
               </button>
             </div>
-            <div style={s.modalBody}>
+            <div className={styles.modalBody}>
               {[
                 { label: 'Staff', val: selectedLeaveEntry.staffName },
                 {
@@ -1051,15 +1051,18 @@ function Staff() {
                     ]
                   : []),
               ].map((row) => (
-                <div key={row.label} style={s.detailRow}>
-                  <span style={s.detailLabel}>{row.label}</span>
-                  <span style={s.detailVal}>{row.val}</span>
+                <div key={row.label} className={styles.detailRow}>
+                  <span className={styles.detailLabel}>{row.label}</span>
+                  <span className={styles.detailVal}>{row.val}</span>
                 </div>
               ))}
               {selectedLeaveEntry.status === 'pending' && (
-                <div style={{ ...s.modalActions, marginTop: '20px' }}>
+                <div
+                  className={styles.modalActions}
+                  style={{ marginTop: '20px' }}
+                >
                   <button
-                    style={s.declineBtn}
+                    className={styles.declineBtn}
                     onClick={async () => {
                       await removeTimeOff(selectedLeaveEntry.id)
                       refreshTimeOff()
@@ -1069,10 +1072,9 @@ function Staff() {
                     Decline
                   </button>
                   <button
-                    style={s.approveBtn}
+                    className={styles.approveBtn}
                     onClick={async () => {
                       await approveTimeOff(selectedLeaveEntry.id, user?.name)
-                      // fromLeave: true supersedes any active cancel record
                       await removeStaffFromShift(
                         selectedLeaveEntry.staff_id,
                         selectedLeaveEntry.date,
@@ -1096,69 +1098,76 @@ function Staff() {
 
       {/* Approve cancel request modal */}
       {selectedRequest && !showRejectModal && (
-        <div style={s.overlay} onClick={() => setSelectedRequest(null)}>
-          <div style={s.modal} onClick={(e) => e.stopPropagation()}>
-            <div style={s.modalHeader}>
-              <div style={s.modalTitle}>Approve Cancellation</div>
+        <div
+          className={styles.overlay}
+          onClick={() => setSelectedRequest(null)}
+        >
+          <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.modalHeader}>
+              <div className={styles.modalTitle}>Approve Cancellation</div>
               <button
-                style={s.closeBtn}
+                className={styles.closeBtn}
                 onClick={() => setSelectedRequest(null)}
               >
                 <FontAwesomeIcon icon='xmark' />
               </button>
             </div>
-            <div style={s.modalBody}>
-              <div style={s.detailRow}>
-                <span style={s.detailLabel}>Staff</span>
-                <span style={s.detailVal}>{selectedRequest.staff_name}</span>
+            <div className={styles.modalBody}>
+              <div className={styles.detailRow}>
+                <span className={styles.detailLabel}>Staff</span>
+                <span className={styles.detailVal}>
+                  {selectedRequest.staff_name}
+                </span>
               </div>
-              <div style={s.detailRow}>
-                <span style={s.detailLabel}>Shift</span>
-                <span style={s.detailVal}>
+              <div className={styles.detailRow}>
+                <span className={styles.detailLabel}>Shift</span>
+                <span className={styles.detailVal}>
                   {selectedRequest.shift_date} · {selectedRequest.shift_type}
                 </span>
               </div>
-              <div style={s.detailRow}>
-                <span style={s.detailLabel}>Reason</span>
-                <span style={s.detailVal}>
+              <div className={styles.detailRow}>
+                <span className={styles.detailLabel}>Reason</span>
+                <span className={styles.detailVal}>
                   {selectedRequest.reason === 'Other'
                     ? selectedRequest.custom_reason
                     : selectedRequest.reason}
                 </span>
               </div>
               {selectedRequest.notes && (
-                <div style={s.detailRow}>
-                  <span style={s.detailLabel}>Staff note</span>
-                  <span style={{ ...s.detailVal, color: '#9499b0' }}>
+                <div className={styles.detailRow}>
+                  <span className={styles.detailLabel}>Staff note</span>
+                  <span className={styles.detailValMuted}>
                     {selectedRequest.notes}
                   </span>
                 </div>
               )}
-              <div style={s.field}>
-                <label style={s.detailLabel}>Notes to staff (optional)</label>
+              <div className={styles.field}>
+                <label className={styles.detailLabel}>
+                  Notes to staff (optional)
+                </label>
                 <textarea
-                  style={s.textarea}
+                  className={styles.textarea}
                   placeholder='Add any notes for the staff member...'
                   value={managerNotes}
                   onChange={(e) => setManagerNotes(e.target.value)}
                   rows='3'
                 />
               </div>
-              <div style={s.warningNote}>
+              <div className={styles.warningNote}>
                 <FontAwesomeIcon icon='triangle-exclamation' /> Approving will
                 remove this shift from the rota and create a gap.
               </div>
             </div>
-            <div style={s.modalFooter}>
-              <div style={s.modalButtonGroup}>
+            <div className={styles.modalFooter}>
+              <div className={styles.modalButtonGroup}>
                 <button
-                  style={s.cancelModalBtn}
+                  className={styles.cancelModalBtn}
                   onClick={() => setSelectedRequest(null)}
                 >
                   Cancel
                 </button>
                 <button
-                  style={s.approveModalBtn}
+                  className={styles.approveModalBtn}
                   onClick={() => handleApproveRequest(selectedRequest)}
                 >
                   <FontAwesomeIcon icon='check' /> Approve & Remove Shift
@@ -1172,7 +1181,7 @@ function Staff() {
       {/* Reject cancel request modal */}
       {showRejectModal && selectedRequest && (
         <div
-          style={s.overlay}
+          className={styles.overlay}
           onClick={() => {
             setShowRejectModal(false)
             setSelectedRequest(null)
@@ -1180,11 +1189,11 @@ function Staff() {
             setManagerNotes('')
           }}
         >
-          <div style={s.modal} onClick={(e) => e.stopPropagation()}>
-            <div style={s.modalHeader}>
-              <div style={s.modalTitle}>Reject Cancellation</div>
+          <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.modalHeader}>
+              <div className={styles.modalTitle}>Reject Cancellation</div>
               <button
-                style={s.closeBtn}
+                className={styles.closeBtn}
                 onClick={() => {
                   setShowRejectModal(false)
                   setSelectedRequest(null)
@@ -1195,46 +1204,52 @@ function Staff() {
                 <FontAwesomeIcon icon='xmark' />
               </button>
             </div>
-            <div style={s.modalBody}>
-              <div style={s.detailRow}>
-                <span style={s.detailLabel}>Staff</span>
-                <span style={s.detailVal}>{selectedRequest.staff_name}</span>
+            <div className={styles.modalBody}>
+              <div className={styles.detailRow}>
+                <span className={styles.detailLabel}>Staff</span>
+                <span className={styles.detailVal}>
+                  {selectedRequest.staff_name}
+                </span>
               </div>
-              <div style={s.detailRow}>
-                <span style={s.detailLabel}>Shift</span>
-                <span style={s.detailVal}>
+              <div className={styles.detailRow}>
+                <span className={styles.detailLabel}>Shift</span>
+                <span className={styles.detailVal}>
                   {selectedRequest.shift_date} · {selectedRequest.shift_type}
                 </span>
               </div>
-              <div style={s.field}>
-                <label style={s.detailLabel}>Rejection reason (optional)</label>
+              <div className={styles.field}>
+                <label className={styles.detailLabel}>
+                  Rejection reason (optional)
+                </label>
                 <textarea
-                  style={s.textarea}
+                  className={styles.textarea}
                   placeholder='Why is this cancellation being rejected?'
                   value={rejectionReason}
                   onChange={(e) => setRejectionReason(e.target.value)}
                   rows='2'
                 />
               </div>
-              <div style={s.field}>
-                <label style={s.detailLabel}>Notes to staff (optional)</label>
+              <div className={styles.field}>
+                <label className={styles.detailLabel}>
+                  Notes to staff (optional)
+                </label>
                 <textarea
-                  style={s.textarea}
+                  className={styles.textarea}
                   placeholder='Add any additional notes...'
                   value={managerNotes}
                   onChange={(e) => setManagerNotes(e.target.value)}
                   rows='2'
                 />
               </div>
-              <div style={s.warningNote}>
+              <div className={styles.warningNote}>
                 <FontAwesomeIcon icon='triangle-exclamation' /> Rejecting means
                 the shift remains in the rota.
               </div>
             </div>
-            <div style={s.modalFooter}>
-              <div style={s.modalButtonGroup}>
+            <div className={styles.modalFooter}>
+              <div className={styles.modalButtonGroup}>
                 <button
-                  style={s.cancelModalBtn}
+                  className={styles.cancelModalBtn}
                   onClick={() => {
                     setShowRejectModal(false)
                     setSelectedRequest(null)
@@ -1245,7 +1260,7 @@ function Staff() {
                   Cancel
                 </button>
                 <button
-                  style={s.rejectModalBtn}
+                  className={styles.rejectModalBtn}
                   onClick={() => handleRejectRequest(selectedRequest)}
                 >
                   <FontAwesomeIcon icon='xmark' /> Reject Request
@@ -1266,551 +1281,6 @@ function Staff() {
       )}
     </div>
   )
-}
-
-const s = {
-  page: {
-    minHeight: '100vh',
-    background: '#0f1117',
-    color: '#e8eaf0',
-    fontFamily: 'DM Sans, sans-serif',
-  },
-  body: { padding: '24px', maxWidth: '900px', margin: '0 auto' },
-  header: {
-    display: 'flex',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    marginBottom: '20px',
-  },
-  title: {
-    fontFamily: 'Syne, sans-serif',
-    fontSize: '22px',
-    fontWeight: 600,
-    margin: 0,
-  },
-  subtitle: { fontSize: '13px', color: '#9499b0', marginTop: '4px' },
-  headerActions: { display: 'flex', alignItems: 'center', gap: '10px' },
-  inviteBtn: {
-    background: '#6c8fff',
-    color: '#fff',
-    border: 'none',
-    borderRadius: '8px',
-    padding: '9px 16px',
-    fontSize: '13px',
-    fontWeight: 500,
-    cursor: 'pointer',
-    fontFamily: 'DM Sans, sans-serif',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '6px',
-  },
-  homeFilterRow: {
-    display: 'flex',
-    gap: '8px',
-    flexWrap: 'wrap',
-    marginBottom: '16px',
-  },
-  homeFilterBtn: {
-    background: 'transparent',
-    border: '1px solid rgba(255,255,255,0.1)',
-    borderRadius: '20px',
-    color: '#9499b0',
-    padding: '5px 14px',
-    fontSize: '12px',
-    cursor: 'pointer',
-    fontFamily: 'DM Sans, sans-serif',
-  },
-  homeFilterActive: {
-    background: 'rgba(108,143,255,0.12)',
-    border: '1px solid rgba(108,143,255,0.3)',
-    color: '#6c8fff',
-  },
-  errorBanner: {
-    background: 'rgba(232,92,61,0.08)',
-    border: '1px solid rgba(232,92,61,0.2)',
-    borderRadius: '8px',
-    padding: '12px',
-    fontSize: '13px',
-    color: '#e85c3d',
-    marginBottom: '16px',
-  },
-  tabs: {
-    display: 'flex',
-    gap: '0',
-    borderBottom: '1px solid rgba(255,255,255,0.07)',
-    marginBottom: '16px',
-    flexWrap: 'wrap',
-  },
-  tabBtn: {
-    padding: '10px 14px',
-    fontSize: '13px',
-    background: 'transparent',
-    border: 'none',
-    cursor: 'pointer',
-    fontFamily: 'DM Sans, sans-serif',
-    marginBottom: '-1px',
-  },
-  tabBadge: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: '6px',
-    background: '#e85c3d',
-    color: '#fff',
-    fontSize: '9px',
-    fontWeight: 600,
-    padding: '2px 5px',
-    borderRadius: '10px',
-    minWidth: '16px',
-  },
-  list: { display: 'flex', flexDirection: 'column', gap: '8px' },
-  empty: {
-    textAlign: 'center',
-    color: '#5d6180',
-    padding: '40px',
-    fontSize: '13px',
-  },
-  staffRow: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '12px',
-    borderRadius: '12px',
-    padding: '14px 16px',
-    cursor: 'pointer',
-  },
-  avatar: {
-    width: '38px',
-    height: '38px',
-    borderRadius: '50%',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: '13px',
-    fontWeight: 600,
-    flexShrink: 0,
-    fontFamily: 'Syne, sans-serif',
-  },
-  staffInfo: { flex: 1, minWidth: 0 },
-  staffName: { fontSize: '14px', fontWeight: 500, color: '#e8eaf0' },
-  staffMeta: { fontSize: '12px', color: '#9499b0', marginTop: '2px' },
-  staffRole: {
-    fontSize: '11px',
-    color: '#9499b0',
-    fontFamily: 'DM Mono, monospace',
-  },
-  staffTags: { display: 'flex', gap: '6px', flexShrink: 0 },
-  tag: {
-    fontSize: '11px',
-    padding: '3px 8px',
-    borderRadius: '5px',
-    background: 'rgba(255,255,255,0.06)',
-    color: '#9499b0',
-    fontWeight: 500,
-  },
-  pendingActions: { display: 'flex', gap: '6px', flexShrink: 0 },
-  approveBtn: {
-    background: 'rgba(46,204,138,0.12)',
-    color: '#2ecc8a',
-    border: '1px solid rgba(46,204,138,0.25)',
-    borderRadius: '7px',
-    padding: '6px 12px',
-    fontSize: '12px',
-    fontWeight: 500,
-    cursor: 'pointer',
-    fontFamily: 'DM Sans, sans-serif',
-  },
-  declineBtn: {
-    background: 'rgba(232,92,61,0.1)',
-    color: '#e85c3d',
-    border: '1px solid rgba(232,92,61,0.25)',
-    borderRadius: '7px',
-    padding: '6px 12px',
-    fontSize: '12px',
-    fontWeight: 500,
-    cursor: 'pointer',
-    fontFamily: 'DM Sans, sans-serif',
-  },
-  chevron: { color: '#5d6180', fontSize: '18px', flexShrink: 0 },
-  overlay: {
-    position: 'fixed',
-    inset: 0,
-    background: 'rgba(0,0,0,0.75)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 100,
-    padding: '20px',
-    backdropFilter: 'blur(2px)',
-  },
-  modal: {
-    background: '#161820',
-    border: '1px solid rgba(255,255,255,0.1)',
-    borderRadius: '16px',
-    width: '100%',
-    maxWidth: '400px',
-    maxHeight: '90vh',
-    display: 'flex',
-    flexDirection: 'column',
-    overflow: 'hidden',
-    boxShadow: '0 24px 64px rgba(0,0,0,0.5)',
-  },
-  modalHeader: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: '20px 24px',
-    borderBottom: '1px solid rgba(255,255,255,0.07)',
-  },
-  modalTitle: {
-    fontFamily: 'Syne, sans-serif',
-    fontSize: '16px',
-    fontWeight: 600,
-  },
-  closeBtn: {
-    background: 'transparent',
-    border: '1px solid rgba(255,255,255,0.1)',
-    borderRadius: '6px',
-    color: '#9499b0',
-    width: '28px',
-    height: '28px',
-    cursor: 'pointer',
-    fontSize: '14px',
-  },
-  modalBody: {
-    padding: '20px 24px',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '14px',
-    overflowY: 'auto',
-    flex: 1,
-  },
-  profileTop: { display: 'flex', alignItems: 'center', gap: '14px' },
-  profileAvatar: {
-    width: '48px',
-    height: '48px',
-    borderRadius: '50%',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: '16px',
-    fontWeight: 600,
-    fontFamily: 'Syne, sans-serif',
-    flexShrink: 0,
-  },
-  profileName: {
-    fontSize: '16px',
-    fontWeight: 600,
-    color: '#e8eaf0',
-    fontFamily: 'Syne, sans-serif',
-  },
-  profileRole: { fontSize: '13px', color: '#9499b0', marginTop: '2px' },
-  divider: { height: '1px', background: 'rgba(255,255,255,0.07)' },
-  detailRow: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  detailLabel: { fontSize: '13px', color: '#9499b0' },
-  detailVal: { fontSize: '13px', fontWeight: 500, color: '#e8eaf0' },
-  modalFooter: {
-    padding: '16px 24px',
-    borderTop: '1px solid rgba(255,255,255,0.07)',
-    flexShrink: 0,
-  },
-  modalNote: {
-    fontSize: '12.5px',
-    color: '#9499b0',
-    marginBottom: '12px',
-    lineHeight: 1.6,
-  },
-  modalActions: { display: 'flex', gap: '8px' },
-  modalFooterRow: {
-    padding: '16px 24px',
-    borderTop: '1px solid rgba(255,255,255,0.07)',
-    display: 'flex',
-    gap: '8px',
-    justifyContent: 'flex-end',
-  },
-  modalButtonGroup: { display: 'flex', gap: '10px', width: '100%' },
-  moveBtn: {
-    width: '100%',
-    background: 'transparent',
-    color: '#6c8fff',
-    border: '1px solid rgba(108,143,255,0.25)',
-    borderRadius: '8px',
-    padding: '10px',
-    fontSize: '13px',
-    cursor: 'pointer',
-    fontFamily: 'DM Sans, sans-serif',
-  },
-  primaryBtn: {
-    background: '#6c8fff',
-    color: '#fff',
-    border: 'none',
-    borderRadius: '8px',
-    padding: '9px 16px',
-    fontSize: '13px',
-    fontWeight: 500,
-    cursor: 'pointer',
-    fontFamily: 'DM Sans, sans-serif',
-  },
-  secondaryBtn: {
-    background: 'transparent',
-    color: '#9499b0',
-    border: '1px solid rgba(255,255,255,0.1)',
-    borderRadius: '8px',
-    padding: '8px 14px',
-    fontSize: '13px',
-    cursor: 'pointer',
-    fontFamily: 'DM Sans, sans-serif',
-  },
-  cancelModalBtn: {
-    flex: 1,
-    background: 'transparent',
-    border: '1px solid rgba(255,255,255,0.15)',
-    borderRadius: '8px',
-    color: '#9499b0',
-    padding: '10px 12px',
-    fontSize: '12px',
-    fontWeight: 500,
-    cursor: 'pointer',
-    fontFamily: 'DM Sans, sans-serif',
-  },
-  approveModalBtn: {
-    flex: 1,
-    background: '#2ecc8a',
-    border: 'none',
-    borderRadius: '8px',
-    color: '#fff',
-    padding: '10px 12px',
-    fontSize: '12px',
-    fontWeight: 500,
-    cursor: 'pointer',
-    fontFamily: 'DM Sans, sans-serif',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: '6px',
-  },
-  rejectModalBtn: {
-    flex: 1,
-    background: 'rgba(232,92,61,0.15)',
-    border: '1px solid rgba(232,92,61,0.4)',
-    borderRadius: '8px',
-    color: '#e85c3d',
-    padding: '10px 12px',
-    fontSize: '12px',
-    fontWeight: 500,
-    cursor: 'pointer',
-    fontFamily: 'DM Sans, sans-serif',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: '6px',
-  },
-  leaveWrap: { display: 'flex', flexDirection: 'column', gap: '10px' },
-  leaveNote: {
-    fontSize: '12.5px',
-    color: '#9499b0',
-    background: 'rgba(108,143,255,0.06)',
-    border: '1px solid rgba(108,143,255,0.15)',
-    borderRadius: '8px',
-    padding: '10px 14px',
-    marginBottom: '8px',
-  },
-  leaveRow: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '16px',
-    background: '#161820',
-    border: '1px solid rgba(255,255,255,0.07)',
-    borderRadius: '12px',
-    padding: '14px 16px',
-    flexWrap: 'wrap',
-  },
-  leaveStaffInfo: { minWidth: '120px' },
-  leaveDates: { flex: 1, display: 'flex', flexWrap: 'wrap', gap: '6px' },
-  noLeave: { fontSize: '12px', color: '#5d6180' },
-  leaveTag: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: '6px',
-    borderRadius: '6px',
-    padding: '3px 8px',
-    fontSize: '12px',
-  },
-  leaveTagLabel: { fontWeight: 500, fontSize: '11px' },
-  leaveTagDate: {
-    fontSize: '11px',
-    fontFamily: 'DM Mono, monospace',
-    opacity: 0.8,
-    marginLeft: '4px',
-  },
-  removeLeave: {
-    background: 'transparent',
-    border: 'none',
-    color: '#e85c3d',
-    cursor: 'pointer',
-    fontSize: '11px',
-    padding: '0',
-    lineHeight: 1,
-  },
-  approveLeaveBtn: {
-    background: 'none',
-    border: 'none',
-    cursor: 'pointer',
-    color: '#2ecc8a',
-    padding: '0 2px',
-    fontSize: '11px',
-    marginLeft: '4px',
-  },
-  addLeaveBtn: {
-    background: 'transparent',
-    border: '1px solid rgba(255,255,255,0.1)',
-    borderRadius: '7px',
-    color: '#9499b0',
-    padding: '6px 12px',
-    fontSize: '12px',
-    cursor: 'pointer',
-    fontFamily: 'DM Sans, sans-serif',
-    whiteSpace: 'nowrap',
-  },
-  input: {
-    background: '#1d1f2b',
-    border: '1px solid rgba(255,255,255,0.08)',
-    borderRadius: '10px',
-    padding: '11px 14px',
-    fontSize: '14px',
-    color: '#e8eaf0',
-    outline: 'none',
-    fontFamily: 'DM Sans, sans-serif',
-    width: '100%',
-  },
-  field: { display: 'flex', flexDirection: 'column' },
-  textarea: {
-    background: '#1d1f2b',
-    border: '1px solid rgba(255,255,255,0.08)',
-    borderRadius: '8px',
-    padding: '10px 12px',
-    fontSize: '13px',
-    color: '#e8eaf0',
-    outline: 'none',
-    fontFamily: 'DM Sans, sans-serif',
-    width: '100%',
-    resize: 'vertical',
-    minHeight: '60px',
-    maxHeight: '100px',
-    boxSizing: 'border-box',
-  },
-  requestsWrap: { display: 'flex', flexDirection: 'column', gap: '16px' },
-  sectionLabel: {
-    fontSize: '11px',
-    textTransform: 'uppercase',
-    letterSpacing: '0.8px',
-    color: '#5d6180',
-    fontWeight: 500,
-    marginBottom: '8px',
-  },
-  requestCard: {
-    background: '#161820',
-    border: '1px solid rgba(196,136,58,0.2)',
-    borderRadius: '12px',
-    padding: '16px',
-  },
-  requestCardHistory: {
-    background: '#161820',
-    border: '1px solid rgba(255,255,255,0.07)',
-    borderRadius: '12px',
-    padding: '16px',
-  },
-  requestHeader: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: '10px',
-  },
-  requestHeaderRight: { display: 'flex', alignItems: 'center', gap: '10px' },
-  requestStaff: { fontSize: '14px', fontWeight: 600, color: '#e8eaf0' },
-  requestStatus: {
-    fontSize: '11px',
-    fontWeight: 500,
-    padding: '3px 10px',
-    borderRadius: '5px',
-    background: 'rgba(196,136,58,0.12)',
-    color: '#c4883a',
-    textTransform: 'uppercase',
-  },
-  requestDetails: {
-    fontSize: '13px',
-    color: '#9499b0',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '4px',
-    marginBottom: '12px',
-  },
-  requestTime: { fontSize: '11px', color: '#5d6180', marginTop: '4px' },
-  requestActions: { display: 'flex', gap: '8px' },
-  approveRequestBtn: {
-    flex: 1,
-    background: 'rgba(46,204,138,0.12)',
-    border: '1px solid rgba(46,204,138,0.25)',
-    borderRadius: '8px',
-    color: '#2ecc8a',
-    padding: '8px',
-    fontSize: '12px',
-    fontWeight: 500,
-    cursor: 'pointer',
-    fontFamily: 'DM Sans, sans-serif',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: '6px',
-  },
-  rejectRequestBtn: {
-    flex: 1,
-    background: 'rgba(232,92,61,0.1)',
-    border: '1px solid rgba(232,92,61,0.25)',
-    borderRadius: '8px',
-    color: '#e85c3d',
-    padding: '8px',
-    fontSize: '12px',
-    fontWeight: 500,
-    cursor: 'pointer',
-    fontFamily: 'DM Sans, sans-serif',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: '6px',
-  },
-  warningNote: {
-    marginTop: '8px',
-    padding: '8px 10px',
-    background: 'rgba(232,92,61,0.08)',
-    border: '1px solid rgba(232,92,61,0.2)',
-    borderRadius: '8px',
-    fontSize: '11px',
-    color: '#e85c3d',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '6px',
-  },
-  clickableDate: {
-    color: '#6c8fff',
-    cursor: 'pointer',
-    textDecoration: 'underline',
-    textDecorationStyle: 'dotted',
-    textUnderlineOffset: '2px',
-  },
-  pingBadge: {
-    fontSize: '10px',
-    padding: '3px 8px',
-    borderRadius: '5px',
-    background: 'rgba(39,45,65,0.12)',
-    color: '#6c8fff',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '5px',
-  },
 }
 
 export default Staff

@@ -1,0 +1,198 @@
+.nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 24px;
+  height: 56px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-raised);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.left {
+  display: flex;
+  align-items: center;
+  gap: 32px;
+}
+
+.right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.logo {
+  font-family: 'Syne', sans-serif;
+  font-weight: 700;
+  font-size: 18px;
+  color: var(--text-primary);
+}
+
+.logoAccent {
+  color: var(--accent);
+}
+
+.links {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.link {
+  position: relative;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 18px 10px;
+  font-size: 13px;
+  font-family: 'DM Sans', sans-serif;
+  color: var(--text-secondary);
+  cursor: pointer;
+  margin-bottom: -1px;
+  transition:
+    color 0.15s,
+    border-color 0.15s;
+}
+
+.link:hover {
+  color: var(--text-primary);
+}
+
+.linkActive {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.badge {
+  position: absolute;
+  top: 8px;
+  right: -8px;
+  background: var(--color-danger);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 600;
+  padding: 2px 5px;
+  border-radius: 10px;
+  min-width: 16px;
+  text-align: center;
+  line-height: 1;
+}
+
+.role {
+  font-size: 12px;
+  color: var(--accent);
+  background: var(--accent-bg);
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-family: 'DM Mono', monospace;
+}
+
+.name {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+/* ── Theme toggle ───────────────────────────────────────────── */
+.themeToggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+
+.themeLabel {
+  font-size: 12px;
+  font-family: 'DM Sans', sans-serif;
+  color: var(--text-muted);
+  font-weight: 400;
+  transition:
+    color 0.2s,
+    font-weight 0.2s;
+  user-select: none;
+}
+
+.themeLabelActive {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.themeTrack {
+  position: relative;
+  width: 48px;
+  height: 26px;
+  border-radius: var(--radius-full);
+  background: var(--accent);
+  transition: background 0.25s ease;
+  flex-shrink: 0;
+}
+
+.themeThumb {
+  position: absolute;
+  top: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* Light mode = thumb on left */
+.themeThumbLight {
+  transform: translateX(3px);
+}
+
+/* Dark mode = thumb on right */
+.themeThumbDark {
+  transform: translateX(25px);
+}
+
+/* Small decorative dot on the track (opposite side of thumb) */
+.themeTrack::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.5);
+  transition:
+    left 0.25s,
+    right 0.25s;
+}
+
+/* Dot sits on the right when light (thumb is left) */
+.themeTrackLight::after {
+  right: 6px;
+}
+
+/* Dot sits on the left when dark (thumb is right) */
+.themeTrackDark::after {
+  left: 6px;
+}
+
+/* ── Logout button ──────────────────────────────────────────── */
+.logoutBtn {
+  background: transparent;
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  color: var(--text-secondary);
+  padding: 6px 12px;
+  font-size: 13px;
+  font-family: 'DM Sans', sans-serif;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: background 0.15s;
+}
+
+.logoutBtn:hover {
+  background: var(--bg-hover);
+}
