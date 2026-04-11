@@ -67,14 +67,14 @@ const HEALTH_COLOURS = {
   gap: '#e85c3d',
   breach: '#c4883a',
   ok: '#2ecc8a',
-  unplanned: '#2e3045',
+  unplanned: 'var(--bg-elevated)',
 }
 
 const HEALTH_TEXT = {
   gap: '#e85c3d',
   breach: '#c4883a',
   ok: '#2ecc8a',
-  unplanned: '#3d405a',
+  unplanned: 'var(--text-muted)',
 }
 
 function Rota() {
