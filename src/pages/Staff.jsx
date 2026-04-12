@@ -79,6 +79,7 @@ function Staff() {
     cancelRequests,
     refreshCancels,
     refreshMonthRota,
+    homeName,
   } = useRota()
   const navigate = useNavigate()
 
@@ -132,6 +133,7 @@ function Staff() {
   }, [user])
 
   // ── Fetch staff ──
+
   useEffect(() => {
     async function fetchStaff() {
       setStaffLoading(true)
@@ -140,10 +142,17 @@ function Staff() {
         let query = supabase
           .from('profiles')
           .select('*')
+          .eq('org_id', user?.org_id)
+          .neq('status', 'declined')
           .order('name', { ascending: true })
-        if (!isOLorAdmin) {
-          query = query.or(`home.eq.${user?.home},role.eq.relief`)
+
+        // OL/admin with no home set — fetch all org staff
+        // OL stepped into a home (user.home set) — scope to that home + relief
+        // Manager/deputy/senior — scope to their home + relief
+        if (user?.home) {
+          query = query.or(`home.eq.${user.home},role.eq.relief`)
         }
+
         const { data, error } = await query
         if (error) throw error
         setAllStaff(data || [])
@@ -155,7 +164,7 @@ function Staff() {
       }
     }
     fetchStaff()
-  }, [staffRefresh, user?.home, isOLorAdmin])
+  }, [staffRefresh, user?.home, user?.org_id, isOLorAdmin])
 
   // ── Approve staff ──
   const handleApprove = async (staffMember) => {
@@ -211,7 +220,7 @@ function Staff() {
           ? reliefStaff
           : visibleStaff
 
-  const uniqueHomes = [...new Set(allStaff.map((s) => s.home).filter(Boolean))]
+  const uniqueHomes = homes
 
   // ── Derived context data ──
   const pendingCancels = getPendingRequests(cancelRequests)
@@ -265,10 +274,11 @@ function Staff() {
         <div className={styles.header}>
           <div>
             <h1 className={styles.title}>Staff</h1>
+
             <p className={styles.subtitle}>
-              {isOLorAdmin
+              {isOLorAdmin && !user?.home
                 ? `All homes · ${allStaff.length} staff members`
-                : `${user?.home ? user.home.charAt(0).toUpperCase() + user.home.slice(1) : ''} · ${visibleStaff.filter((s) => s.status !== 'declined' && !EXCLUDED_ROLES.includes(s.role)).length} staff members`}
+                : `${homeName || '—'} · ${visibleStaff.filter((s) => s.status !== 'declined' && !EXCLUDED_ROLES.includes(s.role)).length} staff members`}
             </p>
           </div>
           <div className={styles.headerActions}>
@@ -290,13 +300,13 @@ function Staff() {
             >
               All homes
             </button>
-            {uniqueHomes.map((h) => (
+            {uniqueHomes.map((home) => (
               <button
-                key={h}
-                className={`${styles.homeFilterBtn}${homeFilter === h ? ` ${styles.homeFilterBtnActive}` : ''}`}
-                onClick={() => setHomeFilter(h)}
+                key={home.id}
+                className={`${styles.homeFilterBtn}${homeFilter === home.id ? ` ${styles.homeFilterBtnActive}` : ''}`}
+                onClick={() => setHomeFilter(home.id)}
               >
-                {h.charAt(0).toUpperCase() + h.slice(1)}
+                {home.name}
               </button>
             ))}
           </div>

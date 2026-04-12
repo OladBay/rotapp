@@ -29,6 +29,7 @@ function BatchGenerateModal({
   monthRota,
   staffMap,
   timeOff,
+  homeName,
 }) {
   const [fromIdx, setFromIdx] = useState(0)
   const [toIdx, setToIdx] = useState(3)
@@ -104,7 +105,7 @@ function BatchGenerateModal({
         <div className={styles.header}>
           <div>
             <div className={styles.title}>Batch generate rota</div>
-            <div className={styles.subtitle}>Meadowview House</div>
+            <div className={styles.subtitle}>{homeName || '—'}</div>
           </div>
           <button className={styles.closeBtn} onClick={onClose}>
             <FontAwesomeIcon icon='xmark' />

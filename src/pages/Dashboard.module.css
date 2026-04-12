@@ -153,6 +153,68 @@
 }
 
 /* ── Buttons ────────────────────────────────────────────────── */
+
+.headerActionGroup {
+  display: flex;
+  align-items: stretch;
+  background: var(--bg-raised);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  padding: 4px;
+  gap: 0;
+  box-shadow: var(--shadow-sm);
+}
+
+.groupSecondaryBtn {
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  padding: 8px 16px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  transition:
+    background 0.15s,
+    color 0.15s;
+}
+
+.groupSecondaryBtn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.groupDivider {
+  width: 1px;
+  background: var(--border-default);
+  margin: 4px 0;
+  flex-shrink: 0;
+}
+
+.groupPrimaryBtn {
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-weight: 500;
+  padding: 8px 16px;
+  background: var(--accent);
+  color: var(--text-inverse);
+  border: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  transition: opacity 0.15s;
+}
+
+.groupPrimaryBtn:hover {
+  opacity: 0.88;
+}
+
 .primaryBtn {
   background: var(--accent);
   color: var(--text-inverse);

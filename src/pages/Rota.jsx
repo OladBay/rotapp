@@ -109,7 +109,19 @@ function Rota() {
   const [hoveredMonth, setHoveredMonth] = useState(null)
   const [overwriteTarget, setOverwriteTarget] = useState(null)
 
-  const { staff, staffMap, monthRota, setMonthRota, timeOff } = useRota()
+  const {
+    staff,
+    staffMap,
+    staffLoading,
+    monthRota,
+    setMonthRota,
+    resetRota,
+    rotaLoading,
+    refreshMonthRota,
+    timeOff,
+    cancelRequests,
+    homeName,
+  } = useRota()
 
   const [weekRota, setWeekRota] = useLocalStorage('rotapp_week_rota', {
     early: Array(7).fill([]),
@@ -242,8 +254,9 @@ function Rota() {
             <h1 className={styles.title}>
               {viewMode === 'week' ? 'Weekly Rota' : 'Rota Planner'}
             </h1>
+
             <p className={styles.subtitle}>
-              Meadowview House ·{' '}
+              {homeName || '—'} ·{' '}
               {viewMode === 'week'
                 ? `${startLabel} – ${endLabel}`
                 : `${currentYear}`}
@@ -1052,6 +1065,7 @@ function Rota() {
           monthRota={monthRota}
           staffMap={staffMap}
           timeOff={timeOff}
+          homeName={homeName}
         />
       )}
 

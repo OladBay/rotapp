@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useParams, useNavigate, Link } from 'react-router-dom'
+import { useParams, Link } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { supabase } from '../lib/supabase'
 import {
@@ -11,7 +11,6 @@ import styles from './Invite.module.css'
 
 function Invite() {
   const { token } = useParams()
-  const navigate = useNavigate()
 
   const [tokenState, setTokenState] = useState('loading')
   const [tokenData, setTokenData] = useState(null)
@@ -210,12 +209,10 @@ function Invite() {
             <p className={styles.hint}>
               You'll be able to log in once your account has been approved.
             </p>
-            <button
-              className={styles.primaryBtn}
-              onClick={() => navigate('/login')}
-            >
+
+            <Link to='/login' className={styles.linkBtn}>
               Back to login
-            </button>
+            </Link>
           </div>
         </div>
       </div>

@@ -23,30 +23,52 @@ export function RotaProvider({ children }) {
   const [timeOffLoading, setTimeOffLoading] = useState(true)
   const [cancelRequests, setCancelRequestsState] = useState([])
   const [cancelsLoading, setCancelsLoading] = useState(true)
+  const [homes, setHomes] = useState([])
+  const [homesLoading, setHomesLoading] = useState(true)
 
   // ── Parallel fetch all ─────────────────────────────────────────────────
   const fetchAll = useCallback(async () => {
     if (!user?.org_id || !user?.home) return
 
-    const [staffRes, rotaRes, timeOffRes, cancelsRes] = await Promise.all([
-      supabase
-        .from('profiles')
-        .select('*')
-        .eq('org_id', user.org_id)
-        .neq('status', 'declined')
-        .order('name', { ascending: true }),
-      supabase
-        .from('rotapp_month_rota')
-        .select('week_key, rota_data')
-        .eq('org_id', user.org_id)
-        .eq('home_id', user.home),
-      supabase.from('rotapp_time_off').select('*').eq('org_id', user.org_id),
-      supabase
-        .from('rotapp_cancel_requests')
-        .select('*')
-        .eq('org_id', user.org_id)
-        .order('requested_at', { ascending: false }),
-    ])
+    const [staffRes, rotaRes, timeOffRes, cancelsRes, homesRes] =
+      await Promise.all([
+        supabase
+          .from('profiles')
+          .select('*')
+          .eq('org_id', user.org_id)
+          .neq('status', 'declined')
+          .order('name', { ascending: true }),
+        supabase
+          .from('rotapp_month_rota')
+          .select('week_key, rota_data')
+          .eq('org_id', user.org_id)
+          .eq('home_id', user.home),
+
+        user.home
+          ? supabase
+              .from('rotapp_time_off')
+              .select('*')
+              .eq('org_id', user.org_id)
+              .eq('home_id', user.home)
+          : supabase
+              .from('rotapp_time_off')
+              .select('*')
+              .eq('org_id', user.org_id),
+        user.home
+          ? supabase
+              .from('rotapp_cancel_requests')
+              .select('*')
+              .eq('org_id', user.org_id)
+              .eq('home_id', user.home)
+              .order('requested_at', { ascending: false })
+          : supabase
+              .from('rotapp_cancel_requests')
+              .select('*')
+              .eq('org_id', user.org_id)
+              .order('requested_at', { ascending: false }),
+
+        supabase.from('homes').select('id, name').eq('org_id', user.org_id),
+      ])
 
     if (staffRes.error)
       console.error('RotaContext: staff fetch failed', staffRes.error)
@@ -77,6 +99,11 @@ export function RotaProvider({ children }) {
       console.error('RotaContext: cancels fetch failed', cancelsRes.error)
     else setCancelRequestsState(cancelsRes.data || [])
     setCancelsLoading(false)
+
+    if (homesRes.error)
+      console.error('RotaContext: homes fetch failed', homesRes.error)
+    else setHomes(homesRes.data || [])
+    setHomesLoading(false)
   }, [user?.org_id, user?.home])
 
   useEffect(() => {
@@ -104,30 +131,34 @@ export function RotaProvider({ children }) {
 
   const refreshTimeOff = useCallback(async () => {
     if (!user?.org_id) return
-    const { data, error } = await supabase
+    let query = supabase
       .from('rotapp_time_off')
       .select('*')
       .eq('org_id', user.org_id)
+    if (user.home) query = query.eq('home_id', user.home)
+    const { data, error } = await query
     if (error) {
       console.error('RotaContext: timeOff refresh failed', error)
       return
     }
     setTimeOffState(data || [])
-  }, [user?.org_id])
+  }, [user?.org_id, user?.home])
 
   const refreshCancels = useCallback(async () => {
     if (!user?.org_id) return
-    const { data, error } = await supabase
+    let query = supabase
       .from('rotapp_cancel_requests')
       .select('*')
       .eq('org_id', user.org_id)
       .order('requested_at', { ascending: false })
+    if (user.home) query = query.eq('home_id', user.home)
+    const { data, error } = await query
     if (error) {
       console.error('RotaContext: cancels refresh failed', error)
       return
     }
     setCancelRequestsState(data || [])
-  }, [user?.org_id])
+  }, [user?.org_id, user?.home])
 
   // ── setMonthRota (write + optimistic update) ───────────────────────────
   const setMonthRota = useCallback(
@@ -186,6 +217,10 @@ export function RotaProvider({ children }) {
         cancelRequests,
         cancelsLoading,
         refreshCancels,
+        // Homes
+        homes,
+        homesLoading,
+        homeName: homes.find((h) => h.id === user?.home)?.name || null,
       }}
     >
       {children}

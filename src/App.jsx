@@ -7,6 +7,7 @@ import {
 } from 'react-router-dom'
 import ProtectedRoute from './components/layout/ProtectedRoute'
 import StickyNote from './components/StickyNote'
+// SessionBanner is rendered inside Navbar
 import Login from './pages/Login'
 import Invite from './pages/Invite'
 import Dashboard from './pages/Dashboard'
@@ -15,15 +16,9 @@ import Calendar from './pages/Calendar'
 import Staff from './pages/Staff'
 import YearCalendar from './pages/YearCalendar'
 import NotFound from './pages/NotFound'
+import Unauthorised from './pages/Unauthorised'
 
-const MANAGER_ROLES = [
-  'superadmin',
-  'operationallead',
-  'manager',
-  'deputy',
-  'senior',
-]
-const CARER_ROLES = ['rcw', 'relief']
+// Role arrays removed — access rules live in src/config/routeAccess.js
 
 function AppContent() {
   const location = useLocation()
@@ -40,7 +35,7 @@ function AppContent() {
         <Route
           path='/dashboard'
           element={
-            <ProtectedRoute allowedRoles={MANAGER_ROLES}>
+            <ProtectedRoute>
               <Dashboard />
             </ProtectedRoute>
           }
@@ -49,7 +44,7 @@ function AppContent() {
         <Route
           path='/rota'
           element={
-            <ProtectedRoute allowedRoles={MANAGER_ROLES}>
+            <ProtectedRoute>
               <Rota />
             </ProtectedRoute>
           }
@@ -58,7 +53,7 @@ function AppContent() {
         <Route
           path='/calendar'
           element={
-            <ProtectedRoute allowedRoles={[...MANAGER_ROLES, ...CARER_ROLES]}>
+            <ProtectedRoute>
               <Calendar />
             </ProtectedRoute>
           }
@@ -67,7 +62,7 @@ function AppContent() {
         <Route
           path='/staff'
           element={
-            <ProtectedRoute allowedRoles={['superadmin', 'manager']}>
+            <ProtectedRoute>
               <Staff />
             </ProtectedRoute>
           }
@@ -76,20 +71,13 @@ function AppContent() {
         <Route
           path='/year-calendar'
           element={
-            <ProtectedRoute
-              allowedRoles={[
-                'manager',
-                'deputy',
-                'senior',
-                'operationallead',
-                'superadmin',
-              ]}
-            >
+            <ProtectedRoute>
               <YearCalendar />
             </ProtectedRoute>
           }
         />
 
+        <Route path='/unauthorised' element={<Unauthorised />} />
         <Route path='*' element={<NotFound />} />
       </Routes>
     </>

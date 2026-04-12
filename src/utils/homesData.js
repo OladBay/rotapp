@@ -59,3 +59,29 @@ export async function fetchHomes(userRole, userHome, userOrgId) {
 
   return enriched
 }
+
+// ── createHome ─────────────────────────────────────────────────────────────
+// Creates a new home record in Supabase.
+// id is generated client-side (text PK, no Supabase default).
+// All other fields beyond name, address, org_id use DB defaults.
+export async function createHome({ name, address, orgId }) {
+  const id = crypto.randomUUID()
+
+  const { data, error } = await supabase
+    .from('homes')
+    .insert({
+      id,
+      name: name.trim(),
+      address: address.trim(),
+      org_id: orgId,
+    })
+    .select('id, name')
+    .single()
+
+  if (error) {
+    console.error('createHome error:', error)
+    throw error
+  }
+
+  return data
+}

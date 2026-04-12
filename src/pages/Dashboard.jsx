@@ -5,12 +5,16 @@ import Navbar from '../components/layout/Navbar'
 import InviteModal from '../components/shared/InviteModal'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { fetchHomes } from '../utils/homesData'
+import AddHomeModal from '../components/shared/AddHomeModal'
 import styles from './Dashboard.module.css'
 
 function Dashboard() {
-  const { user } = useAuth()
+  const { user, switchRole } = useAuth()
   const navigate = useNavigate()
+
   const [showInviteModal, setShowInviteModal] = useState(false)
+  const [showAddHomeModal, setShowAddHomeModal] = useState(false)
+  const [inviteDefaultHomeId, setInviteDefaultHomeId] = useState(null)
   const [homes, setHomes] = useState([])
   const [loading, setLoading] = useState(true)
 
@@ -68,13 +72,23 @@ function Dashboard() {
               View Rota →
             </button>
           )}
+
           {(isOL || isAdmin) && (
-            <button
-              className={styles.primaryBtn}
-              onClick={() => setShowInviteModal(true)}
-            >
-              <FontAwesomeIcon icon='envelope' /> Onboard staff
-            </button>
+            <div className={styles.headerActionGroup}>
+              <button
+                className={styles.groupSecondaryBtn}
+                onClick={() => setShowAddHomeModal(true)}
+              >
+                <FontAwesomeIcon icon='plus' /> Add home
+              </button>
+              <div className={styles.groupDivider} />
+              <button
+                className={styles.groupPrimaryBtn}
+                onClick={() => setShowInviteModal(true)}
+              >
+                <FontAwesomeIcon icon='user-group' /> Onboard staff
+              </button>
+            </div>
           )}
         </div>
 
@@ -123,7 +137,6 @@ function Dashboard() {
             </div>
           </div>
         )}
-
         {/* Homes list */}
         <div className={styles.sectionLabel}>
           {isOL || isAdmin ? 'Homes Overview' : 'Your Home'}
@@ -200,10 +213,14 @@ function Dashboard() {
                 >
                   View rota
                 </button>
+
                 {(isOL || isAdmin) && (
                   <button
                     className={styles.ghostBtn}
-                    onClick={() => navigate('/rota')}
+                    onClick={() => {
+                      switchRole('manager', home.id)
+                      navigate('/rota')
+                    }}
                   >
                     Step in as manager →
                   </button>
@@ -216,9 +233,28 @@ function Dashboard() {
 
       {showInviteModal && (
         <InviteModal
-          onClose={() => setShowInviteModal(false)}
-          defaultHomeId={null}
+          onClose={() => {
+            setShowInviteModal(false)
+            setInviteDefaultHomeId(null)
+          }}
+          defaultHomeId={inviteDefaultHomeId}
           homes={homes}
+        />
+      )}
+
+      {showAddHomeModal && (
+        <AddHomeModal
+          orgId={user.org_id}
+          onClose={(action, newHome) => {
+            setShowAddHomeModal(false)
+            if (action === 'onboard' && newHome) {
+              setInviteDefaultHomeId(newHome.id)
+              setShowInviteModal(true)
+            }
+          }}
+          onHomeCreated={() => {
+            fetchHomes(user.activeRole, user.home, user.org_id).then(setHomes)
+          }}
         />
       )}
     </div>

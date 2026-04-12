@@ -79,21 +79,26 @@ export function AuthProvider({ children }) {
     setUser(null)
   }
 
-  // OL step-in — switches active role for the session only
-  const switchRole = (newRole) => {
+  // OL step-in — switches active role and home for the session only
+  // homeId is the home the OL is stepping into
+  const switchRole = (newRole, homeId) => {
     setUser((prev) => ({
       ...prev,
       activeRole: newRole,
+      home: homeId,
       previousRole: prev.activeRole,
+      previousHome: prev.home,
     }))
   }
 
-  // Reverts OL back to their real role
+  // Reverts OL back to their real role and home
   const revertRole = () => {
     setUser((prev) => ({
       ...prev,
       activeRole: prev.role,
+      home: prev.previousHome,
       previousRole: null,
+      previousHome: null,
     }))
   }
 
