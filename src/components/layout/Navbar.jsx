@@ -5,13 +5,14 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { useRota } from '../../context/RotaContext'
 import { getPendingTimeOffCount } from '../../utils/timeOffStorage'
 import { getPendingCancelCount } from '../../utils/cancelRequests'
+import { getUnreadCount } from '../../utils/notifications'
 import SessionBanner from './SessionBanner'
 import styles from './Navbar.module.css'
 
 function Navbar() {
   const { user, logout } = useAuth()
   const { theme, toggleTheme } = useTheme()
-  const { timeOff, cancelRequests } = useRota()
+  const { timeOff, cancelRequests, notifications } = useRota()
   const navigate = useNavigate()
   const location = useLocation()
 
@@ -20,11 +21,18 @@ function Navbar() {
     navigate('/login')
   }
 
-  const pendingRequests = getPendingCancelCount(cancelRequests)
+  // ── Staff badge count ──────────────────────────────────────────────────
+  // Combines legacy pending counts (cancels + time off) with unread
+  // notifications. As notification creation is wired into more flows,
+  // the legacy counts will be replaced. Both sources are additive for now
+  // so nothing is lost during the transition.
+  const pendingCancels = getPendingCancelCount(cancelRequests)
   const pendingTimeOff = getPendingTimeOffCount(timeOff)
+  const unreadNotifications = getUnreadCount(notifications)
 
-  const totalPending = pendingRequests + pendingTimeOff
-  const hasStaffAction = totalPending > 0
+  const totalStaffPending =
+    pendingCancels + pendingTimeOff + unreadNotifications
+  const hasStaffAction = totalStaffPending > 0
 
   const canSeeStaff = ['manager', 'superadmin', 'operationallead'].includes(
     user?.activeRole
@@ -66,7 +74,7 @@ function Navbar() {
                   {link.label}
                   {link.label === 'Staff' && hasStaffAction && (
                     <span className={styles.badge}>
-                      {totalPending > 9 ? '9+' : totalPending}
+                      {totalStaffPending > 9 ? '9+' : totalStaffPending}
                     </span>
                   )}
                 </button>
@@ -76,33 +84,32 @@ function Navbar() {
         </div>
 
         <div className={styles.right}>
-          <span className={styles.role}>{user?.activeRole}</span>
-          <span className={styles.name}>{user?.name}</span>
-
-          <button
-            className={styles.themeToggle}
-            onClick={toggleTheme}
-            title={isLight ? 'Switch to dark mode' : 'Switch to light mode'}
-          >
-            <span
-              className={`${styles.themeLabel}${isLight ? ` ${styles.themeLabelActive}` : ''}`}
-            >
-              Light
-            </span>
-            <div
-              className={`${styles.themeTrack} ${isLight ? styles.themeTrackLight : styles.themeTrackDark}`}
-            >
-              <div
-                className={`${styles.themeThumb} ${isLight ? styles.themeThumbLight : styles.themeThumbDark}`}
-              />
-            </div>
+          {/* Theme toggle */}
+          <button className={styles.themeToggle} onClick={toggleTheme}>
             <span
               className={`${styles.themeLabel}${!isLight ? ` ${styles.themeLabelActive}` : ''}`}
             >
-              Dark
+              <FontAwesomeIcon icon='moon' />
+            </span>
+            <div
+              className={`${styles.themeTrack}${isLight ? ` ${styles.themeTrackLight}` : ` ${styles.themeTrackDark}`}`}
+            >
+              <div
+                className={`${styles.themeThumb}${isLight ? ` ${styles.themeThumbLight}` : ` ${styles.themeThumbDark}`}`}
+              />
+            </div>
+            <span
+              className={`${styles.themeLabel}${isLight ? ` ${styles.themeLabelActive}` : ''}`}
+            >
+              <FontAwesomeIcon icon='sun' />
             </span>
           </button>
 
+          {/* User info */}
+          <span className={styles.role}>{user?.activeRole}</span>
+          <span className={styles.name}>{user?.name?.split(' ')[0]}</span>
+
+          {/* Logout */}
           <button className={styles.logoutBtn} onClick={handleLogout}>
             <FontAwesomeIcon icon='right-from-bracket' /> Log out
           </button>

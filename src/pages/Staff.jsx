@@ -21,6 +21,27 @@ import {
   getPendingTimeOffCount,
 } from '../utils/timeOffStorage'
 import { removeStaffFromShift } from '../utils/rotaMutations'
+import {
+  createRequest,
+  createAndExecute,
+  acceptRequest,
+  rejectRequest,
+  cancelRequest,
+} from '../utils/staffMoves'
+import {
+  notifyTransferIncoming,
+  notifyTransferAccepted,
+  notifyTransferRejected,
+  notifyTransferCancelled,
+  notifyTransferExecutedOL,
+  notifyTransferOutgoing,
+  markManyAsRead,
+  markReferenceAsRead,
+  getUnreadCountByTypes,
+  fetchHomeManager,
+  NOTIFICATION_TYPES,
+  NOTIFICATION_READ_BEHAVIOUR,
+} from '../utils/notifications'
 import LeaveCalendar from '../components/shared/LeaveCalendar'
 import { fetchHomes } from '../utils/homesData'
 import styles from './Staff.module.css'
@@ -71,6 +92,12 @@ const TYPE_STYLES = {
 
 const EXCLUDED_ROLES = ['superadmin', 'operationallead', 'relief']
 
+// View-behaviour notification types shown in the Transfers tab
+// These are marked as read when the Transfers tab is opened
+const TRANSFERS_VIEW_TYPES = Object.entries(NOTIFICATION_READ_BEHAVIOUR)
+  .filter(([, behaviour]) => behaviour === 'view')
+  .map(([type]) => type)
+
 function Staff() {
   const { user } = useAuth()
   const {
@@ -80,6 +107,11 @@ function Staff() {
     refreshCancels,
     refreshMonthRota,
     homeName,
+    homes: orgHomes,
+    moveRecords,
+    refreshMoveRecords,
+    notifications,
+    refreshNotifications,
   } = useRota()
   const navigate = useNavigate()
 
@@ -112,6 +144,13 @@ function Staff() {
   const [rejectionReason, setRejectionReason] = useState('')
   const [managerNotes, setManagerNotes] = useState('')
   const [showRejectModal, setShowRejectModal] = useState(false)
+
+  // ── Move state ──
+  const [moveStaff, setMoveStaff] = useState(null)
+  const [selectedMoveRequest, setSelectedMoveRequest] = useState(null)
+  const [showRejectMoveModal, setShowRejectMoveModal] = useState(false)
+  const [moveRejectReason, setMoveRejectReason] = useState('')
+
   const [isTabsPinned, setIsTabsPinned] = useState(() => {
     try {
       return localStorage.getItem('rotapp_staff_tabs_pinned') === 'true'
@@ -121,19 +160,36 @@ function Staff() {
   })
 
   const toggleTabsPin = () => {
-    const newValue = !isTabsPinned
-    setIsTabsPinned(newValue)
-    localStorage.setItem('rotapp_staff_tabs_pinned', String(newValue))
+    const newVal = !isTabsPinned
+    setIsTabsPinned(newVal)
+    localStorage.setItem('rotapp_staff_tabs_pinned', String(newVal))
   }
 
-  // ── Fetch homes ──
+  // ── Mark view-behaviour notifications as read when Transfers tab opens ──
+  useEffect(() => {
+    if (tab !== 'transfers') return
+    if (!user?.id) return
+    const hasUnread = notifications.some(
+      (n) => !n.read_at && TRANSFERS_VIEW_TYPES.includes(n.type)
+    )
+    if (!hasUnread) return
+    markManyAsRead(user.id, TRANSFERS_VIEW_TYPES)
+      .then(() => refreshNotifications())
+      .catch((err) =>
+        console.error(
+          'Staff: failed to mark transfer notifications as read',
+          err
+        )
+      )
+  }, [tab])
+
+  // ── Fetch homes (role-scoped, for filter UI only) ──
   useEffect(() => {
     if (!user) return
     fetchHomes(user.activeRole, user.home, user.org_id).then(setHomes)
   }, [user])
 
   // ── Fetch staff ──
-
   useEffect(() => {
     async function fetchStaff() {
       setStaffLoading(true)
@@ -146,9 +202,6 @@ function Staff() {
           .neq('status', 'declined')
           .order('name', { ascending: true })
 
-        // OL/admin with no home set — fetch all org staff
-        // OL stepped into a home (user.home set) — scope to that home + relief
-        // Manager/deputy/senior — scope to their home + relief
         if (user?.home) {
           query = query.or(`home.eq.${user.home},role.eq.relief`)
         }
@@ -197,6 +250,225 @@ function Staff() {
     }
   }
 
+  // ── Move handlers ──
+
+  const handleInitiateMove = async ({
+    staffId,
+    staffName,
+    fromHomeId,
+    toHomeId,
+  }) => {
+    const fromHomeName =
+      orgHomes.find((h) => h.id === fromHomeId)?.name || fromHomeId
+    const toHomeName = orgHomes.find((h) => h.id === toHomeId)?.name || toHomeId
+
+    if (isOLorAdmin) {
+      const requestId = await createAndExecute({
+        orgId: user.org_id,
+        staffId,
+        staffName,
+        fromHomeId,
+        toHomeId,
+        initiatedBy: user.id,
+        initiatedByName: user.name,
+      })
+
+      // Fetch both managers directly — not from allStaff which is
+      // scoped to the current user's home only
+      const [fromHomeManager, toHomeManager] = await Promise.all([
+        fetchHomeManager(fromHomeId),
+        fetchHomeManager(toHomeId),
+      ])
+
+      const notifyPromises = []
+
+      if (fromHomeManager) {
+        notifyPromises.push(
+          notifyTransferExecutedOL({
+            orgId: user.org_id,
+            recipientId: fromHomeManager.id,
+            requestId,
+            staffName,
+            fromHomeName,
+            toHomeName,
+            executedById: user.id,
+            executedByName: user.name,
+          })
+        )
+      }
+
+      if (toHomeManager && toHomeManager.id !== fromHomeManager?.id) {
+        notifyPromises.push(
+          notifyTransferExecutedOL({
+            orgId: user.org_id,
+            recipientId: toHomeManager.id,
+            requestId,
+            staffName,
+            fromHomeName,
+            toHomeName,
+            executedById: user.id,
+            executedByName: user.name,
+          })
+        )
+      }
+
+      await Promise.all(notifyPromises)
+    } else {
+      const requestId = await createRequest({
+        orgId: user.org_id,
+        staffId,
+        staffName,
+        fromHomeId,
+        toHomeId,
+        initiatedBy: user.id,
+        initiatedByName: user.name,
+      })
+
+      // Notify Manager A that their outgoing request is in motion
+      await notifyTransferOutgoing({
+        orgId: user.org_id,
+        recipientId: user.id,
+        requestId,
+        staffName,
+        toHomeName,
+        initiatedById: user.id,
+        initiatedByName: user.name,
+      })
+
+      // Fetch destination manager directly — not from allStaff
+      const toHomeManager = await fetchHomeManager(toHomeId)
+
+      if (toHomeManager) {
+        await notifyTransferIncoming({
+          orgId: user.org_id,
+          recipientId: toHomeManager.id,
+          requestId,
+          staffName,
+          fromHomeName,
+          toHomeName,
+          initiatedById: user.id,
+          initiatedByName: user.name,
+        })
+      }
+    }
+
+    await refreshMoveRecords()
+    await refreshNotifications()
+    setStaffRefresh((n) => n + 1)
+  }
+
+  const handleAcceptMove = async (request) => {
+    try {
+      await acceptRequest({
+        requestId: request.id,
+        staffId: request.staff_id,
+        toHomeId: request.to_home_id,
+        reviewedBy: user.id,
+        reviewedByName: user.name,
+      })
+
+      const toHomeName =
+        orgHomes.find((h) => h.id === request.to_home_id)?.name ||
+        request.to_home_id
+
+      // Notify Manager A that their request was accepted
+      await notifyTransferAccepted({
+        orgId: user.org_id,
+        recipientId: request.initiated_by,
+        requestId: request.id,
+        staffName: request.staff_name,
+        toHomeName,
+        reviewedById: user.id,
+        reviewedByName: user.name,
+      })
+
+      // Mark Manager B's incoming notification as read —
+      // they acted on it so it's resolved
+      await markReferenceAsRead(user.id, request.id)
+
+      await refreshMoveRecords()
+      await refreshNotifications()
+      setStaffRefresh((n) => n + 1)
+      setSelectedMoveRequest(null)
+    } catch (err) {
+      console.error('Accept move failed:', err)
+    }
+  }
+
+  const handleRejectMove = async (request) => {
+    try {
+      await rejectRequest({
+        requestId: request.id,
+        reviewedBy: user.id,
+        reviewedByName: user.name,
+        rejectionReason: moveRejectReason || null,
+      })
+
+      const toHomeName =
+        orgHomes.find((h) => h.id === request.to_home_id)?.name ||
+        request.to_home_id
+
+      // Notify Manager A that their request was rejected
+      await notifyTransferRejected({
+        orgId: user.org_id,
+        recipientId: request.initiated_by,
+        requestId: request.id,
+        staffName: request.staff_name,
+        toHomeName,
+        reviewedById: user.id,
+        reviewedByName: user.name,
+      })
+
+      // Mark Manager B's incoming notification as read —
+      // they acted on it so it's resolved
+      await markReferenceAsRead(user.id, request.id)
+
+      await refreshMoveRecords()
+      await refreshNotifications()
+      setSelectedMoveRequest(null)
+      setShowRejectMoveModal(false)
+      setMoveRejectReason('')
+    } catch (err) {
+      console.error('Reject move failed:', err)
+    }
+  }
+
+  const handleCancelMove = async (requestId) => {
+    try {
+      const request = moveRecords.find((r) => r.id === requestId)
+
+      await cancelRequest({ requestId })
+
+      if (request) {
+        const fromHomeName =
+          orgHomes.find((h) => h.id === request.from_home_id)?.name ||
+          request.from_home_id
+
+        // Fetch destination manager directly — not from allStaff
+        const toHomeManager = await fetchHomeManager(request.to_home_id)
+
+        if (toHomeManager) {
+          await notifyTransferCancelled({
+            orgId: user.org_id,
+            recipientId: toHomeManager.id,
+            requestId: request.id,
+            staffName: request.staff_name,
+            fromHomeName,
+            cancelledById: user.id,
+            cancelledByName: user.name,
+          })
+        }
+
+        await markReferenceAsRead(user.id, requestId)
+      }
+
+      await refreshMoveRecords()
+      await refreshNotifications()
+    } catch (err) {
+      console.error('Cancel move failed:', err)
+    }
+  }
+
   // ── Derived staff lists ──
   const visibleStaff =
     isOLorAdmin && homeFilter !== 'all'
@@ -225,6 +497,37 @@ function Staff() {
   // ── Derived context data ──
   const pendingCancels = getPendingRequests(cancelRequests)
   const allCancels = getAllRequests(cancelRequests)
+
+  // ── Derived move data ──
+  const incomingMoveRequests = moveRecords.filter(
+    (r) => r.to_home_id === user?.home && r.status === 'pending'
+  )
+  const outgoingMoveRequests = moveRecords.filter(
+    (r) => r.from_home_id === user?.home && r.status === 'pending'
+  )
+  const moveHistory = moveRecords.filter(
+    (r) =>
+      (r.from_home_id === user?.home || r.to_home_id === user?.home) &&
+      ['completed', 'rejected', 'cancelled'].includes(r.status)
+  )
+
+  // ── Derived notification data for Transfers tab ──
+  // Incoming count — actionable, drives number badge
+  const transferIncomingUnread = getUnreadCountByTypes(notifications, [
+    NOTIFICATION_TYPES.TRANSFER_INCOMING,
+  ])
+  // View-type unread — informational, drives ! alert for Manager A
+  const transferViewUnread = getUnreadCountByTypes(
+    notifications,
+    TRANSFERS_VIEW_TYPES
+  )
+
+  const pendingIncomingCount = isOLorAdmin
+    ? moveRecords.filter((r) => r.status === 'pending').length
+    : transferIncomingUnread
+
+  const transfersTabHasBadge = pendingIncomingCount > 0
+  const transfersTabHasAlert = !transfersTabHasBadge && transferViewUnread > 0
 
   // ── Cancel request handlers ──
   const handleApproveRequest = async (request) => {
@@ -274,7 +577,6 @@ function Staff() {
         <div className={styles.header}>
           <div>
             <h1 className={styles.title}>Staff</h1>
-
             <p className={styles.subtitle}>
               {isOLorAdmin && !user?.home
                 ? `All homes · ${allStaff.length} staff members`
@@ -332,7 +634,10 @@ function Staff() {
                   hasBadge: pendingStaff.length > 0,
                   badgeCount: pendingStaff.length,
                 },
-                { key: 'relief', label: `Relief pool (${reliefStaff.length})` },
+                {
+                  key: 'relief',
+                  label: `Relief pool (${reliefStaff.length})`,
+                },
                 {
                   key: 'leave',
                   label: 'Leave & Absence',
@@ -345,6 +650,13 @@ function Staff() {
                   hasBadge: pendingCancels.length > 0,
                   badgeCount: pendingCancels.length,
                 },
+                {
+                  key: 'transfers',
+                  label: 'Transfers',
+                  hasBadge: transfersTabHasBadge,
+                  badgeCount: pendingIncomingCount,
+                  hasAlert: transfersTabHasAlert,
+                },
               ].map((t) => (
                 <button
                   key={t.key}
@@ -355,15 +667,18 @@ function Staff() {
                   {t.hasBadge && (
                     <span className={styles.tabBadge}>{t.badgeCount}</span>
                   )}
+                  {t.hasAlert && (
+                    <span className={styles.tabAlert}>
+                      <FontAwesomeIcon icon='triangle-exclamation' />
+                    </span>
+                  )}
                 </button>
               ))}
             </div>
             <button
               className={`${styles.tabsPinBtn}${isTabsPinned ? ` ${styles.tabsPinBtnActive}` : ''}`}
               onClick={toggleTabsPin}
-              title={
-                isTabsPinned ? 'Unpin tabs' : 'Pin tabs (stays while scrolling)'
-              }
+              title={isTabsPinned ? 'Unpin tabs' : 'Pin tabs'}
             >
               <FontAwesomeIcon icon='thumbtack' />
             </button>
@@ -371,92 +686,96 @@ function Staff() {
         )}
 
         {/* Staff list */}
-        {!staffLoading && tab !== 'leave' && tab !== 'requests' && (
-          <div className={styles.list}>
-            {displayed.length === 0 && (
-              <div className={styles.empty}>No staff in this category</div>
-            )}
-            {displayed.map((member) => (
-              <div
-                key={member.id}
-                className={`${styles.staffRow} ${member.status === 'pending' ? styles.staffRowPending : styles.staffRowDefault}`}
-                onClick={() => setSelectedStaff(member)}
-              >
+        {!staffLoading &&
+          tab !== 'leave' &&
+          tab !== 'requests' &&
+          tab !== 'transfers' && (
+            <div className={styles.list}>
+              {displayed.length === 0 && (
+                <div className={styles.empty}>No staff in this category</div>
+              )}
+              {displayed.map((member) => (
                 <div
-                  className={styles.avatar}
-                  style={{
-                    background:
-                      member.gender === 'F'
-                        ? 'rgba(122,79,168,0.2)'
-                        : 'rgba(108,143,255,0.15)',
-                    color: member.gender === 'F' ? '#7a4fa8' : '#6c8fff',
-                  }}
+                  key={member.id}
+                  className={`${styles.staffRow} ${member.status === 'pending' ? styles.staffRowPending : styles.staffRowDefault}`}
+                  onClick={() => setSelectedStaff(member)}
                 >
-                  {member.name
-                    ? member.name
-                        .split(' ')
-                        .map((n) => n[0])
-                        .join('')
-                    : '?'}
-                </div>
-                <div className={styles.staffInfo}>
-                  <div className={styles.staffName}>{member.name || '—'}</div>
-                  <div className={styles.staffMeta}>
-                    {ROLE_LABELS[member.role] || member.role}
-                    {member.driver && ' · Driver'}
-                    {member.home === null && ' · Relief pool'}
-                    {isOLorAdmin &&
-                      member.home &&
-                      ` · ${member.home.charAt(0).toUpperCase() + member.home.slice(1)}`}
-                  </div>
-                </div>
-                <div className={styles.staffTags}>
-                  {member.gender && (
-                    <span className={styles.tag}>
-                      {member.gender === 'F'
-                        ? 'Female'
-                        : member.gender === 'M'
-                          ? 'Male'
-                          : 'Other'}
-                    </span>
-                  )}
-                  <span
-                    className={styles.tag}
+                  <div
+                    className={styles.avatar}
                     style={{
                       background:
-                        STATUS_COLORS[member.status]?.bg || 'var(--bg-active)',
-                      color:
-                        STATUS_COLORS[member.status]?.color ||
-                        'var(--text-secondary)',
+                        member.gender === 'F'
+                          ? 'rgba(122,79,168,0.2)'
+                          : 'rgba(108,143,255,0.15)',
+                      color: member.gender === 'F' ? '#7a4fa8' : '#6c8fff',
                     }}
                   >
-                    {member.status}
-                  </span>
-                </div>
-                {member.status === 'pending' && (
-                  <div
-                    className={styles.pendingActions}
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <button
-                      className={styles.approveBtn}
-                      onClick={() => handleApprove(member)}
-                    >
-                      Approve
-                    </button>
-                    <button
-                      className={styles.declineBtn}
-                      onClick={() => handleDecline(member)}
-                    >
-                      Decline
-                    </button>
+                    {member.name
+                      ? member.name
+                          .split(' ')
+                          .map((n) => n[0])
+                          .join('')
+                      : '?'}
                   </div>
-                )}
-                <div className={styles.chevron}>›</div>
-              </div>
-            ))}
-          </div>
-        )}
+                  <div className={styles.staffInfo}>
+                    <div className={styles.staffName}>{member.name || '—'}</div>
+                    <div className={styles.staffMeta}>
+                      {ROLE_LABELS[member.role] || member.role}
+                      {member.driver && ' · Driver'}
+                      {member.home === null && ' · Relief pool'}
+                      {isOLorAdmin &&
+                        member.home &&
+                        ` · ${orgHomes.find((h) => h.id === member.home)?.name || member.home}`}
+                    </div>
+                  </div>
+                  <div className={styles.staffTags}>
+                    {member.gender && (
+                      <span className={styles.tag}>
+                        {member.gender === 'F'
+                          ? 'Female'
+                          : member.gender === 'M'
+                            ? 'Male'
+                            : 'Other'}
+                      </span>
+                    )}
+                    <span
+                      className={styles.tag}
+                      style={{
+                        background:
+                          STATUS_COLORS[member.status]?.bg ||
+                          'var(--bg-active)',
+                        color:
+                          STATUS_COLORS[member.status]?.color ||
+                          'var(--text-secondary)',
+                      }}
+                    >
+                      {member.status}
+                    </span>
+                  </div>
+                  {member.status === 'pending' && (
+                    <div
+                      className={styles.pendingActions}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <button
+                        className={styles.approveBtn}
+                        onClick={() => handleApprove(member)}
+                      >
+                        Approve
+                      </button>
+                      <button
+                        className={styles.declineBtn}
+                        onClick={() => handleDecline(member)}
+                      >
+                        Decline
+                      </button>
+                    </div>
+                  )}
+                  <div className={styles.chevron}>›</div>
+                </div>
+              ))}
+            </div>
+          )}
 
         {/* Leave tab */}
         {tab === 'leave' && (
@@ -600,7 +919,7 @@ function Staff() {
               <>
                 {pendingCancels.length > 0 && (
                   <>
-                    <div className={styles.sectionLabel}>Pending Requests</div>
+                    <div className={styles.sectionLabel}>Pending requests</div>
                     {pendingCancels.map((request) => (
                       <div key={request.id} className={styles.requestCard}>
                         <div className={styles.requestHeader}>
@@ -794,6 +1113,161 @@ function Staff() {
             )}
           </div>
         )}
+
+        {/* Transfers tab */}
+        {tab === 'transfers' && (
+          <div className={styles.requestsWrap}>
+            {/* OL view — all pending across org */}
+            {isOLorAdmin && (
+              <>
+                {moveRecords.filter((r) => r.status === 'pending').length ===
+                  0 &&
+                moveRecords.filter((r) =>
+                  ['completed', 'rejected', 'cancelled'].includes(r.status)
+                ).length === 0 ? (
+                  <div className={styles.empty}>No transfer requests</div>
+                ) : (
+                  <>
+                    {moveRecords.filter((r) => r.status === 'pending').length >
+                      0 && (
+                      <>
+                        <div className={styles.sectionLabel}>
+                          Pending transfers
+                        </div>
+                        {moveRecords
+                          .filter((r) => r.status === 'pending')
+                          .map((request) => (
+                            <MoveRequestCard
+                              key={request.id}
+                              request={request}
+                              homes={orgHomes}
+                              currentUserHomeId={user?.home}
+                              isOLorAdmin={isOLorAdmin}
+                              onAccept={() => handleAcceptMove(request)}
+                              onReject={() => {
+                                setSelectedMoveRequest(request)
+                                setShowRejectMoveModal(true)
+                              }}
+                              onCancel={() => handleCancelMove(request.id)}
+                              styles={styles}
+                            />
+                          ))}
+                      </>
+                    )}
+                    {moveRecords.filter((r) =>
+                      ['completed', 'rejected', 'cancelled'].includes(r.status)
+                    ).length > 0 && (
+                      <>
+                        <div
+                          className={styles.sectionLabel}
+                          style={{ marginTop: '24px' }}
+                        >
+                          History
+                        </div>
+                        {moveRecords
+                          .filter((r) =>
+                            ['completed', 'rejected', 'cancelled'].includes(
+                              r.status
+                            )
+                          )
+                          .map((request) => (
+                            <MoveRequestCard
+                              key={request.id}
+                              request={request}
+                              homes={orgHomes}
+                              currentUserHomeId={user?.home}
+                              isOLorAdmin={isOLorAdmin}
+                              styles={styles}
+                            />
+                          ))}
+                      </>
+                    )}
+                  </>
+                )}
+              </>
+            )}
+
+            {/* Manager view — incoming + outgoing + history */}
+            {!isOLorAdmin && (
+              <>
+                {incomingMoveRequests.length === 0 &&
+                outgoingMoveRequests.length === 0 &&
+                moveHistory.length === 0 ? (
+                  <div className={styles.empty}>No transfer requests</div>
+                ) : (
+                  <>
+                    {incomingMoveRequests.length > 0 && (
+                      <>
+                        <div className={styles.sectionLabel}>
+                          Incoming requests
+                        </div>
+                        {incomingMoveRequests.map((request) => (
+                          <MoveRequestCard
+                            key={request.id}
+                            request={request}
+                            homes={orgHomes}
+                            currentUserHomeId={user?.home}
+                            isOLorAdmin={false}
+                            onAccept={() => handleAcceptMove(request)}
+                            onReject={() => {
+                              setSelectedMoveRequest(request)
+                              setShowRejectMoveModal(true)
+                            }}
+                            styles={styles}
+                          />
+                        ))}
+                      </>
+                    )}
+                    {outgoingMoveRequests.length > 0 && (
+                      <>
+                        <div
+                          className={styles.sectionLabel}
+                          style={{
+                            marginTop:
+                              incomingMoveRequests.length > 0 ? '24px' : '0',
+                          }}
+                        >
+                          Outgoing requests
+                        </div>
+                        {outgoingMoveRequests.map((request) => (
+                          <MoveRequestCard
+                            key={request.id}
+                            request={request}
+                            homes={orgHomes}
+                            currentUserHomeId={user?.home}
+                            isOLorAdmin={false}
+                            onCancel={() => handleCancelMove(request.id)}
+                            styles={styles}
+                          />
+                        ))}
+                      </>
+                    )}
+                    {moveHistory.length > 0 && (
+                      <>
+                        <div
+                          className={styles.sectionLabel}
+                          style={{ marginTop: '24px' }}
+                        >
+                          History
+                        </div>
+                        {moveHistory.map((request) => (
+                          <MoveRequestCard
+                            key={request.id}
+                            request={request}
+                            homes={orgHomes}
+                            currentUserHomeId={user?.home}
+                            isOLorAdmin={false}
+                            styles={styles}
+                          />
+                        ))}
+                      </>
+                    )}
+                  </>
+                )}
+              </>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Staff profile modal */}
@@ -849,11 +1323,16 @@ function Staff() {
                 },
                 {
                   label: 'Driver',
-                  val: selectedStaff.driver ? '✓ Yes' : '✗ No',
+                  val: selectedStaff.driver ? 'Yes' : 'No',
                 },
-                { label: 'Home', val: selectedStaff.home || 'Relief pool' },
+                {
+                  label: 'Home',
+                  val: selectedStaff.home
+                    ? orgHomes.find((h) => h.id === selectedStaff.home)?.name ||
+                      selectedStaff.home
+                    : 'Relief pool',
+                },
                 { label: 'Status', val: selectedStaff.status },
-                { label: 'Org', val: selectedStaff.org_id || '—' },
               ].map((row) => (
                 <div key={row.label} className={styles.detailRow}>
                   <span className={styles.detailLabel}>{row.label}</span>
@@ -884,11 +1363,111 @@ function Staff() {
             )}
             {selectedStaff.status === 'active' && (
               <div className={styles.modalFooter}>
-                <button className={styles.moveBtn}>
-                  Move to another home →
+                <button
+                  className={styles.moveBtn}
+                  onClick={() => {
+                    setSelectedStaff(null)
+                    setMoveStaff(selectedStaff)
+                  }}
+                >
+                  <FontAwesomeIcon icon='right-left' /> Move to another home
                 </button>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Move staff modal */}
+      {moveStaff && (
+        <MoveStaffModal
+          staff={moveStaff}
+          homes={orgHomes}
+          moveRecords={moveRecords}
+          isOLorAdmin={isOLorAdmin}
+          onConfirm={handleInitiateMove}
+          onClose={() => setMoveStaff(null)}
+          styles={styles}
+        />
+      )}
+
+      {/* Reject move modal */}
+      {showRejectMoveModal && selectedMoveRequest && (
+        <div
+          className={styles.overlay}
+          onClick={() => {
+            setShowRejectMoveModal(false)
+            setSelectedMoveRequest(null)
+            setMoveRejectReason('')
+          }}
+        >
+          <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.modalHeader}>
+              <div className={styles.modalTitle}>Reject transfer</div>
+              <button
+                className={styles.closeBtn}
+                onClick={() => {
+                  setShowRejectMoveModal(false)
+                  setSelectedMoveRequest(null)
+                  setMoveRejectReason('')
+                }}
+              >
+                <FontAwesomeIcon icon='xmark' />
+              </button>
+            </div>
+            <div className={styles.modalBody}>
+              <div className={styles.detailRow}>
+                <span className={styles.detailLabel}>Staff</span>
+                <span className={styles.detailVal}>
+                  {selectedMoveRequest.staff_name}
+                </span>
+              </div>
+              <div className={styles.detailRow}>
+                <span className={styles.detailLabel}>From</span>
+                <span className={styles.detailVal}>
+                  {orgHomes.find(
+                    (h) => h.id === selectedMoveRequest.from_home_id
+                  )?.name || '—'}
+                </span>
+              </div>
+              <div className={styles.detailRow}>
+                <span className={styles.detailLabel}>To</span>
+                <span className={styles.detailVal}>
+                  {orgHomes.find((h) => h.id === selectedMoveRequest.to_home_id)
+                    ?.name || '—'}
+                </span>
+              </div>
+              <div className={styles.field}>
+                <label className={styles.detailLabel}>Reason (optional)</label>
+                <textarea
+                  className={styles.textarea}
+                  placeholder='Why is this transfer being rejected?'
+                  value={moveRejectReason}
+                  onChange={(e) => setMoveRejectReason(e.target.value)}
+                  rows='3'
+                />
+              </div>
+            </div>
+            <div className={styles.modalFooter}>
+              <div className={styles.modalButtonGroup}>
+                <button
+                  className={styles.cancelModalBtn}
+                  onClick={() => {
+                    setShowRejectMoveModal(false)
+                    setSelectedMoveRequest(null)
+                    setMoveRejectReason('')
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  className={styles.rejectModalBtn}
+                  onClick={() => handleRejectMove(selectedMoveRequest)}
+                >
+                  <FontAwesomeIcon icon='xmark' /> Reject transfer
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -1180,7 +1759,7 @@ function Staff() {
                   className={styles.approveModalBtn}
                   onClick={() => handleApproveRequest(selectedRequest)}
                 >
-                  <FontAwesomeIcon icon='check' /> Approve & Remove Shift
+                  <FontAwesomeIcon icon='check' /> Approve & remove shift
                 </button>
               </div>
             </div>
@@ -1273,7 +1852,7 @@ function Staff() {
                   className={styles.rejectModalBtn}
                   onClick={() => handleRejectRequest(selectedRequest)}
                 >
-                  <FontAwesomeIcon icon='xmark' /> Reject Request
+                  <FontAwesomeIcon icon='xmark' /> Reject request
                 </button>
               </div>
             </div>
@@ -1289,6 +1868,351 @@ function Staff() {
           homes={homes}
         />
       )}
+    </div>
+  )
+}
+
+// ── MoveRequestCard ────────────────────────────────────────────────
+function MoveRequestCard({
+  request,
+  homes,
+  currentUserHomeId,
+  isOLorAdmin,
+  onAccept,
+  onReject,
+  onCancel,
+  styles,
+}) {
+  const fromHome = homes.find((h) => h.id === request.from_home_id)?.name || '—'
+  const toHome = homes.find((h) => h.id === request.to_home_id)?.name || '—'
+  const isIncoming = request.to_home_id === currentUserHomeId
+  const isOutgoing = request.from_home_id === currentUserHomeId
+
+  const statusStyle = {
+    pending: {
+      bg: 'var(--color-warning-bg)',
+      color: 'var(--color-warning)',
+    },
+    completed: {
+      bg: 'var(--color-success-bg)',
+      color: 'var(--color-success)',
+    },
+    rejected: {
+      bg: 'var(--color-danger-bg)',
+      color: 'var(--color-danger)',
+    },
+    cancelled: {
+      bg: 'var(--bg-active)',
+      color: 'var(--text-secondary)',
+    },
+  }
+
+  const s = statusStyle[request.status] || statusStyle.pending
+
+  return (
+    <div
+      className={
+        request.status === 'pending'
+          ? styles.requestCard
+          : styles.requestCardHistory
+      }
+    >
+      <div className={styles.requestHeader}>
+        <div className={styles.requestStaff}>{request.staff_name}</div>
+        <div
+          className={styles.requestStatus}
+          style={{ background: s.bg, color: s.color }}
+        >
+          {request.status}
+        </div>
+      </div>
+      <div className={styles.requestDetails}>
+        <div>
+          {fromHome}{' '}
+          <FontAwesomeIcon
+            icon='right-left'
+            style={{ fontSize: '10px', margin: '0 4px' }}
+          />{' '}
+          {toHome}
+        </div>
+        {(isOLorAdmin || isIncoming) && (
+          <div>Initiated by {request.initiated_by_name}</div>
+        )}
+        {isOutgoing && !isOLorAdmin && (
+          <div style={{ color: 'var(--text-muted)', fontSize: '12px' }}>
+            Waiting for {toHome} manager to respond
+          </div>
+        )}
+        {request.status === 'rejected' && request.rejection_reason && (
+          <div
+            style={{
+              color: 'var(--color-danger)',
+              fontSize: '12px',
+              marginTop: '4px',
+            }}
+          >
+            Rejection reason: {request.rejection_reason}
+          </div>
+        )}
+        <div className={styles.requestTime}>
+          {new Date(request.initiated_at).toLocaleString()}
+          {request.completed_at &&
+            ` · Completed: ${new Date(request.completed_at).toLocaleString()}`}
+          {request.reviewed_at &&
+            request.status === 'rejected' &&
+            ` · Rejected: ${new Date(request.reviewed_at).toLocaleString()}`}
+        </div>
+      </div>
+
+      {request.status === 'pending' && (
+        <div className={styles.requestActions}>
+          {(isIncoming || isOLorAdmin) && onAccept && onReject && (
+            <>
+              <button className={styles.approveRequestBtn} onClick={onAccept}>
+                <FontAwesomeIcon icon='check' /> Accept
+              </button>
+              <button className={styles.rejectRequestBtn} onClick={onReject}>
+                <FontAwesomeIcon icon='xmark' /> Reject
+              </button>
+            </>
+          )}
+          {isOutgoing && !isOLorAdmin && onCancel && (
+            <button className={styles.rejectRequestBtn} onClick={onCancel}>
+              <FontAwesomeIcon icon='xmark' /> Cancel request
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── MoveStaffModal ─────────────────────────────────────────────────
+function MoveStaffModal({
+  staff,
+  homes,
+  moveRecords,
+  isOLorAdmin,
+  onConfirm,
+  onClose,
+  styles,
+}) {
+  const [selectedHomeId, setSelectedHomeId] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [result, setResult] = useState(null)
+  const [resultMessage, setResultMessage] = useState('')
+
+  const hasPendingRequest = moveRecords.some(
+    (r) => r.staff_id === staff.id && r.status === 'pending'
+  )
+
+  const availableHomes = homes.filter((h) => h.id !== staff.home)
+
+  const handleConfirm = async () => {
+    if (!selectedHomeId) {
+      setError('Please select a destination home.')
+      return
+    }
+    setLoading(true)
+    setError('')
+    try {
+      await onConfirm({
+        staffId: staff.id,
+        staffName: staff.name,
+        fromHomeId: staff.home,
+        toHomeId: selectedHomeId,
+      })
+      const destName =
+        homes.find((h) => h.id === selectedHomeId)?.name || 'the destination'
+      setResult('success')
+      setResultMessage(
+        isOLorAdmin
+          ? `${staff.name} has been moved to ${destName}.`
+          : `Transfer request for ${staff.name} has been sent to ${destName}.`
+      )
+    } catch (err) {
+      setResult('error')
+      setResultMessage('Something went wrong. Please try again.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  if (result) {
+    return (
+      <div className={styles.overlay} onClick={onClose}>
+        <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
+          <div className={styles.modalHeader}>
+            <div className={styles.modalTitle}>
+              {result === 'success' ? 'Transfer complete' : 'Transfer failed'}
+            </div>
+            <button className={styles.closeBtn} onClick={onClose}>
+              <FontAwesomeIcon icon='xmark' />
+            </button>
+          </div>
+          <div className={styles.modalBody}>
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '12px',
+                padding: '16px 0',
+                textAlign: 'center',
+              }}
+            >
+              <div
+                style={{
+                  width: '52px',
+                  height: '52px',
+                  borderRadius: '50%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '20px',
+                  background:
+                    result === 'success'
+                      ? 'var(--color-success-bg)'
+                      : 'var(--color-danger-bg)',
+                  color:
+                    result === 'success'
+                      ? 'var(--color-success)'
+                      : 'var(--color-danger)',
+                  border:
+                    result === 'success'
+                      ? '1px solid var(--color-success-border)'
+                      : '1px solid var(--color-danger-border)',
+                }}
+              >
+                <FontAwesomeIcon
+                  icon={
+                    result === 'success'
+                      ? 'circle-check'
+                      : 'triangle-exclamation'
+                  }
+                />
+              </div>
+              <p
+                style={{
+                  fontSize: '13px',
+                  color: 'var(--text-secondary)',
+                  margin: 0,
+                }}
+              >
+                {resultMessage}
+              </p>
+            </div>
+          </div>
+          <div className={styles.modalFooter}>
+            <div className={styles.modalButtonGroup}>
+              <button className={styles.approveModalBtn} onClick={onClose}>
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className={styles.overlay} onClick={onClose}>
+      <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
+        <div className={styles.modalHeader}>
+          <div className={styles.modalTitle}>Move to another home</div>
+          <button className={styles.closeBtn} onClick={onClose}>
+            <FontAwesomeIcon icon='xmark' />
+          </button>
+        </div>
+        <div className={styles.modalBody}>
+          <div className={styles.detailRow}>
+            <span className={styles.detailLabel}>Staff member</span>
+            <span className={styles.detailVal}>{staff.name}</span>
+          </div>
+          <div className={styles.detailRow}>
+            <span className={styles.detailLabel}>Current home</span>
+            <span className={styles.detailVal}>
+              {homes.find((h) => h.id === staff.home)?.name || '—'}
+            </span>
+          </div>
+
+          {hasPendingRequest ? (
+            <div className={styles.warningNote}>
+              <FontAwesomeIcon icon='triangle-exclamation' /> A transfer request
+              for this staff member is already pending. Cancel it first before
+              creating a new one.
+            </div>
+          ) : (
+            <>
+              <div className={styles.field}>
+                <label className={styles.detailLabel}>Destination home</label>
+                <select
+                  className={styles.input}
+                  value={selectedHomeId}
+                  onChange={(e) => {
+                    setSelectedHomeId(e.target.value)
+                    setError('')
+                  }}
+                >
+                  <option value=''>Select a home…</option>
+                  {availableHomes.map((h) => (
+                    <option key={h.id} value={h.id}>
+                      {h.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div
+                className={styles.warningNote}
+                style={{
+                  background: 'var(--accent-bg)',
+                  borderColor: 'var(--accent-border)',
+                  color: 'var(--accent)',
+                }}
+              >
+                <FontAwesomeIcon icon='circle-info' />{' '}
+                {isOLorAdmin
+                  ? 'As OL, this move will execute immediately. The destination manager will be notified via the Transfers tab.'
+                  : 'A request will be sent to the destination manager for approval. You can cancel it from the Transfers tab.'}
+              </div>
+
+              {error && (
+                <div className={styles.warningNote}>
+                  <FontAwesomeIcon icon='triangle-exclamation' /> {error}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        {!hasPendingRequest && (
+          <div className={styles.modalFooter}>
+            <div className={styles.modalButtonGroup}>
+              <button className={styles.cancelModalBtn} onClick={onClose}>
+                Cancel
+              </button>
+              <button
+                className={styles.approveModalBtn}
+                onClick={handleConfirm}
+                disabled={loading || !selectedHomeId}
+                style={{
+                  opacity: loading || !selectedHomeId ? 0.5 : 1,
+                  cursor:
+                    loading || !selectedHomeId ? 'not-allowed' : 'pointer',
+                }}
+              >
+                {loading
+                  ? 'Processing…'
+                  : isOLorAdmin
+                    ? 'Move now'
+                    : 'Send request'}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

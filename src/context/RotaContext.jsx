@@ -25,50 +25,72 @@ export function RotaProvider({ children }) {
   const [cancelsLoading, setCancelsLoading] = useState(true)
   const [homes, setHomes] = useState([])
   const [homesLoading, setHomesLoading] = useState(true)
+  const [moveRecords, setMoveRecords] = useState([])
+  const [moveRecordsLoading, setMoveRecordsLoading] = useState(true)
+  const [notifications, setNotifications] = useState([])
+  const [notificationsLoading, setNotificationsLoading] = useState(true)
 
   // ── Parallel fetch all ─────────────────────────────────────────────────
   const fetchAll = useCallback(async () => {
-    if (!user?.org_id || !user?.home) return
+    if (!user?.org_id) return
+    const [
+      staffRes,
+      rotaRes,
+      timeOffRes,
+      cancelsRes,
+      homesRes,
+      moveRecordsRes,
+      notificationsRes,
+    ] = await Promise.all([
+      supabase
+        .from('profiles')
+        .select('*')
+        .eq('org_id', user.org_id)
+        .neq('status', 'declined')
+        .order('name', { ascending: true }),
+      supabase
+        .from('rotapp_month_rota')
+        .select('week_key, rota_data')
+        .eq('org_id', user.org_id)
+        .eq('home_id', user.home),
 
-    const [staffRes, rotaRes, timeOffRes, cancelsRes, homesRes] =
-      await Promise.all([
-        supabase
-          .from('profiles')
-          .select('*')
-          .eq('org_id', user.org_id)
-          .neq('status', 'declined')
-          .order('name', { ascending: true }),
-        supabase
-          .from('rotapp_month_rota')
-          .select('week_key, rota_data')
-          .eq('org_id', user.org_id)
-          .eq('home_id', user.home),
+      user.home
+        ? supabase
+            .from('rotapp_time_off')
+            .select('*')
+            .eq('org_id', user.org_id)
+            .eq('home_id', user.home)
+        : supabase
+            .from('rotapp_time_off')
+            .select('*')
+            .eq('org_id', user.org_id),
+      user.home
+        ? supabase
+            .from('rotapp_cancel_requests')
+            .select('*')
+            .eq('org_id', user.org_id)
+            .eq('home_id', user.home)
+            .order('requested_at', { ascending: false })
+        : supabase
+            .from('rotapp_cancel_requests')
+            .select('*')
+            .eq('org_id', user.org_id)
+            .order('requested_at', { ascending: false }),
 
-        user.home
-          ? supabase
-              .from('rotapp_time_off')
-              .select('*')
-              .eq('org_id', user.org_id)
-              .eq('home_id', user.home)
-          : supabase
-              .from('rotapp_time_off')
-              .select('*')
-              .eq('org_id', user.org_id),
-        user.home
-          ? supabase
-              .from('rotapp_cancel_requests')
-              .select('*')
-              .eq('org_id', user.org_id)
-              .eq('home_id', user.home)
-              .order('requested_at', { ascending: false })
-          : supabase
-              .from('rotapp_cancel_requests')
-              .select('*')
-              .eq('org_id', user.org_id)
-              .order('requested_at', { ascending: false }),
+      supabase.from('homes').select('id, name').eq('org_id', user.org_id),
 
-        supabase.from('homes').select('id, name').eq('org_id', user.org_id),
-      ])
+      supabase
+        .from('staff_move_requests')
+        .select('*')
+        .eq('org_id', user.org_id)
+        .order('initiated_at', { ascending: false }),
+
+      supabase
+        .from('notifications')
+        .select('*')
+        .eq('recipient_id', user.id)
+        .order('created_at', { ascending: false }),
+    ])
 
     if (staffRes.error)
       console.error('RotaContext: staff fetch failed', staffRes.error)
@@ -104,7 +126,23 @@ export function RotaProvider({ children }) {
       console.error('RotaContext: homes fetch failed', homesRes.error)
     else setHomes(homesRes.data || [])
     setHomesLoading(false)
-  }, [user?.org_id, user?.home])
+
+    if (moveRecordsRes.error)
+      console.error(
+        'RotaContext: moveRecords fetch failed',
+        moveRecordsRes.error
+      )
+    else setMoveRecords(moveRecordsRes.data || [])
+    setMoveRecordsLoading(false)
+
+    if (notificationsRes.error)
+      console.error(
+        'RotaContext: notifications fetch failed',
+        notificationsRes.error
+      )
+    else setNotifications(notificationsRes.data || [])
+    setNotificationsLoading(false)
+  }, [user?.org_id, user?.home, user?.id])
 
   useEffect(() => {
     fetchAll()
@@ -159,6 +197,33 @@ export function RotaProvider({ children }) {
     }
     setCancelRequestsState(data || [])
   }, [user?.org_id, user?.home])
+  const refreshMoveRecords = useCallback(async () => {
+    if (!user?.org_id) return
+    const { data, error } = await supabase
+      .from('staff_move_requests')
+      .select('*')
+      .eq('org_id', user.org_id)
+      .order('initiated_at', { ascending: false })
+    if (error) {
+      console.error('RotaContext: moveRecords refresh failed', error)
+      return
+    }
+    setMoveRecords(data || [])
+  }, [user?.org_id])
+
+  const refreshNotifications = useCallback(async () => {
+    if (!user?.id) return
+    const { data, error } = await supabase
+      .from('notifications')
+      .select('*')
+      .eq('recipient_id', user.id)
+      .order('created_at', { ascending: false })
+    if (error) {
+      console.error('RotaContext: notifications refresh failed', error)
+      return
+    }
+    setNotifications(data || [])
+  }, [user?.id])
 
   // ── setMonthRota (write + optimistic update) ───────────────────────────
   const setMonthRota = useCallback(
@@ -221,6 +286,14 @@ export function RotaProvider({ children }) {
         homes,
         homesLoading,
         homeName: homes.find((h) => h.id === user?.home)?.name || null,
+        // Move records
+        moveRecords,
+        moveRecordsLoading,
+        refreshMoveRecords,
+        // Notifications
+        notifications,
+        notificationsLoading,
+        refreshNotifications,
       }}
     >
       {children}
