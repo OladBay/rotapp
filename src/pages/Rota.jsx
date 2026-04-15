@@ -21,6 +21,7 @@ import {
   isSameDay,
   dateKey,
 } from '../utils/dateUtils'
+import { getActiveMoveForStaff } from '../utils/staffMoves'
 import { calculateStaffHoursForWeek } from '../utils/hoursCalculator'
 import styles from './Rota.module.css'
 
@@ -118,9 +119,10 @@ function Rota() {
     resetRota,
     rotaLoading,
     refreshMonthRota,
-    timeOff,
+    leaveDays,
     cancelRequests,
     homeName,
+    moveRecords,
   } = useRota()
 
   const [weekRota, setWeekRota] = useLocalStorage('rotapp_week_rota', {
@@ -728,6 +730,11 @@ function Rota() {
                       {staffList.map((entry) => {
                         const st = staffMap[entry.id]
                         if (!st) return null
+                        const hasMoved = !!getActiveMoveForStaff(
+                          moveRecords,
+                          entry.id,
+                          user.home
+                        )
                         return (
                           <div key={entry.id} className={styles.chipEarly}>
                             <span className={styles.chipName}>
@@ -736,6 +743,11 @@ function Rota() {
                             <span className={styles.chipRole}>
                               {st.roleCode}
                             </span>
+                            {hasMoved && (
+                              <span className={styles.movedTag}>
+                                <FontAwesomeIcon icon='right-left' /> Moved
+                              </span>
+                            )}
                           </div>
                         )
                       })}
@@ -771,6 +783,11 @@ function Rota() {
                       {staffList.map((entry) => {
                         const st = staffMap[entry.id]
                         if (!st) return null
+                        const hasMoved = !!getActiveMoveForStaff(
+                          moveRecords,
+                          entry.id,
+                          user.home
+                        )
                         return (
                           <div key={entry.id} className={styles.chipLate}>
                             <span className={styles.chipName}>
@@ -785,9 +802,15 @@ function Rota() {
                                 style={{ fontSize: '9px', color: '#c4883a' }}
                               />
                             )}
+                            {hasMoved && (
+                              <span className={styles.movedTag}>
+                                <FontAwesomeIcon icon='right-left' /> Moved
+                              </span>
+                            )}
                           </div>
                         )
                       })}
+
                       {canSeeGaps && sleepCount < 2 && (
                         <div className={styles.sleepWarn}>
                           <FontAwesomeIcon icon='triangle-exclamation' />{' '}
@@ -889,7 +912,7 @@ function Rota() {
                               member.id,
                               currentRotaForWeek,
                               currentMonday,
-                              timeOff
+                              leaveDays
                             )
                             const weekVariance = weekHours - 37
                             return { ...member, weekHours, weekVariance }
@@ -1054,7 +1077,7 @@ function Rota() {
           scopeMonth={generateTarget.month}
           monthLabel={generateTarget.label}
           staffMap={staffMap}
-          timeOff={timeOff}
+          timeOff={leaveDays}
         />
       )}
 
@@ -1064,7 +1087,7 @@ function Rota() {
           onApplyBatch={handleApplyBatch}
           monthRota={monthRota}
           staffMap={staffMap}
-          timeOff={timeOff}
+          timeOff={leaveDays}
           homeName={homeName}
         />
       )}

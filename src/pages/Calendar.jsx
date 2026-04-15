@@ -24,10 +24,9 @@ import {
   getPingInfo,
 } from '../utils/cancelRequests'
 import {
-  addTimeOff,
-  generateTimeOffId,
-  getTimeOffForStaff,
-  getTimeOffForDateStr,
+  createLeaveRequest,
+  getLeaveDaysForStaff,
+  getLeaveDayForDate,
 } from '../utils/timeOffStorage'
 import LeaveCalendar from '../components/shared/LeaveCalendar'
 import styles from './Calendar.module.css'
@@ -37,8 +36,14 @@ const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
 function Calendar() {
   const { user } = useAuth()
-  const { monthRota, timeOff, refreshTimeOff, cancelRequests, refreshCancels } =
-    useRota()
+  const {
+    monthRota,
+    leaveDays,
+    refreshLeave,
+    cancelRequests,
+    refreshCancels,
+    homeName,
+  } = useRota()
 
   const [weekRotaState] = useState({
     early: Array(7).fill([]),
@@ -55,13 +60,11 @@ function Calendar() {
   // ── Modals ──
   const [selectedShift, setSelectedShift] = useState(null)
   const [cancelledShiftDetail, setCancelledShiftDetail] = useState(null)
-
   const [cancelReason, setCancelReason] = useState('')
   const [customReasonText, setCustomReasonText] = useState('')
   const [cancelNote, setCancelNote] = useState('')
   const [showReasonForm, setShowReasonForm] = useState(false)
   const [submitting, setSubmitting] = useState(false)
-
   const [showTimeOffModal, setShowTimeOffModal] = useState(false)
   const [timeOffType, setTimeOffType] = useState('annual_leave')
   const [timeOffSelectedDates, setTimeOffSelectedDates] = useState([])
@@ -75,9 +78,9 @@ function Calendar() {
   const currentWeekRota = monthRota[currentWeekKey] || weekRotaState
 
   // ── Derived data ──
-  const myTimeOff = useMemo(
-    () => getTimeOffForStaff(timeOff, staffId || ''),
-    [timeOff, staffId]
+  const myLeaveDays = useMemo(
+    () => getLeaveDaysForStaff(leaveDays, staffId || ''),
+    [leaveDays, staffId]
   )
 
   // ── Rota helpers ──
@@ -94,7 +97,7 @@ function Calendar() {
     (date, sid) => {
       const dateStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 
-      // Cancelled — approved cancel record
+      // Cancelled
       const isCancelled = cancelRequests.some(
         (r) =>
           r.staff_id === sid &&
@@ -104,27 +107,24 @@ function Calendar() {
       if (isCancelled) return 'cancelled'
 
       // Leave
-      const leaveEntry = myTimeOff.find((e) => e.date === dateStr)
-      if (leaveEntry) {
-        return leaveEntry.status === 'pending' ? 'leave-pending' : 'leave'
+      const leaveDay = getLeaveDayForDate(leaveDays, sid, dateStr)
+      if (leaveDay) {
+        return leaveDay.status === 'pending' ? 'leave-pending' : 'leave'
       }
 
       // Rota shift
       const rota = getRotaForDate(date)
       if (!rota) return 'none'
       const dayOfWeek = (date.getDay() + 6) % 7
-
       const lateStaff = rota.late?.[dayOfWeek] || []
       const myLate = lateStaff.find((s) => s.id === sid)
       if (myLate) return myLate.sleepIn ? 'sleep-in' : 'late'
-
       const earlyStaff = rota.early?.[dayOfWeek] || []
       const onEarly = earlyStaff.some((s) => s.id === sid)
       if (onEarly) return 'early'
-
       return 'none'
     },
-    [getRotaForDate, cancelRequests, myTimeOff]
+    [getRotaForDate, cancelRequests, leaveDays]
   )
 
   const myShiftsForWeek = useMemo(() => {
@@ -177,17 +177,18 @@ function Calendar() {
             r.shift_date === dateStr &&
             r.status === 'approved'
         ) || null
-      const timeOffEntries = getTimeOffForDateStr(myTimeOff, dateStr)
+      const leaveDay = getLeaveDayForDate(leaveDays, staffId, dateStr)
+      const leaveDayEntries = leaveDay ? [leaveDay] : []
       return {
         shift,
         shiftRequest,
         approvedCancel,
-        timeOffEntries,
+        timeOffEntries: leaveDayEntries,
         isPending: shiftRequest?.status === 'pending',
         isCancelled: !!approvedCancel,
       }
     },
-    [myShiftsForWeek, cancelRequests, staffId, myTimeOff]
+    [myShiftsForWeek, cancelRequests, staffId, leaveDays]
   )
 
   // ── Navigation ──
@@ -247,23 +248,17 @@ function Calendar() {
   // ── Time-off handlers ──
   const handleSubmitTimeOff = async () => {
     if (timeOffSelectedDates.length === 0) return
-    for (const dateStr of timeOffSelectedDates) {
-      await addTimeOff(
-        {
-          id: generateTimeOffId(),
-          staffId,
-          staffName,
-          date: dateStr,
-          type: timeOffType,
-          status: 'pending',
-          notes: timeOffNote || null,
-          requestedAt: new Date().toISOString(),
-        },
-        user.home,
-        user.org_id
-      )
-    }
-    refreshTimeOff()
+    await createLeaveRequest({
+      orgId: user.org_id,
+      homeId: user.home,
+      staffId: user.id,
+      staffName: user.name,
+      dates: timeOffSelectedDates,
+      type: timeOffType,
+      notes: timeOffNote || null,
+      status: 'pending',
+    })
+    refreshLeave()
     setTimeOffSubmitted(true)
   }
 
@@ -377,7 +372,6 @@ function Calendar() {
                   const m2 = String(date.getMonth() + 1).padStart(2, '0')
                   const d2 = String(date.getDate()).padStart(2, '0')
                   const dateStr = `${y2}-${m2}-${d2}`
-
                   const {
                     shift,
                     approvedCancel,
@@ -409,7 +403,7 @@ function Calendar() {
                         setSelectedShift(shift)
                       }}
                     >
-                      {/* Time off badges */}
+                      {/* Leave badges */}
                       {timeOffEntries.map((e) => (
                         <div
                           key={e.id}
@@ -483,7 +477,9 @@ function Calendar() {
                               ? '07:00–14:30'
                               : '14:00–23:00'}
                           </div>
-                          <div className={styles.shiftHome}>{shift.home}</div>
+                          <div className={styles.shiftHome}>
+                            {homeName || '—'}
+                          </div>
                         </div>
                       ) : (
                         <div className={styles.offDay}>
@@ -526,7 +522,7 @@ function Calendar() {
               </button>
             </div>
 
-            {/* Legend — month view only */}
+            {/* Legend */}
             <div className={styles.legend}>
               <div className={styles.legendItem}>
                 <span
@@ -569,7 +565,6 @@ function Calendar() {
             <div className={styles.yearWrap}>
               {yearMonths.map(({ year, month, label }) => {
                 const monthDates = getMonthDates(year, month)
-
                 const isHovered = hoveredMonth === `${year}-${month}`
                 let shiftCount = 0
                 monthDates.forEach((date) => {
@@ -626,7 +621,6 @@ function Calendar() {
                         const dateState = inMonth
                           ? getDateState(date, staffId)
                           : 'none'
-                        const hasShift = dateState !== 'none'
 
                         const STATE_BG = {
                           early: 'rgba(42, 127, 98, 0.25)',
@@ -637,7 +631,6 @@ function Calendar() {
                           leave: 'var(--accent-bg)',
                           none: 'transparent',
                         }
-
                         const STATE_BORDER = {
                           early: '1px solid rgba(42, 127, 98, 0.5)',
                           late: '1px solid rgba(122, 79, 168, 0.5)',
@@ -647,7 +640,6 @@ function Calendar() {
                           leave: '1px solid var(--accent-border)',
                           none: '1px solid var(--border-subtle)',
                         }
-
                         const STATE_COLOR = {
                           early: 'rgba(42, 127, 98, 0.9)',
                           late: '#7a4fa8',
@@ -664,9 +656,7 @@ function Calendar() {
                             className={styles.miniCell}
                             style={{
                               opacity: inMonth ? 1 : 0,
-                              background: isToday
-                                ? STATE_BG[dateState]
-                                : STATE_BG[dateState],
+                              background: STATE_BG[dateState],
                               border: isToday
                                 ? '1.5px solid var(--accent)'
                                 : STATE_BORDER[dateState],
@@ -687,7 +677,7 @@ function Calendar() {
                                   : inMonth
                                     ? STATE_COLOR[dateState]
                                     : 'transparent',
-                                fontWeight: hasShift ? 600 : 400,
+                                fontWeight: dateState !== 'none' ? 600 : 400,
                               }}
                             >
                               {date.getDate()}
@@ -732,7 +722,6 @@ function Calendar() {
                 <FontAwesomeIcon icon='xmark' />
               </button>
             </div>
-
             <div className={styles.modalBody}>
               <div className={styles.detailRow}>
                 <span className={styles.detailLabel}>Day</span>
@@ -763,7 +752,7 @@ function Calendar() {
               </div>
               <div className={styles.detailRow}>
                 <span className={styles.detailLabel}>Home</span>
-                <span className={styles.detailVal}>{selectedShift.home}</span>
+                <span className={styles.detailVal}>{homeName || '—'}</span>
               </div>
               {selectedShift.sleepIn && (
                 <div className={styles.detailRow}>
@@ -902,7 +891,6 @@ function Calendar() {
                     <option value='Transport issue'>Transport issue</option>
                     <option value='Other'>Other (please specify)</option>
                   </select>
-
                   {cancelReason === 'Other' && (
                     <div className={styles.field}>
                       <label className={styles.reasonLabel}>
@@ -917,7 +905,6 @@ function Calendar() {
                       />
                     </div>
                   )}
-
                   <div className={styles.fieldDivided}>
                     <label className={styles.reasonLabel}>
                       Additional note{' '}
@@ -933,7 +920,6 @@ function Calendar() {
                       rows='2'
                     />
                   </div>
-
                   <div className={styles.reasonActions}>
                     <button
                       className={styles.cancelReasonBtn}
@@ -1069,9 +1055,9 @@ function Calendar() {
             </div>
             <div className={styles.cancelledNoteWrap}>
               <div className={styles.cancelledNote}>
-                <FontAwesomeIcon icon='triangle-exclamation' />
-                This shift has been removed from the rota. Contact your manager
-                if this was a mistake.
+                <FontAwesomeIcon icon='triangle-exclamation' /> This shift has
+                been removed from the rota. Contact your manager if this was a
+                mistake.
               </div>
             </div>
           </div>
@@ -1117,6 +1103,7 @@ function Calendar() {
                     staffId={staffId}
                     selectedDates={timeOffSelectedDates}
                     onSelectionChange={setTimeOffSelectedDates}
+                    leaveDays={myLeaveDays}
                   />
                   <div className={styles.field}>
                     <label className={styles.detailLabel}>Leave type</label>

@@ -4,7 +4,6 @@ import { useRota } from '../context/RotaContext'
 import Navbar from '../components/layout/Navbar'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { fetchBankHolidays, getBankHolidayForDate } from '../utils/bankHolidays'
-import { removeTimeOff } from '../utils/timeOffStorage'
 import { toLocalDateString } from '../utils/dateUtils'
 import { getEventsForDate, getEventColor } from '../data/worldEvents'
 import styles from './YearCalendar.module.css'
@@ -28,16 +27,20 @@ const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
 function YearCalendar() {
   const { user } = useAuth()
-  const { timeOff, refreshTimeOff } = useRota()
+  const { leaveDays } = useRota()
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear())
   const [bankHolidays, setBankHolidays] = useState([])
   const [selectedDate, setSelectedDate] = useState(null)
   const [selectedDateInfo, setSelectedDateInfo] = useState(null)
   const [loading, setLoading] = useState(true)
 
-  const timeOffRecords = timeOff.reduce((acc, entry) => {
-    if (!acc[entry.date]) acc[entry.date] = []
-    acc[entry.date].push(entry)
+  // Build a map of date → approved leave day records for fast lookup
+  // Only show approved leave on the year calendar — pending and declined
+  // are not relevant at this view level
+  const leaveDaysByDate = leaveDays.reduce((acc, day) => {
+    if (day.status !== 'approved') return acc
+    if (!acc[day.date]) acc[day.date] = []
+    acc[day.date].push(day)
     return acc
   }, {})
 
@@ -63,20 +66,6 @@ function YearCalendar() {
     setSelectedDateInfo({ bankHoliday, staffOff, events })
   }
 
-  const handleRemoveTimeOff = async (dateStr, timeOffId) => {
-    await removeTimeOff(timeOffId)
-    refreshTimeOff()
-    const remaining = (timeOffRecords[dateStr] || []).filter(
-      (e) => e.id !== timeOffId
-    )
-    if (remaining.length === 0) {
-      setSelectedDate(null)
-      setSelectedDateInfo(null)
-    } else {
-      setSelectedDateInfo((prev) => ({ ...prev, staffOff: remaining }))
-    }
-  }
-
   const renderMonth = (year, monthIndex) => {
     const monthName = MONTHS[monthIndex]
     const daysInMonth = getDaysInMonth(year, monthIndex)
@@ -94,7 +83,7 @@ function YearCalendar() {
       const date = new Date(year, monthIndex, day)
       const dateStr = toLocalDateString(date)
       const bankHoliday = getBankHolidayForDate(date, bankHolidays)
-      const staffOff = timeOffRecords[dateStr] || []
+      const staffOff = leaveDaysByDate[dateStr] || []
       const isToday = isCurrentMonth && day === today.getDate()
 
       const dateEvents = getEventsForDate(date, bankHolidays)
@@ -142,7 +131,7 @@ function YearCalendar() {
           <div className={styles.staffList}>
             {staffOff.slice(0, 2).map((off) => (
               <div key={off.id} className={styles.staffNameTag}>
-                {(off.staff_name || off.staffName || '').split(' ')[0]}
+                {(off.staff_name || '').split(' ')[0]}
               </div>
             ))}
             {staffOff.length > 2 && (
@@ -358,29 +347,12 @@ function YearCalendar() {
                       <div key={off.id} className={styles.staffOffCard}>
                         <div>
                           <div className={styles.staffOffName}>
-                            {off.staff_name || off.staffName}
+                            {off.staff_name}
                           </div>
                           <div className={styles.staffOffType}>
-                            Type: {off.type.replace('_', ' ')}
+                            {off.type?.replace('_', ' ')}
                           </div>
-                          {off.notes && (
-                            <div className={styles.staffOffNotes}>
-                              {off.notes}
-                            </div>
-                          )}
                         </div>
-                        <button
-                          className={styles.removeBtn}
-                          onClick={() =>
-                            handleRemoveTimeOff(
-                              toLocalDateString(selectedDate),
-                              off.id
-                            )
-                          }
-                          title='Remove time off'
-                        >
-                          <FontAwesomeIcon icon='xmark' />
-                        </button>
                       </div>
                     ))}
                   </div>

@@ -944,3 +944,309 @@
   color: var(--color-warning);
   font-size: 10px;
 }
+/* ── Leave tab redesign ─────────────────────────────────────────── */
+.leaveActionsBox {
+  background: var(--bg-raised);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  margin-bottom: 24px;
+  max-height: 420px;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.pendingList {
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-bottom: 4px;
+}
+
+.noPending {
+  font-size: 13px;
+  color: var(--text-muted);
+  padding: 8px 0;
+}
+
+.leaveActionsDivider {
+  border: none;
+  border-top: 1px dashed var(--border-subtle);
+  margin: 14px 0;
+  flex-shrink: 0;
+}
+
+.addLeaveBtn {
+  background: transparent;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  padding: 8px 14px;
+  font-size: 13px;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: background 0.15s;
+  flex-shrink: 0;
+  align-self: flex-start;
+}
+
+.addLeaveBtn:hover {
+  background: var(--bg-hover);
+}
+
+/* ── Pending leave card ─────────────────────────────────────────── */
+.pendingCard {
+  background: var(--bg-elevated);
+  border: 1px solid var(--color-warning-border);
+  border-radius: var(--radius-md);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pendingCardTop {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.pendingCardName {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.pendingCardMeta {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+.dayChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.dayChip {
+  border-radius: var(--radius-sm);
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  transition:
+    background 0.12s,
+    color 0.12s,
+    border-color 0.12s;
+}
+
+.pendingCardHint {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.declineAllBtn {
+  background: transparent;
+  border: 1px solid var(--color-danger-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-danger);
+  padding: 5px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+
+.declineAllBtn:hover {
+  background: var(--color-danger-bg);
+}
+
+.confirmLeaveBtn {
+  background: var(--color-success);
+  border: none;
+  border-radius: var(--radius-md);
+  color: #fff;
+  padding: 9px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  transition: opacity 0.15s;
+  align-self: flex-end;
+}
+
+.confirmLeaveBtn:hover:not(:disabled) {
+  opacity: 0.88;
+}
+
+.confirmLeaveBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Leave history ──────────────────────────────────────────────── */
+.leaveHistoryWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.leaveHistoryTitle {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.leaveFilters {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.leaveFilter {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  padding: 7px 12px;
+  font-size: 12px;
+  font-family: 'DM Sans', sans-serif;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.leaveFilter:focus {
+  border-color: var(--accent);
+}
+
+.leaveTable {
+  background: var(--bg-raised);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.leaveTableHeader {
+  display: grid;
+  grid-template-columns: 1fr 2fr 1fr 80px 1fr 24px;
+  padding: 10px 16px;
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border-subtle);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.leaveTableRow {
+  display: grid;
+  grid-template-columns: 1fr 2fr 1fr 80px 1fr 24px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+  cursor: pointer;
+  transition: background 0.1s;
+  align-items: center;
+}
+
+.leaveTableRow:last-child {
+  border-bottom: none;
+}
+
+.leaveTableRow:hover {
+  background: var(--bg-hover);
+}
+
+.leaveTableStaff {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.leaveTableDate {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-family: 'DM Mono', monospace;
+}
+
+.leaveTableType {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.leaveTableChevron {
+  font-size: 16px;
+  color: var(--text-muted);
+  text-align: right;
+}
+
+.leaveTableFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 8px;
+}
+
+.leaveTableCount {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.loadMoreBtn {
+  background: transparent;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  color: var(--accent);
+  padding: 6px 14px;
+  font-size: 12px;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  transition: background 0.15s;
+}
+
+.loadMoreBtn:hover {
+  background: var(--accent-bg);
+}
+
+.leaveHistoryEmpty {
+  font-size: 13px;
+  color: var(--text-muted);
+  padding: 24px 0;
+  text-align: center;
+}
+.pendingCardActions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.leaveTableStatus {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  text-transform: capitalize;
+  align-self: center;
+  justify-self: start;
+}
+
+.leaveTableBy {
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

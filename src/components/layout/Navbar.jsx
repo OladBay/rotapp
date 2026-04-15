@@ -3,7 +3,7 @@ import { useAuth } from '../../context/AuthContext'
 import { useTheme } from '../../context/ThemeContext'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { useRota } from '../../context/RotaContext'
-import { getPendingTimeOffCount } from '../../utils/timeOffStorage'
+import { getPendingRequestCount } from '../../utils/timeOffStorage'
 import { getPendingCancelCount } from '../../utils/cancelRequests'
 import { getUnreadCount } from '../../utils/notifications'
 import SessionBanner from './SessionBanner'
@@ -12,7 +12,7 @@ import styles from './Navbar.module.css'
 function Navbar() {
   const { user, logout } = useAuth()
   const { theme, toggleTheme } = useTheme()
-  const { timeOff, cancelRequests, notifications } = useRota()
+  const { leaveRequests, cancelRequests, notifications } = useRota()
   const navigate = useNavigate()
   const location = useLocation()
 
@@ -22,16 +22,13 @@ function Navbar() {
   }
 
   // ── Staff badge count ──────────────────────────────────────────────────
-  // Combines legacy pending counts (cancels + time off) with unread
-  // notifications. As notification creation is wired into more flows,
-  // the legacy counts will be replaced. Both sources are additive for now
-  // so nothing is lost during the transition.
+  // Combines pending leave requests, pending cancellations, and unread
+  // notifications into a single badge count on the Staff nav link.
   const pendingCancels = getPendingCancelCount(cancelRequests)
-  const pendingTimeOff = getPendingTimeOffCount(timeOff)
+  const pendingLeave = getPendingRequestCount(leaveRequests)
   const unreadNotifications = getUnreadCount(notifications)
 
-  const totalStaffPending =
-    pendingCancels + pendingTimeOff + unreadNotifications
+  const totalStaffPending = pendingCancels + pendingLeave + unreadNotifications
   const hasStaffAction = totalStaffPending > 0
 
   const canSeeStaff = ['manager', 'superadmin', 'operationallead'].includes(

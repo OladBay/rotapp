@@ -1,7 +1,6 @@
 import { useState, useMemo } from 'react'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { useRota } from '../../context/RotaContext'
-import { getTimeOffForStaff } from '../../utils/timeOffStorage'
+import { getLeaveDaysForStaff } from '../../utils/timeOffStorage'
 import styles from './LeaveCalendar.module.css'
 
 const DAYS = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su']
@@ -28,25 +27,36 @@ function toDateStr(date) {
   return `${y}-${m}-${d}`
 }
 
-function LeaveCalendar({ staffId, selectedDates = [], onSelectionChange }) {
+// LeaveCalendar accepts leaveDays as a prop — it does not read from context.
+// Callers are responsible for passing the correct leaveDays array for the
+// staff member being shown.
+function LeaveCalendar({
+  staffId,
+  selectedDates = [],
+  onSelectionChange,
+  leaveDays = [],
+}) {
   const today = new Date()
   const [viewYear, setViewYear] = useState(today.getFullYear())
   const [viewMonth, setViewMonth] = useState(today.getMonth())
 
-  const { timeOff } = useRota()
-
-  const existingLeave = useMemo(
-    () => getTimeOffForStaff(timeOff, staffId || ''),
-    [timeOff, staffId]
+  // Get all leave days for this staff member
+  const staffLeaveDays = useMemo(
+    () => getLeaveDaysForStaff(leaveDays, staffId || ''),
+    [leaveDays, staffId]
   )
 
+  // Build a map of date → status for blocking already-taken days
+  // Only block approved and pending days — declined days are available again
   const blockedMap = useMemo(() => {
     const map = {}
-    existingLeave.forEach((e) => {
-      if (e.date) map[e.date] = e.status
+    staffLeaveDays.forEach((e) => {
+      if (e.date && (e.status === 'approved' || e.status === 'pending')) {
+        map[e.date] = e.status
+      }
     })
     return map
-  }, [existingLeave])
+  }, [staffLeaveDays])
 
   const todayStr = toDateStr(today)
 
@@ -54,18 +64,14 @@ function LeaveCalendar({ staffId, selectedDates = [], onSelectionChange }) {
     if (viewMonth === 0) {
       setViewMonth(11)
       setViewYear((y) => y - 1)
-    } else {
-      setViewMonth((m) => m - 1)
-    }
+    } else setViewMonth((m) => m - 1)
   }
 
   const nextMonth = () => {
     if (viewMonth === 11) {
       setViewMonth(0)
       setViewYear((y) => y + 1)
-    } else {
-      setViewMonth((m) => m + 1)
-    }
+    } else setViewMonth((m) => m + 1)
   }
 
   const calendarDays = useMemo(() => {
@@ -110,8 +116,7 @@ function LeaveCalendar({ staffId, selectedDates = [], onSelectionChange }) {
     return selectedDates
       .map((ds) => {
         const [y, m, d] = ds.split('-').map(Number)
-        const date = new Date(y, m - 1, d)
-        return date.toLocaleDateString('en-GB', {
+        return new Date(y, m - 1, d).toLocaleDateString('en-GB', {
           day: 'numeric',
           month: 'short',
         })
@@ -152,7 +157,6 @@ function LeaveCalendar({ staffId, selectedDates = [], onSelectionChange }) {
           const isBlocked = !!blockedStatus && !outside
           const isPast = !outside && dateStr < todayStr
 
-          // Cell class
           const cellClass = [
             styles.cell,
             outside
@@ -170,7 +174,6 @@ function LeaveCalendar({ staffId, selectedDates = [], onSelectionChange }) {
             .filter(Boolean)
             .join(' ')
 
-          // Number class
           const numClass = [
             styles.cellNum,
             outside

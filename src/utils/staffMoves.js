@@ -50,7 +50,8 @@ export async function createRequest({
 // ── executeMove ────────────────────────────────────────────────────
 // Shared by both paths. Updates profiles.home to the new home.
 // Also marks the move request as completed.
-// Called by: acceptRequest() and directly on OL-initiated moves.
+// Uses security definer RPC to bypass RLS on cross-home profile update.
+// Called by: acceptRequest() and createAndExecute().
 export async function executeMove({
   requestId,
   staffId,
@@ -64,11 +65,17 @@ export async function executeMove({
 
   const now = new Date().toISOString()
 
-  // Update profiles.home
-  const { error: profileError } = await supabase
-    .from('profiles')
-    .update({ home: toHomeId })
-    .eq('id', staffId)
+  // Update profiles.home via security definer function.
+  // Direct update is blocked by RLS when updating cross-home staff —
+  // the RPC function has its own guards and bypasses RLS safely.
+  const { error: profileError } = await supabase.rpc(
+    'execute_staff_home_update',
+    {
+      p_staff_id: staffId,
+      p_to_home_id: toHomeId,
+      p_request_id: requestId,
+    }
+  )
 
   if (profileError) {
     console.error('staffMoves.executeMove: profile update error', profileError)
@@ -143,11 +150,17 @@ export async function createAndExecute({
     throw error
   }
 
-  // Update profiles.home
-  const { error: profileError } = await supabase
-    .from('profiles')
-    .update({ home: toHomeId })
-    .eq('id', staffId)
+  // Update profiles.home via security definer function.
+  // OL path: request is already completed so we pass it directly.
+  // The RPC validates org_id and role before executing.
+  const { error: profileError } = await supabase.rpc(
+    'execute_staff_home_update',
+    {
+      p_staff_id: staffId,
+      p_to_home_id: toHomeId,
+      p_request_id: data.id,
+    }
+  )
 
   if (profileError) {
     console.error(
@@ -210,6 +223,7 @@ export async function rejectRequest({
     throw error
   }
 }
+
 // ── cancelRequest ──────────────────────────────────────────────────
 // Manager A cancels their own pending request before Manager B acts.
 // profiles.home is NOT touched.

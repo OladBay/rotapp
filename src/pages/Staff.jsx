@@ -13,12 +13,10 @@ import {
   getPendingCancelCount,
 } from '../utils/cancelRequests'
 import {
-  getTimeOffForStaff,
-  addTimeOff,
-  approveTimeOff,
-  removeTimeOff,
-  generateTimeOffId,
-  getPendingTimeOffCount,
+  createLeaveRequest,
+  reviewLeaveRequest,
+  getPendingRequestCount,
+  getLeaveDaysForStaff,
 } from '../utils/timeOffStorage'
 import { removeStaffFromShift } from '../utils/rotaMutations'
 import {
@@ -46,6 +44,7 @@ import LeaveCalendar from '../components/shared/LeaveCalendar'
 import { fetchHomes } from '../utils/homesData'
 import styles from './Staff.module.css'
 
+// ── Constants ──────────────────────────────────────────────────────
 const ROLE_LABELS = {
   manager: 'Manager',
   deputy: 'Deputy Manager',
@@ -61,48 +60,25 @@ const STATUS_COLORS = {
 }
 
 const TYPE_LABELS = {
-  annual_leave: 'Annual',
+  annual_leave: 'Annual leave',
   sick: 'Sick',
   training: 'Training',
   other: 'Other',
 }
 
-const TYPE_STYLES = {
-  annual_leave: {
-    background: 'var(--accent-bg)',
-    color: 'var(--accent)',
-    border: '1px solid var(--accent-border)',
-  },
-  sick: {
-    background: 'var(--color-danger-bg)',
-    color: 'var(--color-danger)',
-    border: '1px solid var(--color-danger-border)',
-  },
-  training: {
-    background: 'var(--color-success-bg)',
-    color: 'var(--color-success)',
-    border: '1px solid var(--color-success-border)',
-  },
-  other: {
-    background: 'var(--bg-active)',
-    color: 'var(--text-secondary)',
-    border: '1px solid var(--border-default)',
-  },
-}
-
 const EXCLUDED_ROLES = ['superadmin', 'operationallead', 'relief']
 
-// View-behaviour notification types shown in the Transfers tab
-// These are marked as read when the Transfers tab is opened
 const TRANSFERS_VIEW_TYPES = Object.entries(NOTIFICATION_READ_BEHAVIOUR)
   .filter(([, behaviour]) => behaviour === 'view')
   .map(([type]) => type)
 
+// ── Staff page ─────────────────────────────────────────────────────
 function Staff() {
   const { user } = useAuth()
   const {
-    timeOff,
-    refreshTimeOff,
+    leaveRequests,
+    leaveDays,
+    refreshLeave,
     cancelRequests,
     refreshCancels,
     refreshMonthRota,
@@ -131,13 +107,20 @@ function Staff() {
   const [showInviteModal, setShowInviteModal] = useState(false)
   const [tab, setTab] = useState('active')
   const [selectedStaff, setSelectedStaff] = useState(null)
+  const [isTabsPinned, setIsTabsPinned] = useState(() => {
+    try {
+      return localStorage.getItem('rotapp_staff_tabs_pinned') === 'true'
+    } catch {
+      return false
+    }
+  })
 
   // ── Leave state ──
   const [leaveStaff, setLeaveStaff] = useState(null)
   const [leaveModalType, setLeaveModalType] = useState('annual_leave')
   const [leaveSelectedDates, setLeaveSelectedDates] = useState([])
   const [leaveNotes, setLeaveNotes] = useState('')
-  const [selectedLeaveEntry, setSelectedLeaveEntry] = useState(null)
+  const [selectedLeaveRequest, setSelectedLeaveRequest] = useState(null)
 
   // ── Cancel request state ──
   const [selectedRequest, setSelectedRequest] = useState(null)
@@ -151,24 +134,16 @@ function Staff() {
   const [showRejectMoveModal, setShowRejectMoveModal] = useState(false)
   const [moveRejectReason, setMoveRejectReason] = useState('')
 
-  const [isTabsPinned, setIsTabsPinned] = useState(() => {
-    try {
-      return localStorage.getItem('rotapp_staff_tabs_pinned') === 'true'
-    } catch {
-      return false
-    }
-  })
-
+  // ── Tabs pin ──
   const toggleTabsPin = () => {
     const newVal = !isTabsPinned
     setIsTabsPinned(newVal)
     localStorage.setItem('rotapp_staff_tabs_pinned', String(newVal))
   }
 
-  // ── Mark view-behaviour notifications as read when Transfers tab opens ──
+  // ── Mark transfer notifications as read on tab open ──
   useEffect(() => {
-    if (tab !== 'transfers') return
-    if (!user?.id) return
+    if (tab !== 'transfers' || !user?.id) return
     const hasUnread = notifications.some(
       (n) => !n.read_at && TRANSFERS_VIEW_TYPES.includes(n.type)
     )
@@ -183,7 +158,7 @@ function Staff() {
       )
   }, [tab])
 
-  // ── Fetch homes (role-scoped, for filter UI only) ──
+  // ── Fetch homes ──
   useEffect(() => {
     if (!user) return
     fetchHomes(user.activeRole, user.home, user.org_id).then(setHomes)
@@ -200,12 +175,11 @@ function Staff() {
           .select('*')
           .eq('org_id', user?.org_id)
           .neq('status', 'declined')
+          .neq('role', 'superadmin')
           .order('name', { ascending: true })
-
         if (user?.home) {
           query = query.or(`home.eq.${user.home},role.eq.relief`)
         }
-
         const { data, error } = await query
         if (error) throw error
         setAllStaff(data || [])
@@ -219,7 +193,7 @@ function Staff() {
     fetchStaff()
   }, [staffRefresh, user?.home, user?.org_id, isOLorAdmin])
 
-  // ── Approve staff ──
+  // ── Staff approval ──
   const handleApprove = async (staffMember) => {
     try {
       const { error } = await supabase
@@ -235,7 +209,6 @@ function Staff() {
     }
   }
 
-  // ── Decline staff ──
   const handleDecline = async (staffMember) => {
     try {
       const { error } = await supabase
@@ -251,7 +224,6 @@ function Staff() {
   }
 
   // ── Move handlers ──
-
   const handleInitiateMove = async ({
     staffId,
     staffName,
@@ -272,16 +244,11 @@ function Staff() {
         initiatedBy: user.id,
         initiatedByName: user.name,
       })
-
-      // Fetch both managers directly — not from allStaff which is
-      // scoped to the current user's home only
       const [fromHomeManager, toHomeManager] = await Promise.all([
         fetchHomeManager(fromHomeId),
         fetchHomeManager(toHomeId),
       ])
-
       const notifyPromises = []
-
       if (fromHomeManager) {
         notifyPromises.push(
           notifyTransferExecutedOL({
@@ -296,7 +263,6 @@ function Staff() {
           })
         )
       }
-
       if (toHomeManager && toHomeManager.id !== fromHomeManager?.id) {
         notifyPromises.push(
           notifyTransferExecutedOL({
@@ -311,7 +277,6 @@ function Staff() {
           })
         )
       }
-
       await Promise.all(notifyPromises)
     } else {
       const requestId = await createRequest({
@@ -323,8 +288,6 @@ function Staff() {
         initiatedBy: user.id,
         initiatedByName: user.name,
       })
-
-      // Notify Manager A that their outgoing request is in motion
       await notifyTransferOutgoing({
         orgId: user.org_id,
         recipientId: user.id,
@@ -334,10 +297,7 @@ function Staff() {
         initiatedById: user.id,
         initiatedByName: user.name,
       })
-
-      // Fetch destination manager directly — not from allStaff
       const toHomeManager = await fetchHomeManager(toHomeId)
-
       if (toHomeManager) {
         await notifyTransferIncoming({
           orgId: user.org_id,
@@ -351,7 +311,6 @@ function Staff() {
         })
       }
     }
-
     await refreshMoveRecords()
     await refreshNotifications()
     setStaffRefresh((n) => n + 1)
@@ -366,12 +325,9 @@ function Staff() {
         reviewedBy: user.id,
         reviewedByName: user.name,
       })
-
       const toHomeName =
         orgHomes.find((h) => h.id === request.to_home_id)?.name ||
         request.to_home_id
-
-      // Notify Manager A that their request was accepted
       await notifyTransferAccepted({
         orgId: user.org_id,
         recipientId: request.initiated_by,
@@ -381,11 +337,7 @@ function Staff() {
         reviewedById: user.id,
         reviewedByName: user.name,
       })
-
-      // Mark Manager B's incoming notification as read —
-      // they acted on it so it's resolved
       await markReferenceAsRead(user.id, request.id)
-
       await refreshMoveRecords()
       await refreshNotifications()
       setStaffRefresh((n) => n + 1)
@@ -403,12 +355,9 @@ function Staff() {
         reviewedByName: user.name,
         rejectionReason: moveRejectReason || null,
       })
-
       const toHomeName =
         orgHomes.find((h) => h.id === request.to_home_id)?.name ||
         request.to_home_id
-
-      // Notify Manager A that their request was rejected
       await notifyTransferRejected({
         orgId: user.org_id,
         recipientId: request.initiated_by,
@@ -418,11 +367,7 @@ function Staff() {
         reviewedById: user.id,
         reviewedByName: user.name,
       })
-
-      // Mark Manager B's incoming notification as read —
-      // they acted on it so it's resolved
       await markReferenceAsRead(user.id, request.id)
-
       await refreshMoveRecords()
       await refreshNotifications()
       setSelectedMoveRequest(null)
@@ -436,17 +381,12 @@ function Staff() {
   const handleCancelMove = async (requestId) => {
     try {
       const request = moveRecords.find((r) => r.id === requestId)
-
       await cancelRequest({ requestId })
-
       if (request) {
         const fromHomeName =
           orgHomes.find((h) => h.id === request.from_home_id)?.name ||
           request.from_home_id
-
-        // Fetch destination manager directly — not from allStaff
         const toHomeManager = await fetchHomeManager(request.to_home_id)
-
         if (toHomeManager) {
           await notifyTransferCancelled({
             orgId: user.org_id,
@@ -458,76 +398,14 @@ function Staff() {
             cancelledByName: user.name,
           })
         }
-
         await markReferenceAsRead(user.id, requestId)
       }
-
       await refreshMoveRecords()
       await refreshNotifications()
     } catch (err) {
       console.error('Cancel move failed:', err)
     }
   }
-
-  // ── Derived staff lists ──
-  const visibleStaff =
-    isOLorAdmin && homeFilter !== 'all'
-      ? allStaff.filter((s) => s.home === homeFilter || s.role === 'relief')
-      : allStaff
-
-  const activeStaff = visibleStaff.filter(
-    (s) => s.status === 'active' && !EXCLUDED_ROLES.includes(s.role)
-  )
-  const pendingStaff = visibleStaff.filter(
-    (s) => s.status === 'pending' && !EXCLUDED_ROLES.includes(s.role)
-  )
-  const reliefStaff = allStaff.filter((s) => s.role === 'relief')
-
-  const displayed =
-    tab === 'active'
-      ? activeStaff
-      : tab === 'pending'
-        ? pendingStaff
-        : tab === 'relief'
-          ? reliefStaff
-          : visibleStaff
-
-  const uniqueHomes = homes
-
-  // ── Derived context data ──
-  const pendingCancels = getPendingRequests(cancelRequests)
-  const allCancels = getAllRequests(cancelRequests)
-
-  // ── Derived move data ──
-  const incomingMoveRequests = moveRecords.filter(
-    (r) => r.to_home_id === user?.home && r.status === 'pending'
-  )
-  const outgoingMoveRequests = moveRecords.filter(
-    (r) => r.from_home_id === user?.home && r.status === 'pending'
-  )
-  const moveHistory = moveRecords.filter(
-    (r) =>
-      (r.from_home_id === user?.home || r.to_home_id === user?.home) &&
-      ['completed', 'rejected', 'cancelled'].includes(r.status)
-  )
-
-  // ── Derived notification data for Transfers tab ──
-  // Incoming count — actionable, drives number badge
-  const transferIncomingUnread = getUnreadCountByTypes(notifications, [
-    NOTIFICATION_TYPES.TRANSFER_INCOMING,
-  ])
-  // View-type unread — informational, drives ! alert for Manager A
-  const transferViewUnread = getUnreadCountByTypes(
-    notifications,
-    TRANSFERS_VIEW_TYPES
-  )
-
-  const pendingIncomingCount = isOLorAdmin
-    ? moveRecords.filter((r) => r.status === 'pending').length
-    : transferIncomingUnread
-
-  const transfersTabHasBadge = pendingIncomingCount > 0
-  const transfersTabHasAlert = !transfersTabHasBadge && transferViewUnread > 0
 
   // ── Cancel request handlers ──
   const handleApproveRequest = async (request) => {
@@ -569,11 +447,76 @@ function Staff() {
     setShowRejectModal(false)
   }
 
+  // ── Derived lists ──
+  const visibleStaff =
+    isOLorAdmin && homeFilter !== 'all'
+      ? allStaff.filter((s) => s.home === homeFilter || s.role === 'relief')
+      : allStaff
+
+  const activeStaff = visibleStaff.filter(
+    (s) => s.status === 'active' && !EXCLUDED_ROLES.includes(s.role)
+  )
+  const pendingStaff = visibleStaff.filter(
+    (s) => s.status === 'pending' && !EXCLUDED_ROLES.includes(s.role)
+  )
+  const reliefStaff = allStaff.filter((s) => s.role === 'relief')
+  const displayed =
+    tab === 'active'
+      ? activeStaff
+      : tab === 'pending'
+        ? pendingStaff
+        : tab === 'relief'
+          ? reliefStaff
+          : visibleStaff
+
+  // ── Derived cancel data ──
+  const pendingCancels = getPendingRequests(cancelRequests)
+  const allCancels = getAllRequests(cancelRequests)
+
+  // ── Derived move data ──
+  const incomingMoveRequests = moveRecords.filter(
+    (r) => r.to_home_id === user?.home && r.status === 'pending'
+  )
+  const outgoingMoveRequests = moveRecords.filter(
+    (r) => r.from_home_id === user?.home && r.status === 'pending'
+  )
+  const moveHistory = moveRecords.filter(
+    (r) =>
+      (r.from_home_id === user?.home || r.to_home_id === user?.home) &&
+      ['completed', 'rejected', 'cancelled'].includes(r.status)
+  )
+
+  // ── Derived notification data ──
+  const transferIncomingUnread = getUnreadCountByTypes(notifications, [
+    NOTIFICATION_TYPES.TRANSFER_INCOMING,
+  ])
+  const transferViewUnread = getUnreadCountByTypes(
+    notifications,
+    TRANSFERS_VIEW_TYPES
+  )
+  const pendingIncomingCount = isOLorAdmin
+    ? moveRecords.filter((r) => r.status === 'pending').length
+    : transferIncomingUnread
+  const transfersTabHasBadge = pendingIncomingCount > 0
+  const transfersTabHasAlert = !transfersTabHasBadge && transferViewUnread > 0
+
+  // ── Leave modal helpers ──
+  const closeLeaveModal = () => {
+    setLeaveStaff(null)
+    setLeaveSelectedDates([])
+    setLeaveNotes('')
+    setLeaveModalType('annual_leave')
+  }
+
+  // Get leaveDays for a specific staff member — used by LeaveCalendar
+  const getLeaveDaysForMember = (staffId) =>
+    getLeaveDaysForStaff(leaveDays, staffId)
+
   return (
     <div className={styles.page}>
       <Navbar />
       <div className={styles.body}>
-        {/* Header */}
+        {/* ── Header ── */}
         <div className={styles.header}>
           <div>
             <h1 className={styles.title}>Staff</h1>
@@ -593,7 +536,7 @@ function Staff() {
           </div>
         </div>
 
-        {/* OL home filter */}
+        {/* ── OL home filter ── */}
         {isOLorAdmin && (
           <div className={styles.homeFilterRow}>
             <button
@@ -602,7 +545,7 @@ function Staff() {
             >
               All homes
             </button>
-            {uniqueHomes.map((home) => (
+            {homes.map((home) => (
               <button
                 key={home.id}
                 className={`${styles.homeFilterBtn}${homeFilter === home.id ? ` ${styles.homeFilterBtnActive}` : ''}`}
@@ -617,7 +560,7 @@ function Staff() {
         {staffLoading && <div className={styles.empty}>Loading staff…</div>}
         {staffError && <div className={styles.errorBanner}>{staffError}</div>}
 
-        {/* Tabs */}
+        {/* ── Tabs ── */}
         {!staffLoading && (
           <div
             className={`${styles.tabsBar}${isTabsPinned ? ` ${styles.tabsBarPinned}` : ''}`}
@@ -634,15 +577,12 @@ function Staff() {
                   hasBadge: pendingStaff.length > 0,
                   badgeCount: pendingStaff.length,
                 },
-                {
-                  key: 'relief',
-                  label: `Relief pool (${reliefStaff.length})`,
-                },
+                { key: 'relief', label: `Relief pool (${reliefStaff.length})` },
                 {
                   key: 'leave',
                   label: 'Leave & Absence',
-                  hasBadge: getPendingTimeOffCount(timeOff) > 0,
-                  badgeCount: getPendingTimeOffCount(timeOff),
+                  hasBadge: getPendingRequestCount(leaveRequests) > 0,
+                  badgeCount: getPendingRequestCount(leaveRequests),
                 },
                 {
                   key: 'requests',
@@ -685,7 +625,7 @@ function Staff() {
           </div>
         )}
 
-        {/* Staff list */}
+        {/* ── Staff list ── */}
         {!staffLoading &&
           tab !== 'leave' &&
           tab !== 'requests' &&
@@ -777,140 +717,41 @@ function Staff() {
             </div>
           )}
 
-        {/* Leave tab */}
+        {/* ── Leave & Absence tab ── */}
         {tab === 'leave' && (
           <div className={styles.leaveWrap}>
-            <div className={styles.leaveNote}>
-              Add and manage staff absences. Approved leave is automatically
-              excluded from rota generation.
+            {/* Actions box */}
+            <div className={styles.leaveActionsBox}>
+              <PendingLeaveSection
+                leaveRequests={leaveRequests}
+                leaveDays={leaveDays}
+                allStaff={allStaff}
+                user={user}
+                styles={styles}
+                refreshLeave={refreshLeave}
+                refreshMonthRota={refreshMonthRota}
+              />
+              <div className={styles.leaveActionsDivider} />
+              <button
+                className={styles.addLeaveBtn}
+                onClick={() => setLeaveStaff('picker')}
+              >
+                <FontAwesomeIcon icon='plus' /> Add leave for a staff member
+              </button>
             </div>
-            {allStaff
-              .filter(
-                (st) =>
-                  !['relief', 'manager', 'deputy'].includes(st.role) &&
-                  st.status === 'active'
-              )
-              .map((st) => {
-                const entries = getTimeOffForStaff(timeOff, st.id)
-                const approved = entries.filter((e) => e.status === 'approved')
-                const pending = entries.filter((e) => e.status === 'pending')
-                return (
-                  <div key={st.id} className={styles.leaveRow}>
-                    <div className={styles.leaveStaffInfo}>
-                      <div className={styles.staffName}>{st.name}</div>
-                      <div className={styles.staffRole}>
-                        {ROLE_LABELS[st.role] || st.role}
-                      </div>
-                    </div>
-                    <div className={styles.leaveDates}>
-                      {approved.length === 0 && pending.length === 0 ? (
-                        <span className={styles.noLeave}>
-                          No absences recorded
-                        </span>
-                      ) : (
-                        <>
-                          {approved.map((entry) => (
-                            <span
-                              key={entry.id}
-                              className={styles.leaveTag}
-                              style={{
-                                ...TYPE_STYLES[entry.type],
-                                cursor: 'pointer',
-                              }}
-                              onClick={() =>
-                                setSelectedLeaveEntry({
-                                  ...entry,
-                                  staffName: st.name,
-                                })
-                              }
-                            >
-                              <span className={styles.leaveTagLabel}>
-                                {TYPE_LABELS[entry.type]}
-                              </span>
-                              <span className={styles.leaveTagDate}>
-                                {entry.date}
-                              </span>
-                              <button
-                                className={styles.removeLeave}
-                                onClick={async (e) => {
-                                  e.stopPropagation()
-                                  await removeTimeOff(entry.id)
-                                  refreshTimeOff()
-                                }}
-                              >
-                                <FontAwesomeIcon icon='xmark' />
-                              </button>
-                            </span>
-                          ))}
-                          {pending.map((entry) => (
-                            <span
-                              key={entry.id}
-                              className={styles.leaveTag}
-                              style={{
-                                background: 'var(--color-warning-bg)',
-                                color: 'var(--color-warning)',
-                                border: '1px solid var(--color-warning-border)',
-                                cursor: 'pointer',
-                              }}
-                              onClick={() =>
-                                setSelectedLeaveEntry({
-                                  ...entry,
-                                  staffName: st.name,
-                                })
-                              }
-                            >
-                              <span className={styles.leaveTagLabel}>
-                                {TYPE_LABELS[entry.type]} · pending
-                              </span>
-                              <span className={styles.leaveTagDate}>
-                                {entry.date}
-                              </span>
-                              <button
-                                className={styles.approveLeaveBtn}
-                                onClick={async (e) => {
-                                  e.stopPropagation()
-                                  await approveTimeOff(entry.id, user?.name)
-                                  await removeStaffFromShift(
-                                    entry.staff_id,
-                                    entry.date,
-                                    user.home,
-                                    user.org_id,
-                                    { fromLeave: true }
-                                  )
-                                  refreshTimeOff()
-                                  refreshMonthRota()
-                                }}
-                              >
-                                <FontAwesomeIcon icon='check' />
-                              </button>
-                              <button
-                                className={styles.removeLeave}
-                                onClick={async (e) => {
-                                  e.stopPropagation()
-                                  await removeTimeOff(entry.id)
-                                  refreshTimeOff()
-                                }}
-                              >
-                                <FontAwesomeIcon icon='xmark' />
-                              </button>
-                            </span>
-                          ))}
-                        </>
-                      )}
-                    </div>
-                    <button
-                      className={styles.addLeaveBtn}
-                      onClick={() => setLeaveStaff(st)}
-                    >
-                      <FontAwesomeIcon icon='plus' /> Add leave
-                    </button>
-                  </div>
-                )
-              })}
+
+            {/* Leave history */}
+            <LeaveHistory
+              leaveRequests={leaveRequests}
+              leaveDays={leaveDays}
+              allStaff={allStaff}
+              styles={styles}
+              onRowClick={(request) => setSelectedLeaveRequest(request)}
+            />
           </div>
         )}
 
-        {/* Cancellations tab */}
+        {/* ── Cancellations tab ── */}
         {tab === 'requests' && (
           <div className={styles.requestsWrap}>
             {pendingCancels.length === 0 && allCancels.length === 0 ? (
@@ -1114,11 +955,10 @@ function Staff() {
           </div>
         )}
 
-        {/* Transfers tab */}
+        {/* ── Transfers tab ── */}
         {tab === 'transfers' && (
           <div className={styles.requestsWrap}>
-            {/* OL view — all pending across org */}
-            {isOLorAdmin && (
+            {isOLorAdmin ? (
               <>
                 {moveRecords.filter((r) => r.status === 'pending').length ===
                   0 &&
@@ -1185,10 +1025,7 @@ function Staff() {
                   </>
                 )}
               </>
-            )}
-
-            {/* Manager view — incoming + outgoing + history */}
-            {!isOLorAdmin && (
+            ) : (
               <>
                 {incomingMoveRequests.length === 0 &&
                 outgoingMoveRequests.length === 0 &&
@@ -1270,7 +1107,7 @@ function Staff() {
         )}
       </div>
 
-      {/* Staff profile modal */}
+      {/* ── Staff profile modal ── */}
       {selectedStaff && (
         <div className={styles.overlay} onClick={() => setSelectedStaff(null)}>
           <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
@@ -1321,10 +1158,7 @@ function Staff() {
                         ? 'Male'
                         : '—',
                 },
-                {
-                  label: 'Driver',
-                  val: selectedStaff.driver ? 'Yes' : 'No',
-                },
+                { label: 'Driver', val: selectedStaff.driver ? 'Yes' : 'No' },
                 {
                   label: 'Home',
                   val: selectedStaff.home
@@ -1378,7 +1212,7 @@ function Staff() {
         </div>
       )}
 
-      {/* Move staff modal */}
+      {/* ── Move staff modal ── */}
       {moveStaff && (
         <MoveStaffModal
           staff={moveStaff}
@@ -1391,7 +1225,7 @@ function Staff() {
         />
       )}
 
-      {/* Reject move modal */}
+      {/* ── Reject move modal ── */}
       {showRejectMoveModal && selectedMoveRequest && (
         <div
           className={styles.overlay}
@@ -1472,17 +1306,9 @@ function Staff() {
         </div>
       )}
 
-      {/* Add leave modal */}
+      {/* ── Add leave modal ── */}
       {leaveStaff && (
-        <div
-          className={styles.overlay}
-          onClick={() => {
-            setLeaveStaff(null)
-            setLeaveSelectedDates([])
-            setLeaveNotes('')
-            setLeaveModalType('annual_leave')
-          }}
-        >
+        <div className={styles.overlay} onClick={closeLeaveModal}>
           <div
             className={styles.modal}
             style={{ maxWidth: '460px' }}
@@ -1490,139 +1316,192 @@ function Staff() {
           >
             <div className={styles.modalHeader}>
               <div className={styles.modalTitle}>
-                Add Leave — {leaveStaff.name}
+                {leaveStaff === 'picker'
+                  ? 'Add Leave'
+                  : `Add Leave — ${leaveStaff.name}`}
               </div>
-              <button
-                className={styles.closeBtn}
-                onClick={() => {
-                  setLeaveStaff(null)
-                  setLeaveSelectedDates([])
-                  setLeaveNotes('')
-                  setLeaveModalType('annual_leave')
-                }}
-              >
+              <button className={styles.closeBtn} onClick={closeLeaveModal}>
                 <FontAwesomeIcon icon='xmark' />
               </button>
             </div>
             <div className={styles.modalBody}>
-              <LeaveCalendar
-                staffId={leaveStaff.id}
-                selectedDates={leaveSelectedDates}
-                onSelectionChange={setLeaveSelectedDates}
-              />
-              <div className={styles.field}>
-                <label className={styles.detailLabel}>Leave type</label>
-                <select
-                  className={styles.input}
-                  value={leaveModalType}
-                  onChange={(e) => setLeaveModalType(e.target.value)}
+              {leaveStaff === 'picker' ? (
+                <div className={styles.field}>
+                  <label className={styles.detailLabel}>Staff member</label>
+                  <select
+                    className={styles.input}
+                    value=''
+                    onChange={(e) => {
+                      const selected = allStaff.find(
+                        (s) => s.id === e.target.value
+                      )
+                      if (selected) {
+                        setLeaveStaff(selected)
+                        setLeaveSelectedDates([])
+                      }
+                    }}
+                  >
+                    <option value=''>Select a staff member…</option>
+                    {allStaff
+                      .filter(
+                        (s) =>
+                          s.status === 'active' &&
+                          !['superadmin', 'operationallead', 'relief'].includes(
+                            s.role
+                          )
+                      )
+                      .map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+              ) : (
+                <>
+                  <LeaveCalendar
+                    staffId={leaveStaff.id}
+                    selectedDates={leaveSelectedDates}
+                    onSelectionChange={setLeaveSelectedDates}
+                    leaveDays={getLeaveDaysForMember(leaveStaff.id)}
+                  />
+                  <div className={styles.field}>
+                    <label className={styles.detailLabel}>Leave type</label>
+                    <select
+                      className={styles.input}
+                      value={leaveModalType}
+                      onChange={(e) => setLeaveModalType(e.target.value)}
+                    >
+                      <option value='annual_leave'>Annual leave</option>
+                      <option value='sick'>Sick</option>
+                      <option value='training'>Training</option>
+                      <option value='other'>Other</option>
+                    </select>
+                  </div>
+                  <div className={styles.field}>
+                    <label className={styles.detailLabel}>
+                      Note (optional)
+                    </label>
+                    <input
+                      className={styles.input}
+                      type='text'
+                      placeholder='e.g. holiday, hospital appointment'
+                      value={leaveNotes}
+                      onChange={(e) => setLeaveNotes(e.target.value)}
+                    />
+                  </div>
+                </>
+              )}
+            </div>
+            {leaveStaff !== 'picker' && (
+              <div className={styles.modalFooterRow}>
+                <button
+                  className={styles.cancelModalBtn}
+                  onClick={closeLeaveModal}
                 >
-                  <option value='annual_leave'>Annual leave</option>
-                  <option value='sick'>Sick</option>
-                  <option value='training'>Training</option>
-                  <option value='other'>Other</option>
-                </select>
+                  Cancel
+                </button>
+                <button
+                  className={styles.approveModalBtn}
+                  style={{
+                    opacity: leaveSelectedDates.length > 0 ? 1 : 0.5,
+                    cursor:
+                      leaveSelectedDates.length > 0 ? 'pointer' : 'not-allowed',
+                  }}
+                  disabled={leaveSelectedDates.length === 0}
+                  onClick={async () => {
+                    await createLeaveRequest({
+                      orgId: user.org_id,
+                      homeId: user.home,
+                      staffId: leaveStaff.id,
+                      staffName: leaveStaff.name,
+                      dates: leaveSelectedDates,
+                      type: leaveModalType,
+                      notes: leaveNotes || null,
+                      status: 'approved',
+                      approvedBy: user?.name || 'Manager',
+                    })
+                    refreshLeave()
+                    refreshMonthRota()
+                    closeLeaveModal()
+                  }}
+                >
+                  <FontAwesomeIcon icon='check' /> Confirm leave
+                </button>
               </div>
-              <div className={styles.field}>
-                <label className={styles.detailLabel}>Note (optional)</label>
-                <input
-                  className={styles.input}
-                  type='text'
-                  placeholder='e.g. holiday, hospital appointment'
-                  value={leaveNotes}
-                  onChange={(e) => setLeaveNotes(e.target.value)}
-                />
-              </div>
-            </div>
-            <div className={styles.modalFooterRow}>
-              <button
-                className={styles.cancelModalBtn}
-                onClick={() => {
-                  setLeaveStaff(null)
-                  setLeaveSelectedDates([])
-                  setLeaveNotes('')
-                  setLeaveModalType('annual_leave')
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                className={styles.approveModalBtn}
-                style={{
-                  opacity: leaveSelectedDates.length > 0 ? 1 : 0.5,
-                  cursor:
-                    leaveSelectedDates.length > 0 ? 'pointer' : 'not-allowed',
-                }}
-                disabled={leaveSelectedDates.length === 0}
-                onClick={async () => {
-                  for (const dateStr of leaveSelectedDates) {
-                    await addTimeOff(
-                      {
-                        id: generateTimeOffId(),
-                        staffId: leaveStaff.id,
-                        staffName: leaveStaff.name,
-                        date: dateStr,
-                        type: leaveModalType,
-                        status: 'approved',
-                        approvedBy: user?.name || 'Manager',
-                        approvedAt: new Date().toISOString(),
-                        notes: leaveNotes || null,
-                      },
-                      user.home,
-                      user.org_id
-                    )
-                  }
-                  refreshTimeOff()
-                  refreshMonthRota()
-                  setLeaveStaff(null)
-                  setLeaveSelectedDates([])
-                  setLeaveNotes('')
-                  setLeaveModalType('annual_leave')
-                }}
-              >
-                <FontAwesomeIcon icon='check' /> Confirm leave
-              </button>
-            </div>
+            )}
           </div>
         </div>
       )}
 
-      {/* Leave detail modal */}
-      {selectedLeaveEntry && (
+      {/* ── Leave request detail modal ── */}
+      {selectedLeaveRequest && (
         <div
           className={styles.overlay}
-          onClick={() => setSelectedLeaveEntry(null)}
+          onClick={() => setSelectedLeaveRequest(null)}
         >
           <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
             <div className={styles.modalHeader}>
               <div className={styles.modalTitle}>Leave Details</div>
               <button
                 className={styles.closeBtn}
-                onClick={() => setSelectedLeaveEntry(null)}
+                onClick={() => setSelectedLeaveRequest(null)}
               >
                 <FontAwesomeIcon icon='xmark' />
               </button>
             </div>
             <div className={styles.modalBody}>
               {[
-                { label: 'Staff', val: selectedLeaveEntry.staffName },
+                { label: 'Staff', val: selectedLeaveRequest.staff_name },
                 {
                   label: 'Type',
                   val:
-                    TYPE_LABELS[selectedLeaveEntry.type] ||
-                    selectedLeaveEntry.type,
+                    TYPE_LABELS[selectedLeaveRequest.type] ||
+                    selectedLeaveRequest.type,
                 },
-                { label: 'Date', val: selectedLeaveEntry.date },
-                { label: 'Status', val: selectedLeaveEntry.status },
-                ...(selectedLeaveEntry.notes
-                  ? [{ label: 'Note', val: selectedLeaveEntry.notes }]
+                {
+                  label: 'Status',
+                  val: selectedLeaveRequest.status,
+                  style: {
+                    color:
+                      selectedLeaveRequest.status === 'approved'
+                        ? 'var(--color-success)'
+                        : selectedLeaveRequest.status === 'declined'
+                          ? 'var(--color-danger)'
+                          : selectedLeaveRequest.status === 'partially_approved'
+                            ? 'var(--color-warning)'
+                            : 'var(--text-primary)',
+                    fontWeight: 500,
+                    textTransform: 'capitalize',
+                  },
+                },
+                ...(selectedLeaveRequest.notes
+                  ? [{ label: 'Note', val: selectedLeaveRequest.notes }]
                   : []),
-                ...(selectedLeaveEntry.requested_at
+                {
+                  label: 'Requested',
+                  val: new Date(
+                    selectedLeaveRequest.requested_at
+                  ).toLocaleDateString('en-GB', {
+                    day: 'numeric',
+                    month: 'short',
+                    year: 'numeric',
+                  }),
+                },
+                ...(selectedLeaveRequest.reviewed_by
                   ? [
                       {
-                        label: 'Requested',
+                        label: 'Reviewed by',
+                        val: selectedLeaveRequest.reviewed_by,
+                      },
+                    ]
+                  : []),
+                ...(selectedLeaveRequest.reviewed_at
+                  ? [
+                      {
+                        label: 'Reviewed on',
                         val: new Date(
-                          selectedLeaveEntry.requested_at
+                          selectedLeaveRequest.reviewed_at
                         ).toLocaleDateString('en-GB', {
                           day: 'numeric',
                           month: 'short',
@@ -1631,61 +1510,66 @@ function Staff() {
                       },
                     ]
                   : []),
-                ...(selectedLeaveEntry.approved_by
-                  ? [
-                      {
-                        label: 'Approved by',
-                        val: selectedLeaveEntry.approved_by,
-                      },
-                    ]
-                  : []),
               ].map((row) => (
                 <div key={row.label} className={styles.detailRow}>
                   <span className={styles.detailLabel}>{row.label}</span>
-                  <span className={styles.detailVal}>{row.val}</span>
+                  <span className={styles.detailVal} style={row.style || {}}>
+                    {row.val}
+                  </span>
                 </div>
               ))}
-              {selectedLeaveEntry.status === 'pending' && (
-                <div
-                  className={styles.modalActions}
-                  style={{ marginTop: '20px' }}
-                >
-                  <button
-                    className={styles.declineBtn}
-                    onClick={async () => {
-                      await removeTimeOff(selectedLeaveEntry.id)
-                      refreshTimeOff()
-                      setSelectedLeaveEntry(null)
-                    }}
-                  >
-                    Decline
-                  </button>
-                  <button
-                    className={styles.approveBtn}
-                    onClick={async () => {
-                      await approveTimeOff(selectedLeaveEntry.id, user?.name)
-                      await removeStaffFromShift(
-                        selectedLeaveEntry.staff_id,
-                        selectedLeaveEntry.date,
-                        user.home,
-                        user.org_id,
-                        { fromLeave: true }
-                      )
-                      refreshTimeOff()
-                      refreshMonthRota()
-                      setSelectedLeaveEntry(null)
-                    }}
-                  >
-                    Approve
-                  </button>
-                </div>
-              )}
+
+              {/* Individual days */}
+              <div className={styles.divider} />
+              <div
+                className={styles.detailLabel}
+                style={{ marginBottom: '8px' }}
+              >
+                Days
+              </div>
+              <div className={styles.dayChips}>
+                {leaveDays
+                  .filter((d) => d.request_id === selectedLeaveRequest.id)
+                  .sort((a, b) => a.date.localeCompare(b.date))
+                  .map((day) => (
+                    <span
+                      key={day.id}
+                      className={styles.dayChip}
+                      style={{
+                        background:
+                          day.status === 'approved'
+                            ? 'var(--color-success-bg)'
+                            : day.status === 'declined'
+                              ? 'var(--color-danger-bg)'
+                              : 'var(--bg-active)',
+                        color:
+                          day.status === 'approved'
+                            ? 'var(--color-success)'
+                            : day.status === 'declined'
+                              ? 'var(--color-danger)'
+                              : 'var(--text-muted)',
+                        border:
+                          day.status === 'approved'
+                            ? '1px solid var(--color-success-border)'
+                            : day.status === 'declined'
+                              ? '1px solid var(--color-danger-border)'
+                              : '1px solid var(--border-subtle)',
+                        cursor: 'default',
+                      }}
+                    >
+                      {new Date(day.date + 'T00:00:00').toLocaleDateString(
+                        'en-GB',
+                        { day: 'numeric', month: 'short' }
+                      )}
+                    </span>
+                  ))}
+              </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Approve cancel request modal */}
+      {/* ── Approve cancel request modal ── */}
       {selectedRequest && !showRejectModal && (
         <div
           className={styles.overlay}
@@ -1767,7 +1651,7 @@ function Staff() {
         </div>
       )}
 
-      {/* Reject cancel request modal */}
+      {/* ── Reject cancel request modal ── */}
       {showRejectModal && selectedRequest && (
         <div
           className={styles.overlay}
@@ -1860,13 +1744,443 @@ function Staff() {
         </div>
       )}
 
-      {/* Onboard modal */}
+      {/* ── Onboard modal ── */}
       {showInviteModal && (
         <InviteModal
           onClose={() => setShowInviteModal(false)}
           defaultHomeId={user?.home}
           homes={homes}
         />
+      )}
+    </div>
+  )
+}
+
+// ── PendingLeaveSection ────────────────────────────────────────────
+function PendingLeaveSection({
+  leaveRequests,
+  leaveDays,
+  allStaff,
+  user,
+  styles,
+  refreshLeave,
+  refreshMonthRota,
+}) {
+  const pendingRequests = leaveRequests.filter(
+    (r) => r.status === 'pending' && allStaff.some((s) => s.id === r.staff_id)
+  )
+
+  if (pendingRequests.length === 0) {
+    return <div className={styles.noPending}>No pending leave requests</div>
+  }
+
+  return (
+    <div className={styles.pendingList}>
+      {pendingRequests.map((request) => {
+        const requestDays = leaveDays
+          .filter((d) => d.request_id === request.id)
+          .sort((a, b) => a.date.localeCompare(b.date))
+
+        return (
+          <PendingLeaveCard
+            key={request.id}
+            request={request}
+            requestDays={requestDays}
+            styles={styles}
+            onReview={async (approvedDayIds) => {
+              const allDayIds = requestDays.map((d) => d.id)
+              await reviewLeaveRequest({
+                requestId: request.id,
+                allDayIds,
+                approvedDayIds,
+                reviewedBy: user?.name,
+                orgId: user?.org_id,
+                homeId: user?.home,
+                staffId: request.staff_id,
+                onApprovedDate: async (date) => {
+                  await removeStaffFromShift(
+                    request.staff_id,
+                    date,
+                    user.home,
+                    user.org_id,
+                    { fromLeave: true }
+                  )
+                },
+              })
+              refreshLeave()
+              refreshMonthRota()
+            }}
+          />
+        )
+      })}
+    </div>
+  )
+}
+
+// ── PendingLeaveCard ───────────────────────────────────────────────
+function PendingLeaveCard({ request, requestDays, styles, onReview }) {
+  const [selectedDayIds, setSelectedDayIds] = useState(
+    requestDays.map((d) => d.id)
+  )
+  const [loading, setLoading] = useState(false)
+
+  const toggleDay = (dayId) => {
+    setSelectedDayIds((prev) =>
+      prev.includes(dayId)
+        ? prev.filter((id) => id !== dayId)
+        : [...prev, dayId]
+    )
+  }
+
+  const formatDate = (dateStr) => {
+    const [y, m, d] = dateStr.split('-').map(Number)
+    return new Date(y, m - 1, d).toLocaleDateString('en-GB', {
+      day: 'numeric',
+      month: 'short',
+    })
+  }
+
+  const requestedAgo = () => {
+    const diff = Date.now() - new Date(request.requested_at).getTime()
+    const days = Math.floor(diff / 86400000)
+    if (days === 0) return 'Requested today'
+    if (days === 1) return 'Requested yesterday'
+    return `Requested ${days} days ago`
+  }
+
+  const confirmLabel = loading
+    ? 'Processing…'
+    : selectedDayIds.length === requestDays.length
+      ? 'Approve all'
+      : selectedDayIds.length === 0
+        ? 'Decline all'
+        : `Approve ${selectedDayIds.length} of ${requestDays.length} days`
+
+  return (
+    <div className={styles.pendingCard}>
+      <div className={styles.pendingCardTop}>
+        <div>
+          <div className={styles.pendingCardName}>{request.staff_name}</div>
+          <div className={styles.pendingCardMeta}>
+            {TYPE_LABELS[request.type] || request.type} · {requestedAgo()}
+          </div>
+        </div>
+      </div>
+
+      <div className={styles.dayChips}>
+        {requestDays.map((day) => {
+          const isSelected = selectedDayIds.includes(day.id)
+          return (
+            <button
+              key={day.id}
+              className={styles.dayChip}
+              style={{
+                background: isSelected
+                  ? 'var(--color-success-bg)'
+                  : 'var(--bg-active)',
+                color: isSelected
+                  ? 'var(--color-success)'
+                  : 'var(--text-muted)',
+                border: isSelected
+                  ? '1px solid var(--color-success-border)'
+                  : '1px solid var(--border-subtle)',
+              }}
+              onClick={() => toggleDay(day.id)}
+            >
+              {formatDate(day.date)}
+            </button>
+          )
+        })}
+      </div>
+
+      <div className={styles.pendingCardHint}>
+        Tap days to toggle. Green = approve, grey = decline.
+      </div>
+
+      <div className={styles.pendingCardActions}>
+        <button
+          className={styles.declineAllBtn}
+          onClick={async () => {
+            setLoading(true)
+            await onReview([])
+            setLoading(false)
+          }}
+          disabled={loading}
+        >
+          Decline all
+        </button>
+        <button
+          className={styles.confirmLeaveBtn}
+          onClick={async () => {
+            setLoading(true)
+            await onReview(selectedDayIds)
+            setLoading(false)
+          }}
+          disabled={loading}
+        >
+          {confirmLabel}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+// ── LeaveHistory ───────────────────────────────────────────────────
+function LeaveHistory({
+  leaveRequests,
+  leaveDays,
+  allStaff,
+  styles,
+  onRowClick,
+}) {
+  const [staffFilter, setStaffFilter] = useState('all')
+  const [typeFilter, setTypeFilter] = useState('all')
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [fromFilter, setFromFilter] = useState('all')
+  const [toFilter, setToFilter] = useState('all')
+  const [visibleCount, setVisibleCount] = useState(20)
+
+  // Only show reviewed requests in history (not pending)
+  const historyRequests = leaveRequests.filter((r) =>
+    ['approved', 'partially_approved', 'declined'].includes(r.status)
+  )
+
+  const monthOptions = (() => {
+    const months = new Set()
+    historyRequests.forEach((r) => {
+      const [y, m] = r.requested_at.split('T')[0].split('-')
+      months.add(`${y}-${m}`)
+    })
+    return Array.from(months)
+      .sort()
+      .reverse()
+      .map((ym) => {
+        const [y, m] = ym.split('-').map(Number)
+        const label = new Date(y, m - 1, 1).toLocaleDateString('en-GB', {
+          month: 'long',
+          year: 'numeric',
+        })
+        return { value: ym, label }
+      })
+  })()
+
+  const filtered = historyRequests
+    .filter((r) => staffFilter === 'all' || r.staff_id === staffFilter)
+    .filter((r) => typeFilter === 'all' || r.type === typeFilter)
+    .filter((r) => statusFilter === 'all' || r.status === statusFilter)
+    .filter((r) => {
+      if (fromFilter === 'all') return true
+      return r.requested_at >= `${fromFilter}-01`
+    })
+    .filter((r) => {
+      if (toFilter === 'all') return true
+      const [y, m] = toFilter.split('-').map(Number)
+      const lastDay = new Date(y, m, 0).getDate()
+      return (
+        r.requested_at <=
+        `${toFilter}-${String(lastDay).padStart(2, '0')}T23:59:59`
+      )
+    })
+    .sort((a, b) => b.requested_at.localeCompare(a.requested_at))
+
+  const visible = filtered.slice(0, visibleCount)
+  const hasMore = filtered.length > visibleCount
+
+  const getDateRange = (requestId) => {
+    const days = leaveDays
+      .filter((d) => d.request_id === requestId)
+      .sort((a, b) => a.date.localeCompare(b.date))
+    if (days.length === 0) return '—'
+    const fmt = (dateStr) =>
+      new Date(dateStr + 'T00:00:00').toLocaleDateString('en-GB', {
+        day: 'numeric',
+        month: 'short',
+      })
+    if (days.length === 1)
+      return new Date(days[0].date + 'T00:00:00').toLocaleDateString('en-GB', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+      })
+    return `${fmt(days[0].date)} – ${new Date(days[days.length - 1].date + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })} (${days.length} days)`
+  }
+
+  const STATUS_STYLE = {
+    approved: {
+      color: 'var(--color-success)',
+      background: 'var(--color-success-bg)',
+      border: '1px solid var(--color-success-border)',
+    },
+    partially_approved: {
+      color: 'var(--color-warning)',
+      background: 'var(--color-warning-bg)',
+      border: '1px solid var(--color-warning-border)',
+    },
+    declined: {
+      color: 'var(--color-danger)',
+      background: 'var(--color-danger-bg)',
+      border: '1px solid var(--color-danger-border)',
+    },
+  }
+
+  const STATUS_LABEL = {
+    approved: 'Approved',
+    partially_approved: 'Partial',
+    declined: 'Declined',
+  }
+
+  if (
+    filtered.length === 0 &&
+    staffFilter === 'all' &&
+    typeFilter === 'all' &&
+    statusFilter === 'all' &&
+    fromFilter === 'all' &&
+    toFilter === 'all'
+  ) {
+    return null
+  }
+
+  return (
+    <div className={styles.leaveHistoryWrap}>
+      <div className={styles.leaveHistoryTitle}>Leave History</div>
+      <div className={styles.leaveFilters}>
+        <select
+          className={styles.leaveFilter}
+          value={staffFilter}
+          onChange={(e) => {
+            setStaffFilter(e.target.value)
+            setVisibleCount(20)
+          }}
+        >
+          <option value='all'>All staff</option>
+          {allStaff
+            .filter(
+              (s) =>
+                s.status === 'active' &&
+                !['superadmin', 'operationallead'].includes(s.role)
+            )
+            .map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+        </select>
+        <select
+          className={styles.leaveFilter}
+          value={typeFilter}
+          onChange={(e) => {
+            setTypeFilter(e.target.value)
+            setVisibleCount(20)
+          }}
+        >
+          <option value='all'>All types</option>
+          <option value='annual_leave'>Annual leave</option>
+          <option value='sick'>Sick</option>
+          <option value='training'>Training</option>
+          <option value='other'>Other</option>
+        </select>
+        <select
+          className={styles.leaveFilter}
+          value={statusFilter}
+          onChange={(e) => {
+            setStatusFilter(e.target.value)
+            setVisibleCount(20)
+          }}
+        >
+          <option value='all'>All statuses</option>
+          <option value='approved'>Approved</option>
+          <option value='partially_approved'>Partially approved</option>
+          <option value='declined'>Declined</option>
+        </select>
+        <select
+          className={styles.leaveFilter}
+          value={fromFilter}
+          onChange={(e) => {
+            setFromFilter(e.target.value)
+            setVisibleCount(20)
+          }}
+        >
+          <option value='all'>From</option>
+          {monthOptions.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+        <select
+          className={styles.leaveFilter}
+          value={toFilter}
+          onChange={(e) => {
+            setToFilter(e.target.value)
+            setVisibleCount(20)
+          }}
+        >
+          <option value='all'>To</option>
+          {monthOptions.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {filtered.length === 0 ? (
+        <div className={styles.leaveHistoryEmpty}>
+          No leave records match your filters
+        </div>
+      ) : (
+        <>
+          <div className={styles.leaveTable}>
+            <div className={styles.leaveTableHeader}>
+              <span>Staff</span>
+              <span>Dates</span>
+              <span>Type</span>
+              <span>Status</span>
+              <span>By</span>
+              <span />
+            </div>
+            {visible.map((request) => (
+              <div
+                key={request.id}
+                className={styles.leaveTableRow}
+                onClick={() => onRowClick(request)}
+              >
+                <span className={styles.leaveTableStaff}>
+                  {request.staff_name}
+                </span>
+                <span className={styles.leaveTableDate}>
+                  {getDateRange(request.id)}
+                </span>
+                <span className={styles.leaveTableType}>
+                  {TYPE_LABELS[request.type] || request.type}
+                </span>
+                <span
+                  className={styles.leaveTableStatus}
+                  style={STATUS_STYLE[request.status] || {}}
+                >
+                  {STATUS_LABEL[request.status] || request.status}
+                </span>
+                <span className={styles.leaveTableBy}>
+                  {request.reviewed_by || '—'}
+                </span>
+                <span className={styles.leaveTableChevron}>›</span>
+              </div>
+            ))}
+          </div>
+          <div className={styles.leaveTableFooter}>
+            <span className={styles.leaveTableCount}>
+              Showing {visible.length} of {filtered.length} entries
+            </span>
+            {hasMore && (
+              <button
+                className={styles.loadMoreBtn}
+                onClick={() => setVisibleCount((n) => n + 20)}
+              >
+                Load more
+              </button>
+            )}
+          </div>
+        </>
       )}
     </div>
   )
@@ -1887,26 +2201,12 @@ function MoveRequestCard({
   const toHome = homes.find((h) => h.id === request.to_home_id)?.name || '—'
   const isIncoming = request.to_home_id === currentUserHomeId
   const isOutgoing = request.from_home_id === currentUserHomeId
-
   const statusStyle = {
-    pending: {
-      bg: 'var(--color-warning-bg)',
-      color: 'var(--color-warning)',
-    },
-    completed: {
-      bg: 'var(--color-success-bg)',
-      color: 'var(--color-success)',
-    },
-    rejected: {
-      bg: 'var(--color-danger-bg)',
-      color: 'var(--color-danger)',
-    },
-    cancelled: {
-      bg: 'var(--bg-active)',
-      color: 'var(--text-secondary)',
-    },
+    pending: { bg: 'var(--color-warning-bg)', color: 'var(--color-warning)' },
+    completed: { bg: 'var(--color-success-bg)', color: 'var(--color-success)' },
+    rejected: { bg: 'var(--color-danger-bg)', color: 'var(--color-danger)' },
+    cancelled: { bg: 'var(--bg-active)', color: 'var(--text-secondary)' },
   }
-
   const s = statusStyle[request.status] || statusStyle.pending
 
   return (
@@ -1963,7 +2263,6 @@ function MoveRequestCard({
             ` · Rejected: ${new Date(request.reviewed_at).toLocaleString()}`}
         </div>
       </div>
-
       {request.status === 'pending' && (
         <div className={styles.requestActions}>
           {(isIncoming || isOLorAdmin) && onAccept && onReject && (
@@ -2006,7 +2305,6 @@ function MoveStaffModal({
   const hasPendingRequest = moveRecords.some(
     (r) => r.staff_id === staff.id && r.status === 'pending'
   )
-
   const availableHomes = homes.filter((h) => h.id !== staff.home)
 
   const handleConfirm = async () => {
@@ -2136,7 +2434,6 @@ function MoveStaffModal({
               {homes.find((h) => h.id === staff.home)?.name || '—'}
             </span>
           </div>
-
           {hasPendingRequest ? (
             <div className={styles.warningNote}>
               <FontAwesomeIcon icon='triangle-exclamation' /> A transfer request
@@ -2163,7 +2460,6 @@ function MoveStaffModal({
                   ))}
                 </select>
               </div>
-
               <div
                 className={styles.warningNote}
                 style={{
@@ -2177,7 +2473,6 @@ function MoveStaffModal({
                   ? 'As OL, this move will execute immediately. The destination manager will be notified via the Transfers tab.'
                   : 'A request will be sent to the destination manager for approval. You can cancel it from the Transfers tab.'}
               </div>
-
               {error && (
                 <div className={styles.warningNote}>
                   <FontAwesomeIcon icon='triangle-exclamation' /> {error}
@@ -2186,7 +2481,6 @@ function MoveStaffModal({
             </>
           )}
         </div>
-
         {!hasPendingRequest && (
           <div className={styles.modalFooter}>
             <div className={styles.modalButtonGroup}>

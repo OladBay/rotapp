@@ -96,6 +96,7 @@ function StickyNoteWidget({ user }) {
       .eq('org_id', user.org_id)
       .neq('status', 'pending')
       .neq('status', 'declined')
+      .neq('role', 'superadmin')
       .then(({ data }) => {
         if (data) setAllStaff(data)
       })
