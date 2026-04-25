@@ -52,11 +52,13 @@ export function RotaProvider({ children }) {
         .neq('status', 'declined')
         .order('name', { ascending: true }),
 
-      supabase
-        .from('rotapp_month_rota')
-        .select('week_key, rota_data')
-        .eq('org_id', user.org_id)
-        .eq('home_id', user.home),
+      user.home
+        ? supabase
+            .from('rotapp_month_rota')
+            .select('week_key, rota_data')
+            .eq('org_id', user.org_id)
+            .eq('home_id', user.home)
+        : Promise.resolve({ data: [], error: null }),
 
       user.home
         ? supabase

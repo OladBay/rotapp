@@ -113,12 +113,9 @@ export async function fetchHomes(userRole, userHome, userOrgId) {
 
 // ── createHome ─────────────────────────────────────────────────────────────
 export async function createHome({ name, address, orgId }) {
-  const id = crypto.randomUUID()
-
   const { data, error } = await supabase
     .from('homes')
     .insert({
-      id,
       name: name.trim(),
       address: address.trim(),
       org_id: orgId,
