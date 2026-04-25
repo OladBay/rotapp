@@ -17,6 +17,7 @@ import Staff from './pages/Staff'
 import YearCalendar from './pages/YearCalendar'
 import NotFound from './pages/NotFound'
 import Unauthorised from './pages/Unauthorised'
+import HomeSetupWizard from './pages/HomeSetupWizard'
 
 // Role arrays removed — access rules live in src/config/routeAccess.js
 
@@ -77,6 +78,14 @@ function AppContent() {
           }
         />
 
+        <Route
+          path='/home-setup'
+          element={
+            <ProtectedRoute>
+              <HomeSetupWizard />
+            </ProtectedRoute>
+          }
+        />
         <Route path='/unauthorised' element={<Unauthorised />} />
         <Route path='*' element={<NotFound />} />
       </Routes>
