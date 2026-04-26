@@ -171,6 +171,7 @@ export async function saveShifts(homeId, orgId, shifts) {
     end_time: s.endTime,
     hours: calculateHours(s.startTime, s.endTime),
     sort_order: index,
+    sleep_in_eligible: s.sleepInEligible ?? false,
     updated_at: new Date().toISOString(),
   }))
 
@@ -249,5 +250,42 @@ export async function completeWizard(homeId) {
   if (error) {
     console.error('homeConfig.completeWizard error:', error)
     throw error
+  }
+}
+// ── updateSleepInEligibility ───────────────────────────────────────────────
+// Called by Step 4. Updates sleep_in_eligible on home_shifts directly.
+// Sets true for shift IDs in eligibleShiftIds, false for all others.
+export async function updateSleepInEligibility(homeId, eligibleShiftIds) {
+  if (!homeId) return
+
+  // Set all shifts for this home to false first
+  const { error: resetError } = await supabase
+    .from('home_shifts')
+    .update({ sleep_in_eligible: false })
+    .eq('home_id', homeId)
+
+  if (resetError) {
+    console.error(
+      'homeConfig.updateSleepInEligibility reset error:',
+      resetError
+    )
+    throw resetError
+  }
+
+  // Set eligible shifts to true
+  if (eligibleShiftIds && eligibleShiftIds.length > 0) {
+    const { error: updateError } = await supabase
+      .from('home_shifts')
+      .update({ sleep_in_eligible: true })
+      .eq('home_id', homeId)
+      .in('id', eligibleShiftIds)
+
+    if (updateError) {
+      console.error(
+        'homeConfig.updateSleepInEligibility update error:',
+        updateError
+      )
+      throw updateError
+    }
   }
 }
