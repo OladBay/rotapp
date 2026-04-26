@@ -1,0 +1,190 @@
+/* src/pages/Account.module.css */
+
+.page {
+  flex: 1;
+  color: var(--text-primary);
+  font-family: var(--font-body);
+}
+
+.body {
+  padding: 32px 40px;
+  max-width: 720px;
+}
+
+/* ── Header ─────────────────────────────────────────────────── */
+.header {
+  margin-bottom: 28px;
+}
+
+.title {
+  font-family: var(--font-heading);
+  font-size: var(--text-2xl);
+  font-weight: var(--weight-bold);
+  letter-spacing: -0.3px;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.subtitle {
+  font-size: var(--text-base);
+  color: var(--text-secondary);
+  margin-top: 4px;
+}
+
+/* ── Identity card ──────────────────────────────────────────── */
+.identityCard {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-xl);
+  padding: 24px;
+  margin-bottom: 28px;
+  box-shadow: var(--shadow-sm);
+}
+
+.avatarWrap {
+  flex-shrink: 0;
+}
+
+.avatar {
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-full);
+  background: var(--accent);
+  color: #fff;
+  font-family: var(--font-heading);
+  font-size: var(--text-xl);
+  font-weight: var(--weight-bold);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  letter-spacing: 0.5px;
+}
+
+.identityInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.identityName {
+  font-family: var(--font-heading);
+  font-size: var(--text-xl);
+  font-weight: var(--weight-semibold);
+  color: var(--text-primary);
+}
+
+.identityRole {
+  font-size: var(--text-base);
+  color: var(--accent);
+  font-weight: var(--weight-medium);
+}
+
+.identityEmail {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+
+/* ── Section ────────────────────────────────────────────────── */
+.section {
+  margin-bottom: 24px;
+}
+
+.sectionTitle {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+}
+
+/* ── Card ───────────────────────────────────────────────────── */
+.card {
+  background: var(--bg-raised);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-xl);
+  padding: 4px 0;
+  box-shadow: var(--shadow-sm);
+}
+
+/* ── Field row ──────────────────────────────────────────────── */
+.fieldRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 20px;
+  gap: 16px;
+}
+
+.fieldLabel {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: var(--text-base);
+  color: var(--text-secondary);
+  font-weight: var(--weight-medium);
+  flex-shrink: 0;
+}
+
+.fieldIcon {
+  font-size: 13px;
+  color: var(--text-muted);
+  width: 14px;
+}
+
+.fieldValue {
+  font-size: var(--text-base);
+  color: var(--text-primary);
+  text-align: right;
+}
+
+.fieldDivider {
+  height: 1px;
+  background: var(--border-subtle);
+  margin: 0 20px;
+}
+
+/* ── Badges ─────────────────────────────────────────────────── */
+.badgeSuccess {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  background: var(--color-success-bg);
+  color: var(--color-success);
+  border: 1px solid var(--color-success-border);
+}
+
+.badgeNeutral {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+  border: 1px solid var(--border-default);
+}
+
+/* ── Info note ──────────────────────────────────────────────── */
+.infoNote {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 14px 18px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  font-size: var(--text-base);
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.infoIcon {
+  color: var(--accent);
+  font-size: 14px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}

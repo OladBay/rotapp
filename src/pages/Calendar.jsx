@@ -1,7 +1,6 @@
 import { useState, useMemo, useCallback } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { useRota } from '../context/RotaContext'
-import Navbar from '../components/layout/Navbar'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import {
   getWeekDates,
@@ -272,7 +271,6 @@ function Calendar() {
 
   return (
     <div className={styles.page}>
-      <Navbar />
       <div className={styles.body}>
         {/* Header */}
         <div className={styles.header}>

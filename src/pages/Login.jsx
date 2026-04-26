@@ -1,3 +1,4 @@
+// src/pages/Login.jsx
 import { useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
@@ -9,6 +10,7 @@ import styles from './Login.module.css'
 function Login() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -38,7 +40,6 @@ function Login() {
     }
   }
 
-  // Blocked screens
   if (user?.blockedStatus === 'pending') {
     return (
       <div className={styles.page}>
@@ -107,32 +108,47 @@ function Login() {
         <div className={styles.logo}>
           Rot<span className={styles.logoAccent}>app</span>
         </div>
+
         <h1 className={styles.title}>Welcome back</h1>
         <p className={styles.subtitle}>Sign in to your account</p>
 
         <form onSubmit={handleSubmit} className={styles.form}>
           <div className={styles.field}>
             <label className={styles.label}>Email</label>
-            <input
-              className={styles.input}
-              type='email'
-              placeholder='you@example.com'
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
+            <div className={styles.inputWrap}>
+              <FontAwesomeIcon icon='envelope' className={styles.inputIcon} />
+              <input
+                className={styles.input}
+                type='email'
+                placeholder='you@example.com'
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
+            </div>
           </div>
 
           <div className={styles.field}>
             <label className={styles.label}>Password</label>
-            <input
-              className={styles.input}
-              type='password'
-              placeholder='••••••••'
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
+            <div className={styles.inputWrap}>
+              <FontAwesomeIcon icon='shield' className={styles.inputIcon} />
+              <input
+                className={styles.input}
+                type={showPassword ? 'text' : 'password'}
+                placeholder='••••••••'
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+              <button
+                type='button'
+                className={styles.eyeBtn}
+                onClick={() => setShowPassword((v) => !v)}
+                tabIndex={-1}
+              >
+                <FontAwesomeIcon icon={showPassword ? 'eye-slash' : 'eye'} />
+              </button>
+            </div>
           </div>
 
           {error && <div className={styles.error}>{error}</div>}
@@ -140,30 +156,14 @@ function Login() {
           <Button
             type='submit'
             variant='primary'
+            size='lg'
             loading={loading}
             disabled={loading}
+            className={styles.submitBtn}
           >
             {loading ? 'Signing in…' : 'Sign in'}
           </Button>
         </form>
-
-        <p className={styles.footer}>
-          Don't have an account? <Link to='/signup'>Sign up</Link>
-        </p>
-
-        <div className={styles.testAccounts}>
-          <p className={styles.testTitle}>Test accounts</p>
-          <div className={styles.testGrid}>
-            <span>admin@rotapp.com</span>
-            <span>admin123</span>
-            <span>claire@rotapp.com</span>
-            <span>test123</span>
-            <span>dayo@rotapp.com</span>
-            <span>test123</span>
-            <span>tyler@rotapp.com</span>
-            <span>test123</span>
-          </div>
-        </div>
       </div>
     </div>
   )

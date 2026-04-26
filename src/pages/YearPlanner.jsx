@@ -1,12 +1,12 @@
+// src/pages/YearPlanner.jsx
 import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { useRota } from '../context/RotaContext'
-import Navbar from '../components/layout/Navbar'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { fetchBankHolidays, getBankHolidayForDate } from '../utils/bankHolidays'
 import { toLocalDateString } from '../utils/dateUtils'
 import { getEventsForDate, getEventColor } from '../data/worldEvents'
-import styles from './YearCalendar.module.css'
+import styles from './YearPlanner.module.css'
 
 const MONTHS = [
   'January',
@@ -25,7 +25,10 @@ const MONTHS = [
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
-function YearCalendar() {
+// Roles that can see all staff leave
+const MANAGEMENT_ROLES = ['superadmin', 'operationallead', 'manager', 'deputy']
+
+function YearPlanner() {
   const { user } = useAuth()
   const { leaveDays } = useRota()
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear())
@@ -34,11 +37,18 @@ function YearCalendar() {
   const [selectedDateInfo, setSelectedDateInfo] = useState(null)
   const [loading, setLoading] = useState(true)
 
-  // Build a map of date → approved leave day records for fast lookup
-  // Only show approved leave on the year calendar — pending and declined
-  // are not relevant at this view level
-  const leaveDaysByDate = leaveDays.reduce((acc, day) => {
-    if (day.status !== 'approved') return acc
+  const isManagement = MANAGEMENT_ROLES.includes(user?.activeRole)
+
+  // Role-based leave filter:
+  // Management sees all approved leave for their home
+  // Staff sees only their own approved leave
+  const visibleLeaveDays = leaveDays.filter((day) => {
+    if (day.status !== 'approved') return false
+    if (isManagement) return true
+    return day.staff_id === user?.id
+  })
+
+  const leaveDaysByDate = visibleLeaveDays.reduce((acc, day) => {
     if (!acc[day.date]) acc[day.date] = []
     acc[day.date].push(day)
     return acc
@@ -131,7 +141,7 @@ function YearCalendar() {
           <div className={styles.staffList}>
             {staffOff.slice(0, 2).map((off) => (
               <div key={off.id} className={styles.staffNameTag}>
-                {(off.staff_name || '').split(' ')[0]}
+                {isManagement ? (off.staff_name || '').split(' ')[0] : 'You'}
               </div>
             ))}
             {staffOff.length > 2 && (
@@ -169,21 +179,21 @@ function YearCalendar() {
   if (loading) {
     return (
       <div className={styles.page}>
-        <Navbar />
-        <div className={styles.loading}>Loading calendar...</div>
+        <div className={styles.loading}>Loading planner...</div>
       </div>
     )
   }
 
   return (
     <div className={styles.page}>
-      <Navbar />
       <div className={styles.body}>
         <div className={styles.header}>
           <div>
-            <h1 className={styles.title}>Year Calendar</h1>
+            <h1 className={styles.title}>Year Planner</h1>
             <p className={styles.subtitle}>
-              Bank holidays + world events + staff time off at a glance
+              {isManagement
+                ? 'Bank holidays · world events · staff leave at a glance'
+                : 'Your approved leave · bank holidays · world events'}
             </p>
           </div>
           <div className={styles.yearNav}>
@@ -244,7 +254,7 @@ function YearCalendar() {
               className={styles.legendDot}
               style={{ background: 'var(--accent)' }}
             />
-            Staff on leave
+            {isManagement ? 'Staff on leave' : 'Your leave'}
           </span>
           <span className={styles.legendItem}>
             <span className={styles.legendDotToday} />
@@ -339,15 +349,17 @@ function YearCalendar() {
               {selectedDateInfo.staffOff.length > 0 ? (
                 <div className={styles.staffOffSection}>
                   <div className={styles.sectionLabel}>
-                    <FontAwesomeIcon icon='user-group' /> Staff on leave (
-                    {selectedDateInfo.staffOff.length})
+                    <FontAwesomeIcon icon='user-group' />
+                    {isManagement
+                      ? ` Staff on leave (${selectedDateInfo.staffOff.length})`
+                      : ' Your leave'}
                   </div>
                   <div className={styles.staffOffList}>
                     {selectedDateInfo.staffOff.map((off) => (
                       <div key={off.id} className={styles.staffOffCard}>
                         <div>
                           <div className={styles.staffOffName}>
-                            {off.staff_name}
+                            {isManagement ? off.staff_name : 'You'}
                           </div>
                           <div className={styles.staffOffType}>
                             {off.type?.replace('_', ' ')}
@@ -362,7 +374,7 @@ function YearCalendar() {
                 (!selectedDateInfo.events ||
                   selectedDateInfo.events.length === 0) && (
                   <div className={styles.noData}>
-                    No events or staff leave on this date
+                    No events or leave on this date
                   </div>
                 )
               )}
@@ -383,4 +395,4 @@ function YearCalendar() {
   )
 }
 
-export default YearCalendar
+export default YearPlanner

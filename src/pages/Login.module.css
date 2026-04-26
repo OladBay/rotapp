@@ -1,6 +1,15 @@
+/* src/pages/Login.module.css */
+
+/* ── Page ───────────────────────────────────────────────────── */
 .page {
   min-height: 100vh;
-  background: var(--bg-base);
+  background-color: var(--bg-elevated);
+  background-image: radial-gradient(
+    circle,
+    var(--accent-border) 1px,
+    transparent 1px
+  );
+  background-size: 22px 22px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -8,24 +17,39 @@
   transition: background 0.25s ease;
 }
 
+/* ── Card ───────────────────────────────────────────────────── */
 .card {
   background: var(--bg-raised);
   border: 1px solid var(--border-subtle);
-  border-radius: 20px;
-  padding: 40px;
+  border-radius: 18px;
+  padding: 52px 48px 48px;
   width: 100%;
-  max-width: 420px;
-  transition:
-    background 0.25s ease,
-    border-color 0.25s ease;
+  max-width: 480px;
+  box-shadow:
+    0 2px 4px rgba(0, 0, 0, 0.04),
+    0 8px 24px rgba(0, 0, 0, 0.08),
+    0 32px 80px rgba(0, 0, 0, 0.12);
+  animation: cardIn var(--duration-slow) var(--ease-out) both;
 }
 
+@keyframes cardIn {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* ── Logo ───────────────────────────────────────────────────── */
 .logo {
   font-family: 'Syne', sans-serif;
-  font-size: 24px;
-  font-weight: 700;
+  font-size: 26px;
+  font-weight: 800;
   color: var(--text-primary);
-  margin-bottom: 28px;
+  margin-bottom: 40px;
   letter-spacing: -0.5px;
 }
 
@@ -33,9 +57,11 @@
   color: var(--accent);
 }
 
+/* ── Heading ────────────────────────────────────────────────── */
 .title {
+  font-family: 'Syne', sans-serif;
   font-size: 22px;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--text-primary);
   margin-bottom: 6px;
   letter-spacing: -0.3px;
@@ -44,13 +70,14 @@
 .subtitle {
   font-size: 14px;
   color: var(--text-secondary);
-  margin-bottom: 32px;
+  margin-bottom: 40px;
 }
 
+/* ── Form ───────────────────────────────────────────────────── */
 .form {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 20px;
 }
 
 .field {
@@ -65,38 +92,77 @@
   color: var(--text-secondary);
 }
 
+/* ── Input wrap — icon left, eye right ─────────────────────── */
+.inputWrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.inputIcon {
+  position: absolute;
+  left: 14px;
+  font-size: 13px;
+  color: var(--text-muted);
+  pointer-events: none;
+  z-index: 1;
+}
+
 .input {
   background: var(--bg-elevated);
   border: 1px solid var(--border-default);
-  border-radius: 10px;
-  padding: 11px 14px;
+  border-radius: var(--radius-lg);
+  padding: 11px 14px 11px 38px;
   font-size: 14px;
   color: var(--text-primary);
   outline: none;
-  transition:
-    border-color 0.15s,
-    background 0.25s ease;
-  font-family: 'DM Sans', sans-serif;
   width: 100%;
+  font-family: 'DM Sans', sans-serif;
+  transition:
+    border-color var(--duration-base) var(--ease-out),
+    background var(--duration-base) var(--ease-out);
 }
 
 .input:focus {
   border-color: var(--accent);
+  background: var(--bg-raised);
 }
 
 .input::placeholder {
   color: var(--text-muted);
 }
 
+.eyeBtn {
+  position: absolute;
+  right: 12px;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color var(--duration-fast) var(--ease-out);
+}
+
+.eyeBtn:hover {
+  color: var(--text-secondary);
+}
+
+/* ── Error ──────────────────────────────────────────────────── */
 .error {
   background: var(--color-danger-bg);
   border: 1px solid var(--color-danger-border);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   padding: 10px 14px;
   font-size: 13px;
   color: var(--color-danger);
+  animation: fadeIn var(--duration-base) var(--ease-out);
 }
 
+/* ── Footer ─────────────────────────────────────────────────── */
 .footer {
   text-align: center;
   font-size: 13px;
@@ -113,30 +179,7 @@
   text-decoration: underline;
 }
 
-.testAccounts {
-  margin-top: 28px;
-  padding-top: 20px;
-  border-top: 1px solid var(--border-subtle);
-}
-
-.testTitle {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  color: var(--text-muted);
-  margin-bottom: 10px;
-}
-
-.testGrid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 4px 16px;
-  font-size: 12px;
-  font-family: 'DM Mono', monospace;
-  color: var(--text-secondary);
-}
-
-/* Blocked screens */
+/* ── Blocked screens ────────────────────────────────────────── */
 .blockedWrap {
   display: flex;
   flex-direction: column;
@@ -175,7 +218,7 @@
 .blockedTitle {
   font-family: 'Syne', sans-serif;
   font-size: 18px;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--text-primary);
   margin: 0;
 }
@@ -185,4 +228,12 @@
   color: var(--text-secondary);
   line-height: 1.6;
   margin: 0;
+}
+/* ── Sign in button ─────────────────────────────────────────── */
+.submitBtn {
+  width: 100%;
+  padding: 16px !important;
+  font-size: var(--text-md) !important;
+  border-radius: var(--radius-lg) !important;
+  font-weight: var(--weight-semibold) !important;
 }

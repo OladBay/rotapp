@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import Navbar from '../components/layout/Navbar'
 import InviteModal from '../components/shared/InviteModal'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { fetchHomes } from '../utils/homesData'
@@ -41,7 +40,6 @@ function Dashboard() {
   if (loading) {
     return (
       <div className={styles.page}>
-        <Navbar />
         <div className={styles.loadingWrap}>Loading…</div>
       </div>
     )
@@ -49,8 +47,6 @@ function Dashboard() {
 
   return (
     <div className={styles.page}>
-      <Navbar />
-
       <div className={styles.body}>
         {/* Header */}
         <div className={styles.header}>

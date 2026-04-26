@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { useRota } from '../context/RotaContext'
 import { useNavigate } from 'react-router-dom'
-import Navbar from '../components/layout/Navbar'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { supabase } from '../lib/supabase'
 import InviteModal from '../components/shared/InviteModal'
@@ -514,7 +513,6 @@ function Staff() {
 
   return (
     <div className={styles.page}>
-      <Navbar />
       <div className={styles.body}>
         {/* ── Header ── */}
         <div className={styles.header}>

@@ -1,5 +1,5 @@
 .page {
-  min-height: 100vh;
+  flex: 1;
   background: var(--bg-base);
   color: var(--text-primary);
   font-family: 'DM Sans', sans-serif;

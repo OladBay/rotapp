@@ -2,7 +2,6 @@ import { useState, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useRota } from '../context/RotaContext'
-import Navbar from '../components/layout/Navbar'
 import GenerateModal from '../components/layout/GenerateModal'
 import BatchGenerateModal from '../components/layout/BatchGenerateModal'
 import JumpCalendar from '../components/shared/JumpCalendar'
@@ -241,8 +240,6 @@ function Rota() {
 
   return (
     <div className={styles.page}>
-      <Navbar />
-
       <div className={styles.body}>
         {/* Header */}
         <div className={styles.header}>
