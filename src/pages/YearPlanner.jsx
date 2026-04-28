@@ -6,6 +6,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { fetchBankHolidays, getBankHolidayForDate } from '../utils/bankHolidays'
 import { toLocalDateString } from '../utils/dateUtils'
 import { getEventsForDate, getEventColor } from '../data/worldEvents'
+import { useTopBarInit } from '../hooks/useTopBarInit'
 import styles from './YearPlanner.module.css'
 
 const MONTHS = [
@@ -176,6 +177,11 @@ function YearPlanner() {
     [10, 11],
   ]
 
+  useTopBarInit(
+    'Year Planner',
+    'Your full year — leave, bank holidays and events'
+  )
+
   if (loading) {
     return (
       <div className={styles.page}>
@@ -188,14 +194,6 @@ function YearPlanner() {
     <div className={styles.page}>
       <div className={styles.body}>
         <div className={styles.header}>
-          <div>
-            <h1 className={styles.title}>Year Planner</h1>
-            <p className={styles.subtitle}>
-              {isManagement
-                ? 'Bank holidays · world events · staff leave at a glance'
-                : 'Your approved leave · bank holidays · world events'}
-            </p>
-          </div>
           <div className={styles.yearNav}>
             <button
               className={styles.navBtn}

@@ -5,6 +5,7 @@ import InviteModal from '../components/shared/InviteModal'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { fetchHomes } from '../utils/homesData'
 import AddHomeModal from '../components/shared/AddHomeModal'
+import { useTopBarInit } from '../hooks/useTopBarInit'
 import styles from './Dashboard.module.css'
 
 function Dashboard() {
@@ -19,6 +20,16 @@ function Dashboard() {
 
   const isOL = user?.activeRole === 'operationallead'
   const isAdmin = user?.activeRole === 'superadmin'
+
+  const homeName = homes[0]?.name || ''
+  const orgName = 'Coventry City Council'
+
+  useTopBarInit(
+    isOL || isAdmin ? 'All Homes' : homeName || 'Dashboard',
+    isOL || isAdmin
+      ? `${homes.length} home${homes.length !== 1 ? 's' : ''} · ${orgName}`
+      : `${homeName} · ${orgName}`
+  )
 
   useEffect(() => {
     if (!user) return

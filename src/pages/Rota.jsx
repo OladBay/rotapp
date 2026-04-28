@@ -1,7 +1,9 @@
 import { useState, useMemo, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useRota } from '../context/RotaContext'
+import { useTopBarInit } from '../hooks/useTopBarInit'
 import GenerateModal from '../components/layout/GenerateModal'
 import BatchGenerateModal from '../components/layout/BatchGenerateModal'
 import JumpCalendar from '../components/shared/JumpCalendar'
@@ -154,6 +156,13 @@ function Rota() {
   const prevWeek = () => setMonday((prev) => addWeeks(prev, -1))
   const nextWeek = () => setMonday((prev) => addWeeks(prev, 1))
 
+  useTopBarInit(
+    'Rota',
+    viewMode === 'week'
+      ? `${homeName || '—'} · Managing week of ${startLabel} – ${endLabel}`
+      : `${homeName || '—'} · ${currentYear}`
+  )
+
   const togglePinNav = () => {
     const newValue = !isNavPinned
     setIsNavPinned(newValue)
@@ -238,30 +247,14 @@ function Rota() {
     }
   }
 
+  const topBarSlot = document.getElementById('topbar-actions')
+
   return (
     <div className={styles.page}>
-      <div className={styles.body}>
-        {/* Header */}
-        <div className={styles.header}>
-          <div>
-            <div
-              className={styles.breadcrumb}
-              onClick={() => navigate('/dashboard')}
-            >
-              <FontAwesomeIcon icon='chevron-left' /> Dashboard
-            </div>
-            <h1 className={styles.title}>
-              {viewMode === 'week' ? 'Weekly Rota' : 'Rota Planner'}
-            </h1>
-
-            <p className={styles.subtitle}>
-              {homeName || '—'} ·{' '}
-              {viewMode === 'week'
-                ? `${startLabel} – ${endLabel}`
-                : `${currentYear}`}
-            </p>
-          </div>
-          <div className={styles.headerRight}>
+      {/* Portal controls into top bar */}
+      {topBarSlot &&
+        createPortal(
+          <div className={styles.topBarControls}>
             <div className={styles.viewToggle}>
               {[
                 { value: 'month', label: 'Month' },
@@ -277,13 +270,13 @@ function Rota() {
               ))}
             </div>
             {canEdit && viewMode === 'week' && (
-              <div className={styles.headerActions}>
-                <button className={styles.secondaryBtn}>Publish</button>
-              </div>
+              <button className={styles.publishBtn}>Publish</button>
             )}
-          </div>
-        </div>
+          </div>,
+          topBarSlot
+        )}
 
+      <div className={styles.body}>
         {/* Compliance strip — week view only */}
         {viewMode === 'week' && canSeeGaps && (
           <div className={styles.compStrip}>

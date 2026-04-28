@@ -28,6 +28,8 @@ import {
   getLeaveDayForDate,
 } from '../utils/timeOffStorage'
 import LeaveCalendar from '../components/shared/LeaveCalendar'
+import { createPortal } from 'react-dom'
+import { useTopBarInit } from '../hooks/useTopBarInit'
 import styles from './Calendar.module.css'
 
 const TODAY = new Date()
@@ -196,6 +198,13 @@ function Calendar() {
   const weekDates = getWeekDates(currentMonday)
   const startLabel = formatDate(weekDates[0])
   const endLabel = formatDate(weekDates[6])
+
+  useTopBarInit(
+    'My Shifts',
+    viewMode === 'week'
+      ? `Your shifts for ${startLabel} – ${endLabel}`
+      : `Your shifts for ${new Date().getFullYear()}`
+  )
   const yearMonths = useMemo(() => getYearMonths(currentYear), [currentYear])
 
   const handleMonthClick = (year, month) => {
@@ -269,44 +278,31 @@ function Calendar() {
     setTimeOffSubmitted(false)
   }
 
+  const topBarSlot = document.getElementById('topbar-actions')
+
   return (
     <div className={styles.page}>
+      {topBarSlot &&
+        createPortal(
+          <div className={styles.viewToggle}>
+            {[
+              { value: 'week', label: 'Week' },
+              { value: 'month', label: 'Month' },
+            ].map((v) => (
+              <button
+                key={v.value}
+                className={`${styles.toggleBtn}${viewMode === v.value ? ` ${styles.toggleBtnActive}` : ''}`}
+                onClick={() => setViewMode(v.value)}
+              >
+                {v.label}
+              </button>
+            ))}
+          </div>,
+          topBarSlot
+        )}
+
       <div className={styles.body}>
         {/* Header */}
-        <div className={styles.header}>
-          <div>
-            <h1 className={styles.title}>My Schedule</h1>
-            <p className={styles.subtitle}>
-              {viewMode === 'week'
-                ? `${startLabel} – ${endLabel}`
-                : `${currentYear}`}
-            </p>
-          </div>
-          <div className={styles.headerRight}>
-            {user?.activeRole !== 'relief' && (
-              <button
-                className={styles.requestTimeOffBtn}
-                onClick={() => setShowTimeOffModal(true)}
-              >
-                <FontAwesomeIcon icon='calendar-plus' /> Request time off
-              </button>
-            )}
-            <div className={styles.viewToggle}>
-              {[
-                { value: 'week', label: 'Week' },
-                { value: 'month', label: 'Month' },
-              ].map((v) => (
-                <button
-                  key={v.value}
-                  className={`${styles.toggleBtn}${viewMode === v.value ? ` ${styles.toggleBtnActive}` : ''}`}
-                  onClick={() => setViewMode(v.value)}
-                >
-                  {v.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
 
         {/* WEEK VIEW */}
         {viewMode === 'week' && (
@@ -491,7 +487,6 @@ function Calendar() {
             </div>
           </>
         )}
-
         {/* MONTH VIEW */}
         {viewMode === 'month' && (
           <>

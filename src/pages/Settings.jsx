@@ -1,25 +1,18 @@
 // src/pages/Settings.jsx
 import { useTheme } from '../context/ThemeContext'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { useTopBarInit } from '../hooks/useTopBarInit'
 import styles from './Settings.module.css'
 
 function Settings() {
   const { theme, toggleTheme } = useTheme()
   const isLight = theme === 'light'
 
+  useTopBarInit('Settings', 'Notifications, appearance and app behaviour')
+
   return (
     <div className={styles.page}>
       <div className={styles.body}>
-        {/* Header */}
-        <div className={styles.header}>
-          <div>
-            <h1 className={styles.title}>Settings</h1>
-            <p className={styles.subtitle}>
-              App preferences and notification controls
-            </p>
-          </div>
-        </div>
-
         {/* Appearance */}
         <div className={styles.section}>
           <div className={styles.sectionTitle}>Appearance</div>

@@ -2,6 +2,7 @@
 import { useAuth } from '../context/AuthContext'
 import { useHomeConfig } from '../context/HomeConfigContext'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { useTopBarInit } from '../hooks/useTopBarInit'
 import styles from './ManageHome.module.css'
 
 const ROLE_LABELS = {
@@ -87,17 +88,16 @@ function ManageHome() {
   const rotaSchedule = config.rotaSchedule || {}
   const shiftCoordinator = config.shiftCoordinator ?? false
 
+  useTopBarInit(
+    'Manage Home',
+    `${homeName || '—'} · Home configuration and shift settings`
+  )
+
   return (
     <div className={styles.page}>
       <div className={styles.body}>
         {/* Header */}
         <div className={styles.header}>
-          <div>
-            <h1 className={styles.title}>Manage Home</h1>
-            <p className={styles.subtitle}>
-              {homeName || '—'} · View and manage your home configuration
-            </p>
-          </div>
           <div className={styles.headerBadge}>
             <FontAwesomeIcon icon='circle-info' />
             Read only — editing coming soon

@@ -1,6 +1,7 @@
 // src/pages/Account.jsx
 import { useAuth } from '../context/AuthContext'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { useTopBarInit } from '../hooks/useTopBarInit'
 import styles from './Account.module.css'
 
 const ROLE_LABELS = {
@@ -26,19 +27,11 @@ function Account() {
   const roleLabel = ROLE_LABELS[user?.activeRole] || user?.activeRole
   const initials = getInitials(user?.name)
 
+  useTopBarInit('Account', 'Your profile and employment details')
+
   return (
     <div className={styles.page}>
       <div className={styles.body}>
-        {/* Header */}
-        <div className={styles.header}>
-          <div>
-            <h1 className={styles.title}>Account</h1>
-            <p className={styles.subtitle}>
-              Your profile and employment details
-            </p>
-          </div>
-        </div>
-
         {/* Identity card */}
         <div className={styles.identityCard}>
           <div className={styles.avatarWrap}>

@@ -13,6 +13,8 @@ import {
   markManyAsRead,
 } from '../../utils/notifications'
 import SessionBanner from './SessionBanner'
+import AvatarDropdown from '../shared/AvatarDropdown'
+import { useTopBar } from '../../context/TopBarContext'
 import styles from './AppShell.module.css'
 
 // ── Role display labels ────────────────────────────────────────
@@ -47,8 +49,6 @@ function formatTime(ts) {
 }
 
 // ── Nav link definitions ───────────────────────────────────────
-// hideFromDesktopNav: true = lives in sidebarBottom on desktop,
-//                            but still appears in mobile More sheet
 function useNavLinks(user) {
   const canSeeManagement = [
     'manager',
@@ -57,7 +57,6 @@ function useNavLinks(user) {
     'superadmin',
   ].includes(user?.activeRole)
 
-  // Manage Home: managers/deputies always, OL/superadmin only when stepped in
   const canManageHome =
     ['manager', 'deputy'].includes(user?.activeRole) ||
     (['operationallead', 'superadmin'].includes(user?.activeRole) &&
@@ -147,18 +146,14 @@ function notifIcon(type) {
 // ── AppShell ───────────────────────────────────────────────────
 function AppShell({ children }) {
   const { user, logout } = useAuth()
-  const { theme } = useTheme()
+  const { theme, toggleTheme } = useTheme()
   const { leaveRequests, cancelRequests, notifications, refreshNotifications } =
     useRota()
   const navigate = useNavigate()
   const location = useLocation()
-
+  const { topBar } = useTopBar()
   const navLinks = useNavLinks(user)
-
-  // Desktop sidebar nav — excludes items handled in sidebarBottom
   const desktopNavLinks = navLinks.filter((l) => !l.hideFromDesktopNav)
-
-  // Mobile — all links including settings go into the tab bar / More sheet
   const PRIMARY_COUNT = 4
   const primaryLinks = navLinks.slice(0, PRIMARY_COUNT)
   const overflowLinks = navLinks.slice(PRIMARY_COUNT)
@@ -171,6 +166,7 @@ function AppShell({ children }) {
   const [notifOpen, setNotifOpen] = useState(false)
   const [moreOpen, setMoreOpen] = useState(false)
   const [scrolled, setScrolled] = useState(false)
+  const [appToast, setAppToast] = useState(false)
 
   const notifRef = useRef(null)
   const moreRef = useRef(null)
@@ -229,7 +225,14 @@ function AppShell({ children }) {
     if (notif.link) navigate(notif.link)
   }
 
+  const handleAppDownload = () => {
+    setAppToast(true)
+    setTimeout(() => setAppToast(false), 3000)
+  }
+
   const initials = getInitials(user?.name)
+  const roleLabel = ROLE_LABELS[user?.activeRole] || user?.activeRole
+  const isLight = theme === 'light'
 
   return (
     <div className={styles.shell}>
@@ -241,7 +244,7 @@ function AppShell({ children }) {
           <span className={styles.logoAccent}>app</span>
         </div>
 
-        {/* Desktop nav links — excludes sidebarBottom items */}
+        {/* Desktop nav links */}
         <nav className={styles.sidebarNav}>
           {desktopNavLinks.map((link) => {
             const isActive = location.pathname === link.path
@@ -273,81 +276,6 @@ function AppShell({ children }) {
 
         {/* Bottom utility links */}
         <div className={styles.sidebarBottom}>
-          {/* Notifications */}
-          <div className={styles.notifWrap} ref={notifRef}>
-            <button
-              className={`${styles.navItem} ${notifOpen ? styles.navItemActive : ''}`}
-              onClick={() => setNotifOpen((v) => !v)}
-            >
-              <span className={styles.navIcon}>
-                <FontAwesomeIcon icon='bell' />
-                {unreadCount > 0 && (
-                  <span className={`${styles.iconBadge} ${styles.bellPulse}`}>
-                    {unreadCount > 9 ? '9+' : unreadCount}
-                  </span>
-                )}
-              </span>
-              <span className={styles.navLabel}>Notifications</span>
-            </button>
-
-            {notifOpen && (
-              <div className={styles.notifPanel}>
-                <div className={styles.notifHeader}>
-                  <span className={styles.notifTitle}>Notifications</span>
-                  {unreadCount > 0 && (
-                    <button
-                      className={styles.markAllBtn}
-                      onClick={handleMarkAllRead}
-                    >
-                      <FontAwesomeIcon icon='check-double' />
-                      Mark all read
-                    </button>
-                  )}
-                </div>
-                <div className={styles.notifList}>
-                  {!notifications || notifications.length === 0 ? (
-                    <div className={styles.notifEmpty}>
-                      <FontAwesomeIcon
-                        icon='bell'
-                        className={styles.notifEmptyIcon}
-                      />
-                      <span>You're all caught up</span>
-                    </div>
-                  ) : (
-                    [...notifications]
-                      .sort(
-                        (a, b) =>
-                          new Date(b.created_at) - new Date(a.created_at)
-                      )
-                      .slice(0, 20)
-                      .map((notif) => (
-                        <button
-                          key={notif.id}
-                          className={`${styles.notifItem} ${!notif.read_at ? styles.notifUnread : ''}`}
-                          onClick={() => handleNotifClick(notif)}
-                        >
-                          <span className={styles.notifIcon}>
-                            <FontAwesomeIcon icon={notifIcon(notif.type)} />
-                          </span>
-                          <span className={styles.notifBody}>
-                            <span className={styles.notifMessage}>
-                              {notif.message}
-                            </span>
-                            <span className={styles.notifTime}>
-                              {formatTime(notif.created_at)}
-                            </span>
-                          </span>
-                          {!notif.read_at && (
-                            <span className={styles.unreadDot} />
-                          )}
-                        </button>
-                      ))
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-
           {/* Settings */}
           <button
             className={`${styles.navItem} ${location.pathname === '/settings' ? styles.navItemActive : ''}`}
@@ -369,14 +297,147 @@ function AppShell({ children }) {
             </span>
             <span className={styles.navLabel}>Logout</span>
           </button>
+
+          {/* Mobile app card */}
+          <div className={styles.appCard}>
+            <div className={styles.appCardGlow} />
+            <div className={styles.appCardContent}>
+              <div className={styles.appCardIcon}>
+                <FontAwesomeIcon icon='bolt' />
+              </div>
+              <div className={styles.appCardTitle}>Get the mobile app</div>
+              <div className={styles.appCardDesc}>
+                Manage your rota on the go
+              </div>
+              <button className={styles.appCardBtn} onClick={handleAppDownload}>
+                Download
+              </button>
+            </div>
+          </div>
         </div>
       </aside>
 
-      {/* ── MAIN CONTENT ──────────────────────────────────── */}
+      {/* ── MAIN AREA ─────────────────────────────────────── */}
       <div className={styles.main}>
-        <SessionBanner />
+        {/* Top header bar */}
+        <div className={styles.topBarWrap}>
+          <header className={styles.topBar}>
+            <div className={styles.topBarLeft}>
+              {user?.previousRole ? (
+                <SessionBanner />
+              ) : (
+                <div className={styles.topBarTitle}>
+                  <span className={styles.topBarPageName}>{topBar.title}</span>
+                  {topBar.subtitle && (
+                    <span className={styles.topBarPageSub}>
+                      {topBar.subtitle}
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+            <div className={styles.topBarRight}>
+              {/* Page-level actions slot — populated by pages via portal */}
+              <div id='topbar-actions' className={styles.topBarActions} />
+
+              {/* Theme toggle */}
+              <button
+                className={styles.topBarIconBtn}
+                onClick={toggleTheme}
+                title={isLight ? 'Dark mode' : 'Light mode'}
+              >
+                <FontAwesomeIcon icon={isLight ? 'moon' : 'sun'} />
+              </button>
+
+              {/* Notification bell */}
+              <div className={styles.notifWrap} ref={notifRef}>
+                <button
+                  className={`${styles.topBarIconBtn} ${notifOpen ? styles.topBarIconBtnActive : ''}`}
+                  onClick={() => setNotifOpen((v) => !v)}
+                >
+                  <FontAwesomeIcon icon='bell' />
+                  {unreadCount > 0 && (
+                    <span className={`${styles.iconBadge} ${styles.bellPulse}`}>
+                      {unreadCount > 9 ? '9+' : unreadCount}
+                    </span>
+                  )}
+                </button>
+
+                {notifOpen && (
+                  <div className={styles.notifPanel}>
+                    <div className={styles.notifHeader}>
+                      <span className={styles.notifTitle}>Notifications</span>
+                      {unreadCount > 0 && (
+                        <button
+                          className={styles.markAllBtn}
+                          onClick={handleMarkAllRead}
+                        >
+                          <FontAwesomeIcon icon='check-double' />
+                          Mark all read
+                        </button>
+                      )}
+                    </div>
+                    <div className={styles.notifList}>
+                      {!notifications || notifications.length === 0 ? (
+                        <div className={styles.notifEmpty}>
+                          <FontAwesomeIcon
+                            icon='bell'
+                            className={styles.notifEmptyIcon}
+                          />
+                          <span>You're all caught up</span>
+                        </div>
+                      ) : (
+                        [...notifications]
+                          .sort(
+                            (a, b) =>
+                              new Date(b.created_at) - new Date(a.created_at)
+                          )
+                          .slice(0, 20)
+                          .map((notif) => (
+                            <button
+                              key={notif.id}
+                              className={`${styles.notifItem} ${!notif.read_at ? styles.notifUnread : ''}`}
+                              onClick={() => handleNotifClick(notif)}
+                            >
+                              <span className={styles.notifIcon}>
+                                <FontAwesomeIcon icon={notifIcon(notif.type)} />
+                              </span>
+                              <span className={styles.notifBody}>
+                                <span className={styles.notifMessage}>
+                                  {notif.message}
+                                </span>
+                                <span className={styles.notifTime}>
+                                  {formatTime(notif.created_at)}
+                                </span>
+                              </span>
+                              {!notif.read_at && (
+                                <span className={styles.unreadDot} />
+                              )}
+                            </button>
+                          ))
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* User avatar dropdown */}
+              <AvatarDropdown />
+            </div>
+          </header>
+        </div>
+
+        {/* Page content */}
         <div className={styles.content}>{children}</div>
       </div>
+
+      {/* ── APP COMING SOON TOAST ─────────────────────────── */}
+      {appToast && (
+        <div className={styles.toast}>
+          <FontAwesomeIcon icon='bolt' />
+          App coming soon
+        </div>
+      )}
 
       {/* ── MOBILE TOP BAR ────────────────────────────────── */}
       <header

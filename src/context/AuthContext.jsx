@@ -74,6 +74,7 @@ export function AuthProvider({ children }) {
       org_id: profile.org_id,
       contract_type: profile.contract_type,
       contracted_hours: profile.contracted_hours,
+      avatar_url: profile.avatar_url || null,
     }
 
     // Restore step-in state if one was active

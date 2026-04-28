@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { useAuth } from '../context/AuthContext'
 import { useRota } from '../context/RotaContext'
 import { useNavigate } from 'react-router-dom'
@@ -41,6 +42,7 @@ import {
 } from '../utils/notifications'
 import LeaveCalendar from '../components/shared/LeaveCalendar'
 import { fetchHomes } from '../utils/homesData'
+import { useTopBarInit } from '../hooks/useTopBarInit'
 import styles from './Staff.module.css'
 
 // ── Constants ──────────────────────────────────────────────────────
@@ -511,29 +513,36 @@ function Staff() {
   const getLeaveDaysForMember = (staffId) =>
     getLeaveDaysForStaff(leaveDays, staffId)
 
+  const staffCount =
+    isOLorAdmin && !user?.home
+      ? allStaff.length
+      : visibleStaff.filter(
+          (s) => s.status !== 'declined' && !EXCLUDED_ROLES.includes(s.role)
+        ).length
+
+  useTopBarInit(
+    'Manage Staff',
+    isOLorAdmin && !user?.home
+      ? `All homes · Manage your team, leave and approvals`
+      : `${homeName || '—'} · Manage your team, leave and approvals`
+  )
+
+  const topBarSlot = document.getElementById('topbar-actions')
+
   return (
     <div className={styles.page}>
-      <div className={styles.body}>
-        {/* ── Header ── */}
-        <div className={styles.header}>
-          <div>
-            <h1 className={styles.title}>Staff</h1>
-            <p className={styles.subtitle}>
-              {isOLorAdmin && !user?.home
-                ? `All homes · ${allStaff.length} staff members`
-                : `${homeName || '—'} · ${visibleStaff.filter((s) => s.status !== 'declined' && !EXCLUDED_ROLES.includes(s.role)).length} staff members`}
-            </p>
-          </div>
-          <div className={styles.headerActions}>
-            <button
-              className={styles.inviteBtn}
-              onClick={() => setShowInviteModal(true)}
-            >
-              <FontAwesomeIcon icon='envelope' /> Onboard staff
-            </button>
-          </div>
-        </div>
+      {topBarSlot &&
+        createPortal(
+          <button
+            className={styles.inviteBtn}
+            onClick={() => setShowInviteModal(true)}
+          >
+            <FontAwesomeIcon icon='user-plus' /> Onboard staff
+          </button>,
+          topBarSlot
+        )}
 
+      <div className={styles.body}>
         {/* ── OL home filter ── */}
         {isOLorAdmin && (
           <div className={styles.homeFilterRow}>

@@ -54,6 +54,7 @@ import {
   faCheckDouble,
   faPalette,
   faShield,
+  faUserPlus,
 } from '@fortawesome/free-solid-svg-icons'
 
 library.add(
@@ -109,5 +110,6 @@ library.add(
   faArrowLeft,
   faCheckDouble,
   faPalette,
-  faShield
+  faShield,
+  faUserPlus
 )
