@@ -1,7 +1,31 @@
+// src/context/AuthContext.jsx
 import { createContext, useContext, useEffect, useState } from 'react'
 import { supabase } from '../lib/supabase'
 
 const AuthContext = createContext(null)
+
+// ── Step-in persistence keys ───────────────────────────────────
+const STEP_IN_KEY = 'rotapp_step_in'
+
+function saveStepIn(previousRole, previousHome, activeRole, home) {
+  localStorage.setItem(
+    STEP_IN_KEY,
+    JSON.stringify({ previousRole, previousHome, activeRole, home })
+  )
+}
+
+function loadStepIn() {
+  try {
+    const raw = localStorage.getItem(STEP_IN_KEY)
+    return raw ? JSON.parse(raw) : null
+  } catch {
+    return null
+  }
+}
+
+function clearStepIn() {
+  localStorage.removeItem(STEP_IN_KEY)
+}
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
@@ -20,6 +44,7 @@ export function AuthProvider({ children }) {
       .select('*')
       .eq('id', supabaseUser.id)
       .single()
+
     if (error || !profile) {
       console.error('Failed to fetch profile:', error)
       setUser(null)
@@ -35,7 +60,8 @@ export function AuthProvider({ children }) {
       return
     }
 
-    setUser({
+    // Base user from database
+    const baseUser = {
       id: profile.id,
       name: profile.name,
       email: profile.email,
@@ -46,7 +72,24 @@ export function AuthProvider({ children }) {
       gender: profile.gender,
       driver: profile.driver,
       org_id: profile.org_id,
-    })
+      contract_type: profile.contract_type,
+      contracted_hours: profile.contracted_hours,
+    }
+
+    // Restore step-in state if one was active
+    const stepIn = loadStepIn()
+    if (stepIn && stepIn.previousRole) {
+      setUser({
+        ...baseUser,
+        activeRole: stepIn.activeRole,
+        home: stepIn.home,
+        previousRole: stepIn.previousRole,
+        previousHome: stepIn.previousHome,
+      })
+    } else {
+      setUser(baseUser)
+    }
+
     setLoading(false)
   }
 
@@ -75,24 +118,29 @@ export function AuthProvider({ children }) {
   }
 
   const logout = async () => {
+    clearStepIn()
     await supabase.auth.signOut()
     setUser(null)
   }
 
-  // OL step-in — switches active role and home for the session only
-  // homeId is the home the OL is stepping into
+  // OL step-in — switches active role and home, persists to localStorage
   const switchRole = (newRole, homeId) => {
-    setUser((prev) => ({
-      ...prev,
-      activeRole: newRole,
-      home: homeId,
-      previousRole: prev.activeRole,
-      previousHome: prev.home,
-    }))
+    setUser((prev) => {
+      const updated = {
+        ...prev,
+        activeRole: newRole,
+        home: homeId,
+        previousRole: prev.activeRole,
+        previousHome: prev.home,
+      }
+      saveStepIn(prev.activeRole, prev.home, newRole, homeId)
+      return updated
+    })
   }
 
-  // Reverts OL back to their real role and home
+  // Reverts OL back to their real role and home, clears localStorage
   const revertRole = () => {
+    clearStepIn()
     setUser((prev) => ({
       ...prev,
       activeRole: prev.role,

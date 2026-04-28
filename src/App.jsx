@@ -14,6 +14,7 @@ import Staff from './pages/Staff'
 import Calendar from './pages/Calendar'
 import YearPlanner from './pages/YearPlanner'
 import Account from './pages/Account'
+import ManageHome from './pages/ManageHome'
 import Settings from './pages/Settings'
 import HomeSetupWizard from './pages/HomeSetupWizard'
 import Unauthorised from './pages/Unauthorised'
@@ -152,6 +153,23 @@ function App() {
                     >
                       <AppShell>
                         <YearPlanner />
+                      </AppShell>
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path='/manage-home'
+                  element={
+                    <ProtectedRoute
+                      allowedRoles={[
+                        'superadmin',
+                        'operationallead',
+                        'manager',
+                        'deputy',
+                      ]}
+                    >
+                      <AppShell>
+                        <ManageHome />
                       </AppShell>
                     </ProtectedRoute>
                   }

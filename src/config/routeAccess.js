@@ -5,6 +5,15 @@
 // ProtectedRoute reads from this config — never hardcode roles in App.jsx.
 
 export const ROUTE_ACCESS = {
+  '/': [
+    'superadmin',
+    'operationallead',
+    'manager',
+    'deputy',
+    'senior',
+    'rcw',
+    'relief',
+  ],
   '/home-setup': ['manager', 'deputy', 'operationallead', 'superadmin'],
   '/dashboard': ['superadmin', 'operationallead', 'manager', 'deputy'],
   '/rota': ['superadmin', 'operationallead', 'manager', 'deputy'],
@@ -27,6 +36,7 @@ export const ROUTE_ACCESS = {
     'rcw',
     'relief',
   ],
+  '/manage-home': ['superadmin', 'operationallead', 'manager', 'deputy'],
   '/account': [
     'superadmin',
     'operationallead',

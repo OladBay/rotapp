@@ -47,7 +47,8 @@ function formatTime(ts) {
 }
 
 // ── Nav link definitions ───────────────────────────────────────
-// Each link has iconOutline (inactive) and iconFilled (active)
+// hideFromDesktopNav: true = lives in sidebarBottom on desktop,
+//                            but still appears in mobile More sheet
 function useNavLinks(user) {
   const canSeeManagement = [
     'manager',
@@ -56,6 +57,12 @@ function useNavLinks(user) {
     'superadmin',
   ].includes(user?.activeRole)
 
+  // Manage Home: managers/deputies always, OL/superadmin only when stepped in
+  const canManageHome =
+    ['manager', 'deputy'].includes(user?.activeRole) ||
+    (['operationallead', 'superadmin'].includes(user?.activeRole) &&
+      !!user?.previousRole)
+
   return [
     {
       path: '/dashboard',
@@ -63,6 +70,7 @@ function useNavLinks(user) {
       iconOutline: 'house',
       iconFilled: 'house',
       show: canSeeManagement,
+      hideFromDesktopNav: false,
     },
     {
       path: '/rota',
@@ -70,6 +78,7 @@ function useNavLinks(user) {
       iconOutline: 'clipboard-list',
       iconFilled: 'clipboard-list',
       show: canSeeManagement,
+      hideFromDesktopNav: false,
     },
     {
       path: '/staff',
@@ -78,6 +87,7 @@ function useNavLinks(user) {
       iconFilled: 'user-group',
       show: canSeeManagement,
       badgeKey: 'staff',
+      hideFromDesktopNav: false,
     },
     {
       path: '/calendar',
@@ -85,6 +95,7 @@ function useNavLinks(user) {
       iconOutline: 'calendar-days',
       iconFilled: 'calendar-days',
       show: true,
+      hideFromDesktopNav: false,
     },
     {
       path: '/year-planner',
@@ -92,6 +103,15 @@ function useNavLinks(user) {
       iconOutline: 'calendar-plus',
       iconFilled: 'calendar-plus',
       show: true,
+      hideFromDesktopNav: false,
+    },
+    {
+      path: '/manage-home',
+      label: 'Manage Home',
+      iconOutline: 'gear',
+      iconFilled: 'gear',
+      show: canManageHome,
+      hideFromDesktopNav: false,
     },
     {
       path: '/account',
@@ -99,6 +119,15 @@ function useNavLinks(user) {
       iconOutline: 'user',
       iconFilled: 'user',
       show: true,
+      hideFromDesktopNav: false,
+    },
+    {
+      path: '/settings',
+      label: 'Settings',
+      iconOutline: 'gear',
+      iconFilled: 'gear',
+      show: true,
+      hideFromDesktopNav: true,
     },
   ].filter((l) => l.show)
 }
@@ -125,6 +154,11 @@ function AppShell({ children }) {
   const location = useLocation()
 
   const navLinks = useNavLinks(user)
+
+  // Desktop sidebar nav — excludes items handled in sidebarBottom
+  const desktopNavLinks = navLinks.filter((l) => !l.hideFromDesktopNav)
+
+  // Mobile — all links including settings go into the tab bar / More sheet
   const PRIMARY_COUNT = 4
   const primaryLinks = navLinks.slice(0, PRIMARY_COUNT)
   const overflowLinks = navLinks.slice(PRIMARY_COUNT)
@@ -207,9 +241,9 @@ function AppShell({ children }) {
           <span className={styles.logoAccent}>app</span>
         </div>
 
-        {/* Primary nav links */}
+        {/* Desktop nav links — excludes sidebarBottom items */}
         <nav className={styles.sidebarNav}>
-          {navLinks.map((link) => {
+          {desktopNavLinks.map((link) => {
             const isActive = location.pathname === link.path
             const showBadge = link.badgeKey === 'staff' && pendingApprovals > 0
             return (
