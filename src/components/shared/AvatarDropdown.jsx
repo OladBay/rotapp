@@ -181,8 +181,8 @@ function AvatarDropdown() {
           <div className={styles.dropdownActions}>
             <button
               className={`${styles.actionBtn} ${styles.actionBtnDanger}`}
-              onClick={() => {
-                logout()
+              onClick={async () => {
+                await logout()
                 window.location.href = '/login'
               }}
             >

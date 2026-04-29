@@ -1,3 +1,5 @@
+/* src/pages/Dashboard.module.css */
+
 .page {
   flex: 1;
   color: var(--text-primary);
@@ -14,35 +16,55 @@
 }
 
 .body {
-  padding: 32px 40px;
-  max-width: 1100px;
-  margin: 0 auto;
+  padding: 32px 24px 32px 0;
 }
 
-/* ── Header ─────────────────────────────────────────────────── */
-.header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
+/* ── Section label ──────────────────────────────────────────── */
+.sectionLabel {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+  font-weight: 700;
+}
+
+/* ── Rota status placeholder ────────────────────────────────── */
+.rotaStatusSection {
   margin-bottom: 28px;
 }
 
-.title {
-  font-family: 'Syne', sans-serif;
-  font-size: 22px;
-  font-weight: 600;
-  letter-spacing: -0.3px;
-  margin: 0;
-  color: var(--text-primary);
+.rotaStatusPlaceholder {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--bg-raised);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  padding: 20px 24px;
+  box-shadow: var(--shadow-sm);
 }
 
-.subtitle {
+.placeholderIcon {
+  font-size: 20px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.placeholderTitle {
   font-size: 13px;
+  font-weight: 500;
   color: var(--text-secondary);
-  margin-top: 4px;
+  margin-bottom: 3px;
 }
 
-/* ── Stats row ──────────────────────────────────────────────── */
+.placeholderText {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+/* ── Stats row (OL/Admin) ───────────────────────────────────── */
 .statsRow {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -79,16 +101,6 @@
   margin-top: 4px;
 }
 
-/* ── Section label ──────────────────────────────────────────── */
-.sectionLabel {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  color: var(--text-muted);
-  margin-bottom: 12px;
-  font-weight: 500;
-}
-
 /* ── Homes list ─────────────────────────────────────────────── */
 .homesList {
   display: flex;
@@ -102,6 +114,7 @@
   border-radius: var(--radius-xl);
   padding: 24px;
   box-shadow: var(--shadow-sm);
+  min-height: 220px;
   transition:
     box-shadow var(--duration-base) var(--ease-out),
     transform var(--duration-base) var(--ease-out);
@@ -121,8 +134,9 @@
 
 .homeName {
   font-size: 15px;
-  font-weight: 500;
+  font-weight: 600;
   color: var(--text-primary);
+  font-family: 'Syne', sans-serif;
 }
 
 .homeMeta {
@@ -135,12 +149,12 @@
   font-size: 12px;
   font-weight: 500;
   padding: 4px 10px;
-  border-radius: 6px;
+  border-radius: var(--radius-full);
 }
 
 .homeStats {
   display: flex;
-  gap: 24px;
+  gap: 0;
   margin-bottom: 16px;
   padding-bottom: 16px;
   border-bottom: 1px solid var(--border-subtle);
@@ -150,10 +164,20 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
+  flex: 1;
+  padding-right: 24px;
+  border-right: 1px solid var(--border-subtle);
+  margin-right: 24px;
+}
+
+.homeStat:last-child {
+  border-right: none;
+  margin-right: 0;
+  padding-right: 0;
 }
 
 .homeStatVal {
-  font-size: 18px;
+  font-size: 22px;
   font-weight: 600;
   font-family: 'Syne', sans-serif;
   color: var(--text-primary);
@@ -167,9 +191,83 @@
 .homeActions {
   display: flex;
   gap: 8px;
+  margin-bottom: 0;
+}
+
+/* ── AI summary ─────────────────────────────────────────────── */
+.aiSummary {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.aiIconWrap {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.aiIcon {
+  width: 28px;
+  height: 28px;
+  animation:
+    aiSpin 3s linear infinite,
+    aiPulse 3s ease-in-out infinite;
+}
+
+@keyframes aiSpin {
+  from {
+    transform: rotate(0deg) scale(1);
+  }
+  to {
+    transform: rotate(360deg) scale(1);
+  }
+}
+
+@keyframes aiPulse {
+  0%,
+  100% {
+    transform: rotate(0deg) scale(1);
+  }
+  50% {
+    transform: rotate(180deg) scale(1.12);
+  }
+}
+
+.aiText {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin: 0;
+  padding-top: 4px;
 }
 
 /* ── Buttons ────────────────────────────────────────────────── */
+.topBarBtn {
+  background: var(--accent);
+  color: var(--text-inverse);
+  border: none;
+  border-radius: var(--radius-md);
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  transition: opacity 0.15s;
+}
+
+.topBarBtn:hover {
+  opacity: 0.88;
+}
 
 .headerActionGroup {
   display: flex;
@@ -232,31 +330,11 @@
   opacity: 0.88;
 }
 
-.primaryBtn {
-  background: var(--accent);
-  color: var(--text-inverse);
-  border: none;
-  border-radius: 8px;
-  padding: 9px 16px;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  font-family: 'DM Sans', sans-serif;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  transition: opacity 0.15s;
-}
-
-.primaryBtn:hover {
-  opacity: 0.88;
-}
-
 .secondaryBtn {
   background: transparent;
   color: var(--text-secondary);
   border: 1px solid var(--border-default);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   padding: 7px 14px;
   font-size: 13px;
   cursor: pointer;
@@ -281,4 +359,40 @@
 
 .ghostBtn:hover {
   opacity: 0.8;
+}
+
+/* ── Mobile ─────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .body {
+    padding: 20px 16px;
+  }
+
+  .statsRow {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .homeCard {
+    min-height: unset;
+  }
+
+  .homeStats {
+    flex-wrap: wrap;
+    gap: 16px;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .homeStat {
+    flex: 0 0 calc(50% - 8px);
+    border-right: none;
+    margin-right: 0;
+    padding-right: 0;
+  }
+
+  .homeActions {
+    flex-direction: column;
+  }
+
+  .rotaStatusPlaceholder {
+    padding: 16px;
+  }
 }
