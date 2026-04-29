@@ -942,3 +942,47 @@
   align-items: center;
   gap: 8px;
 }
+/* ── Mobile page header ─────────────────────────────────────── */
+.mobilePageHeader {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .mobilePageHeader {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 16px 16px 12px 16px;
+    background: var(--bg-base);
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .mobilePageHeaderTop {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .mobilePageTitle {
+    font-family: var(--font-heading);
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--text-primary);
+    letter-spacing: -0.3px;
+    line-height: 1.2;
+  }
+
+  .mobilePageSubtitle {
+    font-size: 12px;
+    color: var(--text-secondary);
+    font-family: var(--font-body);
+    line-height: 1.4;
+  }
+
+  .mobilePageActions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+}

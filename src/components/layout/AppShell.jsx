@@ -319,6 +319,19 @@ function AppShell({ children }) {
 
       {/* ── MAIN AREA ─────────────────────────────────────── */}
       <div className={styles.main}>
+        {/* Mobile page header — title, subtitle, actions (mobile only) */}
+        <div className={styles.mobilePageHeader}>
+          <div className={styles.mobilePageHeaderTop}>
+            <div className={styles.mobilePageTitle}>{topBar.title}</div>
+            {topBar.subtitle && (
+              <div className={styles.mobilePageSubtitle}>{topBar.subtitle}</div>
+            )}
+          </div>
+          {topBar.actions && (
+            <div className={styles.mobilePageActions}>{topBar.actions}</div>
+          )}
+        </div>
+
         {/* Top header bar */}
         <div className={styles.topBarWrap}>
           <header className={styles.topBar}>
@@ -337,8 +350,10 @@ function AppShell({ children }) {
               )}
             </div>
             <div className={styles.topBarRight}>
-              {/* Page-level actions slot — populated by pages via portal */}
-              <div id='topbar-actions' className={styles.topBarActions} />
+              {/* Page-level actions — supplied by pages via TopBarContext */}
+              {topBar.actions && (
+                <div className={styles.topBarActions}>{topBar.actions}</div>
+              )}
 
               {/* Theme toggle */}
               <button
@@ -447,7 +462,18 @@ function AppShell({ children }) {
           <span className={styles.logoText}>Rot</span>
           <span className={styles.logoAccent}>app</span>
         </div>
+
         <div className={styles.mobileTopRight}>
+          {/* Theme toggle */}
+          <button
+            className={styles.mobileIconBtn}
+            onClick={toggleTheme}
+            title={isLight ? 'Dark mode' : 'Light mode'}
+          >
+            <FontAwesomeIcon icon={isLight ? 'moon' : 'sun'} />
+          </button>
+
+          {/* Notification bell */}
           <div className={styles.mobileNotifWrap} ref={notifRef}>
             <button
               className={`${styles.mobileIconBtn} ${notifOpen ? styles.mobileIconBtnActive : ''}`}
@@ -519,7 +545,9 @@ function AppShell({ children }) {
               </div>
             )}
           </div>
-          <div className={styles.mobileAvatar}>{initials}</div>
+
+          {/* Avatar dropdown */}
+          <AvatarDropdown />
         </div>
       </header>
 

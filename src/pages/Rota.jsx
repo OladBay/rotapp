@@ -1,5 +1,4 @@
 import { useState, useMemo, useEffect } from 'react'
-import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useRota } from '../context/RotaContext'
@@ -160,7 +159,26 @@ function Rota() {
     'Rota',
     viewMode === 'week'
       ? `${homeName || '—'} · Managing week of ${startLabel} – ${endLabel}`
-      : `${homeName || '—'} · ${currentYear}`
+      : `${homeName || '—'} · ${currentYear}`,
+    <div className={styles.topBarControls}>
+      <div className={styles.viewToggle}>
+        {[
+          { value: 'month', label: 'Month' },
+          { value: 'week', label: 'Week' },
+        ].map((v) => (
+          <button
+            key={v.value}
+            className={`${styles.toggleBtn}${viewMode === v.value ? ` ${styles.toggleBtnActive}` : ''}`}
+            onClick={() => setViewMode(v.value)}
+          >
+            {v.label}
+          </button>
+        ))}
+      </div>
+      {canEdit && viewMode === 'week' && (
+        <button className={styles.publishBtn}>Publish</button>
+      )}
+    </div>
   )
 
   const togglePinNav = () => {
@@ -247,35 +265,8 @@ function Rota() {
     }
   }
 
-  const topBarSlot = document.getElementById('topbar-actions')
-
   return (
     <div className={styles.page}>
-      {/* Portal controls into top bar */}
-      {topBarSlot &&
-        createPortal(
-          <div className={styles.topBarControls}>
-            <div className={styles.viewToggle}>
-              {[
-                { value: 'month', label: 'Month' },
-                { value: 'week', label: 'Week' },
-              ].map((v) => (
-                <button
-                  key={v.value}
-                  className={`${styles.toggleBtn}${viewMode === v.value ? ` ${styles.toggleBtnActive}` : ''}`}
-                  onClick={() => setViewMode(v.value)}
-                >
-                  {v.label}
-                </button>
-              ))}
-            </div>
-            {canEdit && viewMode === 'week' && (
-              <button className={styles.publishBtn}>Publish</button>
-            )}
-          </div>,
-          topBarSlot
-        )}
-
       <div className={styles.body}>
         {/* Compliance strip — week view only */}
         {viewMode === 'week' && canSeeGaps && (

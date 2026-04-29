@@ -28,7 +28,6 @@ import {
   getLeaveDayForDate,
 } from '../utils/timeOffStorage'
 import LeaveCalendar from '../components/shared/LeaveCalendar'
-import { createPortal } from 'react-dom'
 import { useTopBarInit } from '../hooks/useTopBarInit'
 import styles from './Calendar.module.css'
 
@@ -203,7 +202,21 @@ function Calendar() {
     'My Shifts',
     viewMode === 'week'
       ? `Your shifts for ${startLabel} – ${endLabel}`
-      : `Your shifts for ${new Date().getFullYear()}`
+      : `Your shifts for ${new Date().getFullYear()}`,
+    <div className={styles.viewToggle}>
+      {[
+        { value: 'week', label: 'Week' },
+        { value: 'month', label: 'Month' },
+      ].map((v) => (
+        <button
+          key={v.value}
+          className={`${styles.toggleBtn}${viewMode === v.value ? ` ${styles.toggleBtnActive}` : ''}`}
+          onClick={() => setViewMode(v.value)}
+        >
+          {v.label}
+        </button>
+      ))}
+    </div>
   )
   const yearMonths = useMemo(() => getYearMonths(currentYear), [currentYear])
 
@@ -278,29 +291,8 @@ function Calendar() {
     setTimeOffSubmitted(false)
   }
 
-  const topBarSlot = document.getElementById('topbar-actions')
-
   return (
     <div className={styles.page}>
-      {topBarSlot &&
-        createPortal(
-          <div className={styles.viewToggle}>
-            {[
-              { value: 'week', label: 'Week' },
-              { value: 'month', label: 'Month' },
-            ].map((v) => (
-              <button
-                key={v.value}
-                className={`${styles.toggleBtn}${viewMode === v.value ? ` ${styles.toggleBtnActive}` : ''}`}
-                onClick={() => setViewMode(v.value)}
-              >
-                {v.label}
-              </button>
-            ))}
-          </div>,
-          topBarSlot
-        )}
-
       <div className={styles.body}>
         {/* Header */}
 

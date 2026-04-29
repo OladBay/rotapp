@@ -166,7 +166,6 @@ function AvatarDropdown() {
               </button>
             )}
           </div>
-
           <input
             ref={fileInputRef}
             type='file'
@@ -174,6 +173,23 @@ function AvatarDropdown() {
             onChange={handleUpload}
             className={styles.fileInput}
           />
+
+          {/* Divider */}
+          <div className={styles.dropdownDivider} />
+
+          {/* Logout */}
+          <div className={styles.dropdownActions}>
+            <button
+              className={`${styles.actionBtn} ${styles.actionBtnDanger}`}
+              onClick={() => {
+                logout()
+                window.location.href = '/login'
+              }}
+            >
+              <FontAwesomeIcon icon='right-from-bracket' />
+              Log out
+            </button>
+          </div>
         </div>
       )}
     </div>

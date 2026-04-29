@@ -4,7 +4,11 @@ import { createContext, useContext, useState } from 'react'
 const TopBarContext = createContext(null)
 
 export function TopBarProvider({ children }) {
-  const [topBar, setTopBar] = useState({ title: '', subtitle: '' })
+  const [topBar, setTopBar] = useState({
+    title: '',
+    subtitle: '',
+    actions: null,
+  })
 
   return (
     <TopBarContext.Provider value={{ topBar, setTopBar }}>

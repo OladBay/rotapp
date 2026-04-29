@@ -236,3 +236,12 @@
 .fileInput {
   display: none;
 }
+/* ── Mobile dropdown position fix ──────────────────────────── */
+@media (max-width: 768px) {
+  .dropdown {
+    right: 0;
+    left: auto;
+    top: calc(100% + 10px);
+    width: 260px;
+  }
+}

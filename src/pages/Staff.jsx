@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react'
-import { createPortal } from 'react-dom'
 import { useAuth } from '../context/AuthContext'
 import { useRota } from '../context/RotaContext'
 import { useNavigate } from 'react-router-dom'
@@ -524,24 +523,17 @@ function Staff() {
     'Manage Staff',
     isOLorAdmin && !user?.home
       ? `All homes · Manage your team, leave and approvals`
-      : `${homeName || '—'} · Manage your team, leave and approvals`
+      : `${homeName || '—'} · Manage your team, leave and approvals`,
+    <button
+      className={styles.inviteBtn}
+      onClick={() => setShowInviteModal(true)}
+    >
+      <FontAwesomeIcon icon='user-plus' /> Onboard staff
+    </button>
   )
-
-  const topBarSlot = document.getElementById('topbar-actions')
 
   return (
     <div className={styles.page}>
-      {topBarSlot &&
-        createPortal(
-          <button
-            className={styles.inviteBtn}
-            onClick={() => setShowInviteModal(true)}
-          >
-            <FontAwesomeIcon icon='user-plus' /> Onboard staff
-          </button>,
-          topBarSlot
-        )}
-
       <div className={styles.body}>
         {/* ── OL home filter ── */}
         {isOLorAdmin && (
