@@ -938,4 +938,129 @@
   .body {
     padding: 20px 16px;
   }
+
+  /* ── Week nav ── */
+  .weekNav {
+    gap: 6px;
+    margin-bottom: 16px;
+  }
+
+  .weekNavPinned {
+    top: 0;
+    padding: 10px 16px;
+    margin: 0 -16px;
+  }
+
+  .weekLabel {
+    font-size: 13px;
+    min-width: 0;
+    flex: 1;
+    text-align: center;
+  }
+
+  .jumpBtn span {
+    display: none;
+  }
+
+  .legend {
+    display: none;
+  }
+
+  .pinBtn {
+    display: none;
+  }
+
+  /* ── Month view ── */
+  .yearWrap {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  /* ── Week view grid ── */
+  .gridWrap {
+    margin: 0 -16px;
+    border-radius: 0;
+  }
+
+  .grid {
+    min-width: 600px;
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+  }
+
+  /* ── Compliance strip ── */
+  .compStrip {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 4px;
+    -webkit-mask-image: linear-gradient(to right, black 85%, transparent 100%);
+    mask-image: linear-gradient(to right, black 85%, transparent 100%);
+  }
+
+  .compStrip::-webkit-scrollbar {
+    display: none;
+  }
+
+  .chip {
+    flex-shrink: 0;
+    font-size: 11px;
+  }
+
+  /* ── View toggle ── */
+  .viewToggle {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .toggleBtn {
+    flex: 1;
+    text-align: center;
+  }
+
+  /* ── Top bar controls ── */
+  .topBarControls {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  /* ── Hours summary ── */
+  .summaryHeaderBar {
+    padding: 12px;
+  }
+
+  .tableWrap {
+    margin: 0 -16px;
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+  }
+
+  .summaryTable {
+    min-width: 500px;
+  }
+
+  .summaryControls {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  /* ── Modals ── */
+  .overlayWarn {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .warnModal {
+    max-width: 100%;
+    border-radius: 20px 20px 0 0;
+    padding: 28px 20px;
+  }
+
+  .warnActions {
+    flex-direction: column;
+  }
 }

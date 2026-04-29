@@ -188,9 +188,159 @@
   flex-shrink: 0;
   margin-top: 1px;
 }
+/* ── Avatar ─────────────────────────────────────────────────── */
+.avatarRing {
+  position: relative;
+  width: 72px;
+  height: 72px;
+  border-radius: var(--radius-full);
+  border: 2px solid var(--border-default);
+  background: var(--color-success-bg);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.avatarImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.avatarInitials {
+  font-family: var(--font-heading);
+  font-size: var(--text-xl);
+  font-weight: var(--weight-bold);
+  color: var(--color-success);
+  letter-spacing: 0.5px;
+}
+
+.avatarOverlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 16px;
+}
+
+.avatarActions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.avatarEditBtn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  padding: 5px 10px;
+  cursor: pointer;
+  font-family: var(--font-body);
+  transition: background 0.15s;
+}
+
+.avatarEditBtn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.avatarEditBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.avatarRemoveBtn {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-danger-border);
+  background: transparent;
+  color: var(--color-danger);
+  font-size: 11px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+}
+
+.avatarRemoveBtn:hover {
+  background: var(--color-danger-bg);
+}
+
+.avatarRemoveBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.avatarError {
+  font-size: var(--text-xs);
+  color: var(--color-danger);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 4px;
+}
+
+.fileInput {
+  display: none;
+}
 @media (max-width: 768px) {
   .body {
     padding: 20px 16px;
     max-width: 100%;
+  }
+
+  .identityCard {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+    padding: 20px 16px;
+  }
+
+  .avatarWrap {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .avatarActions {
+    margin-top: 0;
+  }
+
+  .fieldRow {
+    padding: 12px 16px;
+    gap: 10px;
+  }
+
+  .fieldLabel {
+    font-size: var(--text-sm);
+  }
+
+  .fieldValue {
+    font-size: var(--text-sm);
+    text-align: right;
+  }
+
+  .fieldDivider {
+    margin: 0 16px;
+  }
+
+  .infoNote {
+    padding: 12px 14px;
+    font-size: var(--text-sm);
   }
 }

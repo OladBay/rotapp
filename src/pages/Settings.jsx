@@ -47,7 +47,7 @@ function Settings() {
             <div className={styles.settingRow}>
               <div className={styles.settingLeft}>
                 <div className={styles.settingIconWrap}>
-                  <FontAwesomeIcon icon={['far', 'bell']} />
+                  <FontAwesomeIcon icon='clipboard-list' />
                 </div>
                 <div className={styles.settingInfo}>
                   <div className={styles.settingLabel}>Rota updates</div>

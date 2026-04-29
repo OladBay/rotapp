@@ -277,9 +277,112 @@
   color: var(--text-muted);
   border: 1px solid var(--border-subtle);
 }
+
 @media (max-width: 768px) {
   .body {
     padding: 20px 16px;
     max-width: 100%;
+  }
+
+  /* ── Header ── */
+  .header {
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+
+  .headerBadge {
+    align-self: flex-start;
+  }
+
+  /* ── Field rows ── */
+  .fieldRow {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+    padding: 14px 16px;
+  }
+
+  .fieldLeft {
+    width: 100%;
+  }
+
+  .fieldValue {
+    text-align: left;
+    font-size: var(--text-sm);
+    color: var(--text-primary);
+    font-weight: var(--weight-medium);
+    padding-left: 26px;
+  }
+
+  .fieldDivider {
+    margin: 0 16px;
+  }
+
+  /* ── Shift rows ── */
+  .shiftRow {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+    padding: 14px 16px;
+  }
+
+  .shiftMeta {
+    flex-wrap: wrap;
+    padding-left: 0;
+  }
+
+  /* ── Staffing numbers → labeled grid ── */
+  .staffingHeader {
+    display: none;
+  }
+
+  .staffingRow {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px 16px;
+    padding: 14px 16px;
+    align-items: start;
+  }
+
+  .staffingShiftName {
+    grid-column: 1 / -1;
+    font-size: var(--text-md);
+    font-weight: var(--weight-semibold);
+    margin-bottom: 2px;
+  }
+
+  .staffingRow span[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    font-size: 10px;
+    font-weight: var(--weight-medium);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-muted);
+    margin-bottom: 2px;
+  }
+
+  .staffingRow span[data-label] {
+    display: flex;
+    flex-direction: column;
+    font-size: var(--text-base);
+    color: var(--text-primary);
+  }
+  /* ── Compact field rows (badge/short value) ── */
+  .fieldRowCompact {
+    flex-direction: row;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .fieldRowCompact .fieldValue {
+    text-align: right;
+    padding-left: 0;
+    flex-shrink: 0;
+  }
+
+  .fieldRowCompact .fieldLeft {
+    flex: 1;
   }
 }

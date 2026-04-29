@@ -482,4 +482,86 @@
     padding: 20px 16px;
     max-width: 100%;
   }
+
+  /* ── Header ── */
+  .header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  .yearNav {
+    align-self: stretch;
+    justify-content: space-between;
+  }
+
+  /* ── Legend ── */
+  .legend {
+    gap: 10px 16px;
+    padding: 10px 12px;
+    margin-bottom: 16px;
+  }
+
+  .legendItem {
+    font-size: 11px;
+  }
+
+  /* ── Month grid → single column ── */
+  .monthRow {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .rowMajorLayout {
+    gap: 16px;
+  }
+
+  /* ── Day cells — slightly larger touch targets ── */
+  .dayCell {
+    padding: 3px;
+    border-radius: 4px;
+  }
+
+  .dayNumber {
+    font-size: 10px;
+  }
+
+  .staffNameTag {
+    display: none;
+  }
+
+  .moreTag {
+    display: none;
+  }
+
+  /* ── Modal → bottom sheet ── */
+  .overlay {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .modal {
+    max-width: 100%;
+    border-radius: 20px 20px 0 0;
+    max-height: 85vh;
+  }
+
+  .modalHeader {
+    padding: 16px 20px;
+  }
+
+  .modalBody {
+    padding: 16px 20px;
+  }
+
+  .modalFooter {
+    padding: 12px 20px 20px;
+  }
+
+  .closeModalBtn {
+    width: 100%;
+    text-align: center;
+    justify-content: center;
+  }
 }

@@ -25,9 +25,11 @@ function formatMgmtRole(role) {
 }
 
 // ── Field row with title + description ────────────────────────
-function ConfigField({ icon, label, description, value }) {
+function ConfigField({ icon, label, description, value, compact }) {
   return (
-    <div className={styles.fieldRow}>
+    <div
+      className={`${styles.fieldRow}${compact ? ` ${styles.fieldRowCompact}` : ''}`}
+    >
       <div className={styles.fieldLeft}>
         {icon && <FontAwesomeIcon icon={icon} className={styles.fieldIcon} />}
         <div className={styles.fieldText}>
@@ -200,14 +202,16 @@ function ManageHome() {
                       <span className={styles.staffingShiftName}>
                         {shift?.name || '—'}
                       </span>
-                      <span>{rule.weekday_min}</span>
-                      <span>{rule.weekday_ideal}</span>
-                      <span>
+                      <span data-label='Weekday min'>{rule.weekday_min}</span>
+                      <span data-label='Weekday ideal'>
+                        {rule.weekday_ideal}
+                      </span>
+                      <span data-label='Weekend min'>
                         {rule.same_for_weekend
                           ? rule.weekday_min
                           : rule.weekend_min}
                       </span>
-                      <span>
+                      <span data-label='Weekend ideal'>
                         {rule.same_for_weekend
                           ? rule.weekday_ideal
                           : rule.weekend_ideal}
@@ -292,6 +296,7 @@ function ManageHome() {
                 <ConfigField
                   label={role.label}
                   description='Counts toward shift minimum when rostered'
+                  compact
                   value={
                     roleExclusions[role.key] ? (
                       <span className={styles.badgeOn}>Counted</span>

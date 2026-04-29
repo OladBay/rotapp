@@ -1252,4 +1252,141 @@
   .body {
     padding: 20px 16px;
   }
+
+  /* ── Tabs → pill filters ── */
+  .tabsBar {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    margin: 0 -16px 16px -16px;
+    padding: 0 16px;
+    border-bottom: none;
+    -webkit-mask-image: linear-gradient(to right, black 85%, transparent 100%);
+    mask-image: linear-gradient(to right, black 85%, transparent 100%);
+  }
+
+  .tabsBar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .tabsBarPinned {
+    position: sticky;
+    top: 0;
+    background: var(--bg-base);
+    margin: 0 -16px 16px -16px;
+    padding: 8px 16px;
+    border-bottom: none;
+    z-index: 10;
+  }
+
+  .tabs {
+    flex-wrap: nowrap;
+    border-bottom: none;
+    width: max-content;
+    gap: 6px;
+    padding-bottom: 4px;
+  }
+
+  .tabBtn {
+    flex-shrink: 0;
+    font-size: 12px;
+    font-weight: 500;
+    padding: 7px 14px;
+    border-radius: var(--radius-full);
+    border: 1px solid var(--border-default);
+    background: var(--bg-raised);
+    color: var(--text-secondary);
+    border-bottom: 1px solid var(--border-default);
+    margin-bottom: 0;
+  }
+
+  .tabBtnActive {
+    background: var(--accent-bg);
+    border-color: var(--accent-border);
+    color: var(--accent);
+    border-bottom-color: var(--accent-border);
+  }
+
+  .tabsPinBtn {
+    display: none;
+  }
+
+  /* ── Leave table → card stack ── */
+  .leaveTableHeader {
+    display: none;
+  }
+
+  .leaveTableRow {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 14px 16px;
+  }
+
+  .leaveTableStaff {
+    font-size: 14px;
+  }
+
+  .leaveTableDate,
+  .leaveTableType,
+  .leaveTableBy {
+    font-size: 12px;
+  }
+
+  .leaveTableChevron {
+    display: none;
+  }
+
+  /* ── Modals → bottom sheet ── */
+  .overlay {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .modal {
+    max-width: 100%;
+    border-radius: 20px 20px 0 0;
+    max-height: 85vh;
+  }
+
+  /* ── Leave filters ── */
+  .leaveFilters {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 4px;
+  }
+
+  .leaveFilters::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* ── Home filter row ── */
+  .homeFilterRow {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding-bottom: 4px;
+    margin-bottom: 12px;
+  }
+
+  .homeFilterRow::-webkit-scrollbar {
+    display: none;
+  }
+
+  .homeFilterBtn {
+    flex-shrink: 0;
+  }
+
+  /* ── Pending card actions ── */
+  .pendingCardActions {
+    flex-direction: column;
+  }
+
+  .confirmLeaveBtn {
+    align-self: stretch;
+    text-align: center;
+  }
 }

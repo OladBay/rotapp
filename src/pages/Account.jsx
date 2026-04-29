@@ -1,6 +1,8 @@
 // src/pages/Account.jsx
+import { useState, useRef, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import { getAvatarUrl, uploadAvatar, removeAvatar } from '../utils/avatarUtils'
 import { useTopBarInit } from '../hooks/useTopBarInit'
 import styles from './Account.module.css'
 
@@ -23,28 +25,116 @@ function getInitials(name) {
 
 function Account() {
   const { user } = useAuth()
+  const fileInputRef = useRef(null)
+  const [avatarUrl, setAvatarUrl] = useState(getAvatarUrl(user))
+  const [uploading, setUploading] = useState(false)
+  const [error, setError] = useState('')
 
   const roleLabel = ROLE_LABELS[user?.activeRole] || user?.activeRole
   const initials = getInitials(user?.name)
 
+  useEffect(() => {
+    setAvatarUrl(getAvatarUrl(user))
+  }, [user?.avatar_url])
+
   useTopBarInit('Account', 'Your profile and employment details')
+
+  const handleUpload = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setError('')
+    setUploading(true)
+    try {
+      const url = await uploadAvatar(user.id, file)
+      setAvatarUrl(`${url}&t=${Date.now()}`)
+      window.location.reload()
+    } catch (err) {
+      setError(err.message || 'Upload failed')
+    } finally {
+      setUploading(false)
+      e.target.value = ''
+    }
+  }
+
+  const handleRemove = async () => {
+    setError('')
+    setUploading(true)
+    try {
+      await removeAvatar(user.id, user.avatar_url)
+      window.location.reload()
+    } catch (err) {
+      setError(err.message || 'Failed to remove photo')
+    } finally {
+      setUploading(false)
+    }
+  }
 
   return (
     <div className={styles.page}>
       <div className={styles.body}>
-        {/* Identity card */}
+        {/* ── Identity card ── */}
         <div className={styles.identityCard}>
           <div className={styles.avatarWrap}>
-            <div className={styles.avatar}>{initials}</div>
+            <div className={styles.avatarRing}>
+              {avatarUrl ? (
+                <img
+                  src={avatarUrl}
+                  alt={user?.name || 'Avatar'}
+                  className={styles.avatarImg}
+                  onError={(e) => {
+                    e.target.style.display = 'none'
+                  }}
+                />
+              ) : (
+                <span className={styles.avatarInitials}>{initials}</span>
+              )}
+              {uploading && (
+                <div className={styles.avatarOverlay}>
+                  <FontAwesomeIcon icon='spinner' spin />
+                </div>
+              )}
+            </div>
+            <div className={styles.avatarActions}>
+              <button
+                className={styles.avatarEditBtn}
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+              >
+                <FontAwesomeIcon icon='pen-to-square' />
+                {user?.avatar_url ? 'Change' : 'Upload'}
+              </button>
+              {user?.avatar_url && (
+                <button
+                  className={styles.avatarRemoveBtn}
+                  onClick={handleRemove}
+                  disabled={uploading}
+                >
+                  <FontAwesomeIcon icon='trash' />
+                </button>
+              )}
+            </div>
+            <input
+              ref={fileInputRef}
+              type='file'
+              accept='image/jpeg,image/png,image/webp'
+              onChange={handleUpload}
+              className={styles.fileInput}
+            />
           </div>
+
           <div className={styles.identityInfo}>
             <div className={styles.identityName}>{user?.name || '—'}</div>
             <div className={styles.identityRole}>{roleLabel}</div>
             <div className={styles.identityEmail}>{user?.email || '—'}</div>
+            {error && (
+              <div className={styles.avatarError}>
+                <FontAwesomeIcon icon='triangle-exclamation' /> {error}
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Personal details */}
+        {/* ── Personal details ── */}
         <div className={styles.section}>
           <div className={styles.sectionTitle}>Personal details</div>
           <div className={styles.card}>
@@ -55,9 +145,7 @@ function Account() {
               </div>
               <div className={styles.fieldValue}>{user?.name || '—'}</div>
             </div>
-
             <div className={styles.fieldDivider} />
-
             <div className={styles.fieldRow}>
               <div className={styles.fieldLabel}>
                 <FontAwesomeIcon icon='envelope' className={styles.fieldIcon} />
@@ -65,9 +153,7 @@ function Account() {
               </div>
               <div className={styles.fieldValue}>{user?.email || '—'}</div>
             </div>
-
             <div className={styles.fieldDivider} />
-
             <div className={styles.fieldRow}>
               <div className={styles.fieldLabel}>
                 <FontAwesomeIcon
@@ -82,9 +168,7 @@ function Account() {
                   : '—'}
               </div>
             </div>
-
             <div className={styles.fieldDivider} />
-
             <div className={styles.fieldRow}>
               <div className={styles.fieldLabel}>
                 <FontAwesomeIcon icon='car' className={styles.fieldIcon} />
@@ -103,7 +187,7 @@ function Account() {
           </div>
         </div>
 
-        {/* Employment details */}
+        {/* ── Employment details ── */}
         <div className={styles.section}>
           <div className={styles.sectionTitle}>Employment details</div>
           <div className={styles.card}>
@@ -117,9 +201,7 @@ function Account() {
               </div>
               <div className={styles.fieldValue}>{roleLabel}</div>
             </div>
-
             <div className={styles.fieldDivider} />
-
             <div className={styles.fieldRow}>
               <div className={styles.fieldLabel}>
                 <FontAwesomeIcon
@@ -135,9 +217,7 @@ function Account() {
                   : '—'}
               </div>
             </div>
-
             <div className={styles.fieldDivider} />
-
             <div className={styles.fieldRow}>
               <div className={styles.fieldLabel}>
                 <FontAwesomeIcon icon='clock' className={styles.fieldIcon} />
@@ -152,7 +232,7 @@ function Account() {
           </div>
         </div>
 
-        {/* Info note */}
+        {/* ── Info note ── */}
         <div className={styles.infoNote}>
           <FontAwesomeIcon icon='circle-info' className={styles.infoIcon} />
           <span>
