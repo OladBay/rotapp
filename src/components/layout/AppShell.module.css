@@ -572,6 +572,10 @@
 
 .topBarWrap {
   padding: 12px 12px 0 0;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: var(--bg-base);
 }
 
 .content {
