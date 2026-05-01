@@ -46,7 +46,10 @@ export function AuthProvider({ children }) {
       .single()
 
     if (error || !profile) {
-      console.error('Failed to fetch profile:', error)
+      // Profile not found — user was deleted or data is corrupt.
+      // Sign out immediately to invalidate the session.
+      console.warn('Profile not found — signing out:', supabaseUser.id)
+      await supabase.auth.signOut()
       setUser(null)
       setLoading(false)
       return
@@ -59,6 +62,11 @@ export function AuthProvider({ children }) {
       setLoading(false)
       return
     }
+
+    // ── Email verification status ──────────────────────────────
+    // Derived from Supabase auth record, not the profile table.
+    // This is the single source of truth for email verification.
+    const emailVerified = !!supabaseUser.email_confirmed_at
 
     // Base user from database
     const baseUser = {
@@ -75,6 +83,7 @@ export function AuthProvider({ children }) {
       contract_type: profile.contract_type,
       contracted_hours: profile.contracted_hours,
       avatar_url: profile.avatar_url || null,
+      emailVerified,
     }
 
     // Restore step-in state if one was active

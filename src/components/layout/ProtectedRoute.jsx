@@ -2,21 +2,30 @@
 import { Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { useHomeConfig } from '../../context/HomeConfigContext'
+import { useOrgSetup } from '../../context/OrgSetupContext'
 import { ROUTE_ACCESS } from '../../config/routeAccess'
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
   const { isWizardComplete, configLoading } = useHomeConfig()
+  const { isOrgWizardComplete, orgSetupLoading } = useOrgSetup()
   const location = useLocation()
 
-  // Wait for both auth and config to resolve
-  if (loading || configLoading) return null
+  // Wait for auth, home config, and org setup to resolve
+  if (loading || configLoading || orgSetupLoading) return null
 
   // Not logged in
   if (!user) return <Navigate to='/login' replace />
 
   // Blocked account
   if (user.blockedStatus) return <Navigate to='/login' replace />
+
+  // ── Gate 1 — Email verification ──────────────────────────────
+  // Must be verified before any other gate fires.
+  // Already on /verify-pending — let through to avoid redirect loop.
+  if (!user.emailVerified && location.pathname !== '/verify-pending') {
+    return <Navigate to='/verify-pending' replace />
+  }
 
   // Path not in config — fail safe, deny access
   const allowedRoles = ROUTE_ACCESS[location.pathname]
@@ -27,20 +36,28 @@ function ProtectedRoute({ children }) {
     return <Navigate to='/unauthorised' replace />
   }
 
-  // ── Wizard gate ──────────────────────────────────────────────────────
+  // ── Gate 2 — Org wizard ───────────────────────────────────────
+  // Applies to operationallead and superadmin only.
+  // If their org setup is not complete, redirect to /org-setup.
+  // Already on /org-setup — let through to avoid redirect loop.
+  if (
+    location.pathname !== '/org-setup' &&
+    (user.activeRole === 'operationallead' ||
+      user.activeRole === 'superadmin') &&
+    user.org_id &&
+    !isOrgWizardComplete
+  ) {
+    return <Navigate to='/org-setup' replace />
+  }
+
+  // ── Gate 3 — Home wizard ──────────────────────────────────────
   // Only applies when user has a home assigned.
   // OLs with no home stepped in are never gated.
   // Already on /home-setup — let through to avoid redirect loop.
   if (user?.home && !isWizardComplete && location.pathname !== '/home-setup') {
-    // Manager or deputy — hard redirect, no choice
-    if (user.activeRole === 'manager' || user.activeRole === 'deputy') {
-      return <Navigate to='/home-setup' replace />
-    }
-
-    // OL or superadmin stepped into incomplete home
-    // — redirect to home-setup but wizard will show
-    // the interstitial screen with a choice
     if (
+      user.activeRole === 'manager' ||
+      user.activeRole === 'deputy' ||
       user.activeRole === 'operationallead' ||
       user.activeRole === 'superadmin'
     ) {

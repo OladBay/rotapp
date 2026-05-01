@@ -1795,3 +1795,238 @@
   text-align: right;
   font-weight: 500;
 }
+
+/* ── Mobile ─────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .page {
+    height: auto;
+    min-height: 100vh;
+    overflow: auto;
+  }
+
+  .topbar {
+    padding: 10px 16px;
+  }
+
+  .cardWrap {
+    padding: 0 0 80px;
+    align-items: flex-start;
+  }
+
+  .card {
+    max-width: 100%;
+    max-height: none;
+    height: auto;
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+    border-bottom: none;
+    box-shadow: none;
+  }
+
+  .body {
+    flex-direction: column;
+  }
+
+  /* ── Left panel hidden on mobile ── */
+  .leftPanel {
+    display: none;
+  }
+
+  /* ── Mobile progress strip replaces left panel ── */
+  .mobileProgressStrip {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px 10px;
+    border-bottom: 1px solid var(--border-subtle);
+    background: var(--bg-elevated);
+    flex-shrink: 0;
+    gap: 12px;
+  }
+
+  .mobileProgressLeft {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .mobileProgressLabel {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.9px;
+    color: var(--text-muted);
+    font-weight: 600;
+  }
+
+  .mobileProgressName {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-primary);
+    font-family: 'Syne', sans-serif;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .mobileProgressRight {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+
+  .mobileProgressPct {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-weight: 500;
+  }
+
+  .mobileProgressTrack {
+    width: 80px;
+    height: 4px;
+    background: var(--bg-overlay);
+    border-radius: var(--radius-full);
+    overflow: hidden;
+  }
+
+  .mobileProgressFill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: var(--radius-full);
+    transition: width 0.5s cubic-bezier(0.34, 1.2, 0.64, 1);
+  }
+
+  /* ── Right panel full width ── */
+  .rightPanel {
+    padding: 20px 16px 16px;
+  }
+
+  /* ── Step header ── */
+  .stepTitle {
+    font-size: 19px;
+  }
+
+  .stepSubtitle {
+    font-size: 12px;
+    max-width: 100%;
+  }
+
+  /* ── Step footer ── */
+  .stepFooter {
+    flex-direction: column-reverse;
+    align-items: stretch;
+    gap: 10px;
+    padding-top: 16px;
+  }
+
+  .footerHint {
+    text-align: center;
+  }
+
+  .footerButtons {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .footerButtons .primaryBtn {
+    flex: 1;
+    justify-content: center;
+  }
+
+  .footerButtons .secondaryBtn {
+    flex-shrink: 0;
+  }
+
+  /* ── Shift grid ── */
+  .shiftListHeader {
+    display: none;
+  }
+
+  .shiftRow {
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto auto;
+    gap: 6px;
+  }
+
+  .shiftRow > .shiftField:nth-child(1) {
+    grid-column: 1 / -1;
+  }
+
+  .hoursDisplay {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    padding-top: 0;
+    font-size: 11px;
+  }
+
+  .removeShiftBtn {
+    justify-self: end;
+    align-self: center;
+  }
+
+  /* ── Day grid ── */
+  .dayGrid {
+    gap: 5px;
+  }
+
+  .dayBtn {
+    width: 36px;
+    height: 34px;
+    font-size: 11px;
+  }
+
+  /* ── Staffing grid ── */
+  .staffingGrid {
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  /* ── Schedule cards ── */
+  .scheduleCard {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .scheduleCardCounter {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  /* ── Greeting card ── */
+  .greetingWrap {
+    padding: 16px;
+  }
+
+  .greetingCard {
+    padding: 28px 20px;
+  }
+
+  /* ── Interstitial ── */
+  .interstitialWrap {
+    padding: 16px;
+  }
+
+  .interstitialCard {
+    padding: 28px 20px;
+  }
+
+  .interstitialActions {
+    flex-direction: column;
+  }
+
+  .interstitialActions .secondaryBtn,
+  .interstitialActions .primaryBtn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+/* ── Mobile progress strip hidden on desktop ── */
+.mobileProgressStrip {
+  display: none;
+}

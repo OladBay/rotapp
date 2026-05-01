@@ -237,3 +237,39 @@
   border-radius: var(--radius-lg) !important;
   font-weight: var(--weight-semibold) !important;
 }
+/* ── Mobile ─────────────────────────────────────────────────── */
+@media (max-width: 480px) {
+  .page {
+    padding: 16px;
+    align-items: flex-start;
+    padding-top: 40px;
+  }
+
+  .card {
+    padding: 36px 24px 32px;
+    border-radius: 14px;
+  }
+
+  .logo {
+    font-size: 22px;
+    margin-bottom: 32px;
+  }
+
+  .title {
+    font-size: 19px;
+  }
+
+  .subtitle {
+    font-size: 13px;
+    margin-bottom: 28px;
+  }
+
+  .input {
+    font-size: 16px;
+    padding: 13px 14px 13px 38px;
+  }
+
+  .submitBtn {
+    padding: 14px !important;
+  }
+}

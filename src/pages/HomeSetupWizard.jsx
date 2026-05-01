@@ -340,6 +340,27 @@ function HomeSetupWizard() {
       <div className={styles.cardWrap}>
         <div className={styles.card}>
           <div className={styles.body}>
+            {/* ── Mobile progress strip ── */}
+            <div className={styles.mobileProgressStrip}>
+              <div className={styles.mobileProgressLeft}>
+                <div className={styles.mobileProgressLabel}>Setting up</div>
+                <div className={styles.mobileProgressName}>
+                  {homeName || 'Your home'}
+                </div>
+              </div>
+              <div className={styles.mobileProgressRight}>
+                <span className={styles.mobileProgressPct}>
+                  {completedPercent}%
+                </span>
+                <div className={styles.mobileProgressTrack}>
+                  <div
+                    className={styles.mobileProgressFill}
+                    style={{ width: `${completedPercent}%` }}
+                  />
+                </div>
+              </div>
+            </div>
+
             {/* ── Left panel ── */}
             <div className={styles.leftPanel}>
               {/* Home block — pinned top */}

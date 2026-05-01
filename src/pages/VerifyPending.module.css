@@ -1,0 +1,210 @@
+/* src/pages/VerifyPending.module.css */
+
+/* ── Page ───────────────────────────────────────────────────── */
+.page {
+  min-height: 100vh;
+  background-color: var(--bg-elevated);
+  background-image: radial-gradient(
+    circle,
+    var(--accent-border) 1px,
+    transparent 1px
+  );
+  background-size: 22px 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  transition: background 0.25s ease;
+}
+
+/* ── Card ───────────────────────────────────────────────────── */
+.card {
+  background: var(--bg-raised);
+  border: 1px solid var(--border-subtle);
+  border-radius: 18px;
+  padding: 52px 48px 48px;
+  width: 100%;
+  max-width: 480px;
+  box-shadow:
+    0 2px 4px rgba(0, 0, 0, 0.04),
+    0 8px 24px rgba(0, 0, 0, 0.08),
+    0 32px 80px rgba(0, 0, 0, 0.12);
+  animation: cardIn var(--duration-slow) var(--ease-out) both;
+}
+
+@keyframes cardIn {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* ── Logo ───────────────────────────────────────────────────── */
+.logo {
+  font-family: 'Syne', sans-serif;
+  font-size: 26px;
+  font-weight: 800;
+  color: var(--text-primary);
+  margin-bottom: 40px;
+  letter-spacing: -0.5px;
+}
+
+.logoAccent {
+  color: var(--accent);
+}
+
+/* ── Centred content ────────────────────────────────────────── */
+.centred {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 12px;
+}
+
+/* ── Icon ───────────────────────────────────────────────────── */
+.icon {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: var(--accent-bg);
+  border: 1px solid var(--accent-border);
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  margin-bottom: 8px;
+}
+
+/* ── Text ───────────────────────────────────────────────────── */
+.title {
+  font-family: 'Syne', sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+  letter-spacing: -0.3px;
+}
+
+.body {
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin: 0;
+  max-width: 340px;
+}
+
+.hint {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+/* ── Feedback notes ─────────────────────────────────────────── */
+.successNote {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--color-success-bg);
+  border: 1px solid var(--color-success-border);
+  color: var(--color-success);
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  font-size: 13px;
+  width: 100%;
+  justify-content: center;
+}
+
+.errorNote {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--color-danger-bg);
+  border: 1px solid var(--color-danger-border);
+  color: var(--color-danger);
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  font-size: 13px;
+  width: 100%;
+  justify-content: center;
+}
+
+/* ── Buttons ────────────────────────────────────────────────── */
+.resendBtn {
+  width: 100%;
+  padding: 13px 20px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-lg);
+  font-size: 14px;
+  font-weight: 600;
+  font-family: 'DM Sans', sans-serif;
+  cursor: pointer;
+  margin-top: 4px;
+  transition:
+    opacity var(--duration-base) var(--ease-out),
+    transform var(--duration-fast) var(--ease-out);
+}
+
+.resendBtn:hover:not(:disabled) {
+  opacity: 0.88;
+}
+
+.resendBtn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.resendBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.signOutBtn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-family: 'DM Sans', sans-serif;
+  cursor: pointer;
+  padding: 4px;
+  text-decoration: underline;
+  transition: color var(--duration-fast) var(--ease-out);
+  margin-top: 4px;
+}
+
+.signOutBtn:hover {
+  color: var(--text-secondary);
+}
+
+/* ── Mobile ─────────────────────────────────────────────────── */
+@media (max-width: 480px) {
+  .page {
+    padding: 16px;
+    align-items: flex-start;
+    padding-top: 40px;
+  }
+
+  .card {
+    padding: 36px 24px 32px;
+    border-radius: 14px;
+  }
+
+  .logo {
+    font-size: 22px;
+    margin-bottom: 32px;
+  }
+
+  .title {
+    font-size: 19px;
+  }
+
+  .body {
+    font-size: 13px;
+  }
+}

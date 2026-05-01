@@ -1,4 +1,4 @@
-/* src/pages/Invite.module.css */
+/* src/pages/OrgSignup.module.css */
 
 /* ── Page ───────────────────────────────────────────────────── */
 .page {
@@ -14,7 +14,7 @@
   align-items: center;
   justify-content: center;
   padding: 24px;
-  font-family: 'DM Sans', sans-serif;
+  transition: background 0.25s ease;
 }
 
 /* ── Card ───────────────────────────────────────────────────── */
@@ -95,41 +95,9 @@
   margin: 0 4px;
 }
 
-/* ── Context strip ──────────────────────────────────────────── */
-.contextStrip {
-  display: flex;
-  gap: 16px;
-  flex-wrap: wrap;
-  background: var(--accent-bg);
-  border: 1px solid var(--accent-border);
-  border-radius: var(--radius-md);
-  padding: 12px 16px;
-  margin-bottom: 24px;
-}
-
-.contextItem {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.contextLabel {
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.9px;
-}
-
-.contextVal {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--accent);
-}
-
-/* ── Typography ─────────────────────────────────────────────── */
+/* ── Headings ───────────────────────────────────────────────── */
 .title {
-  font-family: 'Syne', sans-serif;
+  font-family: 'DM Sans', sans-serif;
   font-size: 22px;
   font-weight: 700;
   color: var(--text-primary);
@@ -140,16 +108,34 @@
 .subtitle {
   font-size: 13px;
   color: var(--text-secondary);
-  margin-bottom: 24px;
+  margin-bottom: 20px;
   line-height: 1.5;
 }
 
-.hint {
-  font-size: 12.5px;
+/* ── Info note ──────────────────────────────────────────────── */
+.infoNote {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  background: var(--accent-bg);
+  border: 1px solid var(--accent-border);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  margin-bottom: 20px;
+}
+
+.infoNoteIcon {
+  color: var(--accent);
+  font-size: 13px;
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.infoText {
+  font-size: 13px;
   color: var(--text-secondary);
-  line-height: 1.5;
-  margin-bottom: 8px;
-  text-align: center;
+  line-height: 1.6;
+  margin: 0;
 }
 
 /* ── Form ───────────────────────────────────────────────────── */
@@ -171,16 +157,44 @@
   color: var(--text-secondary);
 }
 
+.optional {
+  font-weight: 400;
+  color: var(--text-muted);
+}
+
+.fieldHint {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* ── Input ──────────────────────────────────────────────────── */
+.inputWrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.inputIcon {
+  position: absolute;
+  left: 14px;
+  font-size: 13px;
+  color: var(--text-muted);
+  pointer-events: none;
+  z-index: 1;
+}
+
 .input {
   background: var(--bg-elevated);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
+  padding: 11px 14px 11px 38px;
+  font-size: 14px;
   color: var(--text-primary);
-  padding: 11px 14px;
-  font-size: 13px;
-  font-family: 'DM Sans', sans-serif;
-  width: 100%;
   outline: none;
+  width: 100%;
+  font-family: 'DM Sans', sans-serif;
   transition:
     border-color var(--duration-base) var(--ease-out),
     background var(--duration-base) var(--ease-out);
@@ -195,26 +209,33 @@
   color: var(--text-muted);
 }
 
-.checkRow {
+.eyeBtn {
+  position: absolute;
+  right: 12px;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px;
+  font-size: 13px;
   display: flex;
   align-items: center;
-  gap: 10px;
+  justify-content: center;
+  transition: color var(--duration-fast) var(--ease-out);
 }
 
-.checkLabel {
-  font-size: 13px;
+.eyeBtn:hover {
   color: var(--text-secondary);
-  cursor: pointer;
 }
 
 /* ── Error ──────────────────────────────────────────────────── */
 .error {
-  font-size: 13px;
-  color: var(--color-danger);
   background: var(--color-danger-bg);
   border: 1px solid var(--color-danger-border);
   border-radius: var(--radius-md);
   padding: 10px 14px;
+  font-size: 13px;
+  color: var(--color-danger);
   animation: fadeIn var(--duration-base) var(--ease-out);
 }
 
@@ -225,26 +246,26 @@
   border: none;
   border-radius: var(--radius-lg);
   padding: 14px 16px;
-  font-size: var(--text-md);
-  font-weight: var(--weight-semibold);
-  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
   font-family: 'DM Sans', sans-serif;
+  cursor: pointer;
   flex: 1;
   transition:
     opacity var(--duration-base) var(--ease-out),
     transform var(--duration-fast) var(--ease-out);
 }
 
-.primaryBtn:hover {
+.primaryBtn:hover:not(:disabled) {
   opacity: 0.88;
 }
 
-.primaryBtn:active {
+.primaryBtn:active:not(:disabled) {
   transform: scale(0.98);
 }
 
 .primaryBtn:disabled {
-  opacity: 0.5;
+  opacity: 0.6;
   cursor: not-allowed;
 }
 
@@ -263,6 +284,7 @@
   transition:
     background var(--duration-base) var(--ease-out),
     transform var(--duration-fast) var(--ease-out);
+  flex-shrink: 0;
 }
 
 .backBtn:hover {
@@ -279,63 +301,74 @@
   margin-top: 4px;
 }
 
-/* ── Centred screens (loading, invalid, done) ───────────────── */
+.resendBtn {
+  background: transparent;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  padding: 10px 20px;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: 'DM Sans', sans-serif;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition:
+    border-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+  margin-top: 8px;
+}
+
+.resendBtn:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.resendBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.resendMessage {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 4px 0 0;
+  text-align: center;
+}
+
+/* ── Centred state screens ──────────────────────────────────── */
 .centred {
   display: flex;
   flex-direction: column;
   align-items: center;
   text-align: center;
   gap: 12px;
-  padding: 16px 0;
 }
 
-.spinner {
-  width: 32px;
-  height: 32px;
-  border: 3px solid var(--border-default);
-  border-top-color: var(--accent);
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.errorIcon {
+.verifyIcon {
   width: 56px;
   height: 56px;
   border-radius: 50%;
-  background: var(--color-danger-bg);
-  border: 1px solid var(--color-danger-border);
-  color: var(--color-danger);
+  background: var(--accent-bg);
+  border: 1px solid var(--accent-border);
+  color: var(--accent);
   display: flex;
   align-items: center;
   justify-content: center;
   font-size: 22px;
+  margin-bottom: 8px;
 }
 
-.pendingIcon {
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  background: var(--color-warning-bg);
-  border: 1px solid var(--color-warning-border);
-  color: var(--color-warning);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 22px;
+.hint {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 0;
 }
 
 /* ── Footer ─────────────────────────────────────────────────── */
 .footer {
-  margin-top: 20px;
+  text-align: center;
   font-size: 13px;
   color: var(--text-secondary);
-  text-align: center;
+  margin-top: 24px;
 }
 
 .footerLink {
@@ -347,14 +380,65 @@
   text-decoration: underline;
 }
 
-.linkBtn {
-  color: var(--accent);
-  font-size: 13px;
-  text-decoration: none;
+/* ── Animations ─────────────────────────────────────────────── */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+/* ── Phone input ────────────────────────────────────────────── */
+.phoneWrap {
+  display: flex;
+  align-items: center;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  transition:
+    border-color var(--duration-base) var(--ease-out),
+    background var(--duration-base) var(--ease-out);
 }
 
-.linkBtn:hover {
-  text-decoration: underline;
+.phoneWrap:focus-within {
+  border-color: var(--accent);
+  background: var(--bg-raised);
+}
+
+.countrySelect {
+  background: var(--bg-overlay);
+  border: none;
+  border-right: 1px solid var(--border-default);
+  outline: none;
+  padding: 11px 10px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-family: 'DM Sans', sans-serif;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background var(--duration-base) var(--ease-out);
+}
+
+.countrySelect:focus {
+  background: var(--bg-hover);
+}
+
+.phoneNumberInput {
+  background: transparent;
+  border: none;
+  outline: none;
+  padding: 11px 14px;
+  font-size: 14px;
+  color: var(--text-primary);
+  font-family: 'DM Sans', sans-serif;
+  flex: 1;
+  min-width: 0;
+}
+
+.phoneNumberInput::placeholder {
+  color: var(--text-muted);
 }
 /* ── Mobile ─────────────────────────────────────────────────── */
 @media (max-width: 480px) {
@@ -375,7 +459,6 @@
   }
 
   .steps {
-    gap: 2px;
     margin-bottom: 16px;
   }
 
@@ -387,24 +470,18 @@
     width: 12px;
   }
 
-  .contextStrip {
-    gap: 12px;
-    padding: 10px 12px;
-    margin-bottom: 16px;
-  }
-
   .title {
     font-size: 19px;
   }
 
   .subtitle {
     font-size: 12px;
-    margin-bottom: 20px;
+    margin-bottom: 16px;
   }
 
   .input {
     font-size: 16px;
-    padding: 13px 14px;
+    padding: 13px 14px 13px 38px;
   }
 
   .primaryBtn {
@@ -417,7 +494,7 @@
     font-size: 13px;
   }
 
-  .btnRow {
-    gap: 8px;
+  .resendBtn {
+    width: 100%;
   }
 }
