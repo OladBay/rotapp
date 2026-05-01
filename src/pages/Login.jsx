@@ -35,6 +35,16 @@ function Login() {
     try {
       await login(email, password)
     } catch (err) {
+      // Supabase returns "Email not confirmed" when the user has not
+      // yet verified their email. Intercept this, show friendly copy,
+      // and redirect to /verify-pending so they can resend.
+      if (
+        err.message?.toLowerCase().includes('email not confirmed') ||
+        err.message?.toLowerCase().includes('not confirmed')
+      ) {
+        navigate('/verify-pending', { replace: true })
+        return
+      }
       setError(err.message || 'Invalid email or password')
       setLoading(false)
     }

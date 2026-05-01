@@ -38,14 +38,14 @@ function ProtectedRoute({ children }) {
 
   // ── Gate 2 — Org wizard ───────────────────────────────────────
   // Applies to operationallead and superadmin only.
-  // If their org setup is not complete, redirect to /org-setup.
+  // Fires when the user has no org at all, or has an org but
+  // has not completed org setup.
   // Already on /org-setup — let through to avoid redirect loop.
   if (
     location.pathname !== '/org-setup' &&
     (user.activeRole === 'operationallead' ||
       user.activeRole === 'superadmin') &&
-    user.org_id &&
-    !isOrgWizardComplete
+    (!user.org_id || !isOrgWizardComplete)
   ) {
     return <Navigate to='/org-setup' replace />
   }

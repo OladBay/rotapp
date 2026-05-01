@@ -30,13 +30,10 @@ const COUNTRY_CODES = [
   { code: 'OTHER', dial: '+', flag: '🌍' },
 ]
 
-function VerifyScreen({
-  email,
-  resendLoading,
-  resendMessage,
-  resendCountdown,
-  onResend,
-}) {
+// ── VerifyScreen ───────────────────────────────────────────────────────────
+// Simple holding screen shown immediately after signup.
+// All resend logic lives in /verify-pending — single owner.
+function VerifyScreen({ email }) {
   return (
     <div className={styles.page}>
       <div className={styles.card}>
@@ -50,25 +47,15 @@ function VerifyScreen({
           <h1 className={styles.title}>Check your email</h1>
           <p className={styles.subtitle}>
             We've sent a verification link to <strong>{email}</strong>. Click
-            the link to continue.
+            the link to continue setting up your organisation.
           </p>
           <p className={styles.hint}>Can't find it? Check your spam folder.</p>
-
-          {resendMessage && (
-            <p className={styles.resendMessage}>{resendMessage}</p>
-          )}
-
-          <button
-            className={styles.resendBtn}
-            onClick={onResend}
-            disabled={resendLoading || resendCountdown > 0}
-          >
-            {resendLoading
-              ? 'Resending…'
-              : resendCountdown > 0
-                ? `Resend in ${resendCountdown}s`
-                : 'Resend email'}
-          </button>
+          <p className={styles.hint}>
+            Having trouble?{' '}
+            <Link to='/verify-pending' className={styles.footerLink}>
+              Go to verification page
+            </Link>
+          </p>
         </div>
       </div>
     </div>
@@ -82,15 +69,6 @@ function OrgSignup() {
   const [showConfirm, setShowConfirm] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
-  const [resendLoading, setResendLoading] = useState(false)
-  const [resendMessage, setResendMessage] = useState('')
-  const [resendCountdown, setResendCountdown] = useState(() => {
-    const stored = sessionStorage.getItem('rotapp_resend_ts')
-    if (!stored) return 0
-    const secondsElapsed = Math.floor((Date.now() - Number(stored)) / 1000)
-    const remaining = 60 - secondsElapsed
-    return remaining > 0 ? remaining : 0
-  })
 
   const [form, setForm] = useState({
     name: '',
@@ -191,19 +169,6 @@ function OrgSignup() {
       // the user clicks the verification link.
       await supabase.auth.signOut()
 
-      sessionStorage.setItem('rotapp_resend_ts', String(Date.now()))
-      setResendCountdown(60)
-      const interval = setInterval(() => {
-        setResendCountdown((prev) => {
-          if (prev <= 1) {
-            clearInterval(interval)
-            sessionStorage.removeItem('rotapp_resend_ts')
-            return 0
-          }
-          return prev - 1
-        })
-      }, 1000)
-
       setScreen('verify')
     } catch (err) {
       setError(err.message || 'Something went wrong. Please try again.')
@@ -212,48 +177,8 @@ function OrgSignup() {
     }
   }
 
-  const handleResend = async () => {
-    setResendMessage('')
-    setResendLoading(true)
-    try {
-      const { error } = await supabase.auth.resend({
-        type: 'signup',
-        email: form.email,
-        options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
-        },
-      })
-      if (error) throw error
-      setResendMessage('Verification email resent. Check your inbox.')
-      sessionStorage.setItem('rotapp_resend_ts', String(Date.now()))
-      setResendCountdown(60)
-      const interval = setInterval(() => {
-        setResendCountdown((prev) => {
-          if (prev <= 1) {
-            clearInterval(interval)
-            sessionStorage.removeItem('rotapp_resend_ts')
-            return 0
-          }
-          return prev - 1
-        })
-      }, 1000)
-    } catch (err) {
-      setResendMessage('Could not resend — please try again.')
-    } finally {
-      setResendLoading(false)
-    }
-  }
-
   if (screen === 'verify') {
-    return (
-      <VerifyScreen
-        email={form.email}
-        resendLoading={resendLoading}
-        resendMessage={resendMessage}
-        resendCountdown={resendCountdown}
-        onResend={handleResend}
-      />
-    )
+    return <VerifyScreen email={form.email} />
   }
 
   return (
