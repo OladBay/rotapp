@@ -589,14 +589,19 @@
 
 .optionTitle {
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--text-primary);
-  font-family: 'Syne', sans-serif;
+  font-family: 'DM Sans', sans-serif;
   margin-bottom: 2px;
 }
 
 .optionSelected .optionTitle {
   color: var(--accent);
+}
+
+.optionContent {
+  display: flex;
+  flex-direction: column;
 }
 
 .optionDesc {
@@ -723,6 +728,16 @@
   color: var(--text-primary);
   font-family: 'DM Sans', sans-serif;
   margin-bottom: 4px;
+}
+
+.inviteHint {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: 'DM Sans', sans-serif;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  line-height: 1.5;
 }
 
 /* ── Review ──────────────────────────────────────────────────── */
@@ -914,6 +929,169 @@
   margin-top: 2px;
   flex-shrink: 0;
 }
+
+/* ── Greeting screen ─────────────────────────────────────────── */
+.greetingWrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 24px 20px;
+}
+
+.greetingCard {
+  width: 100%;
+  max-width: 420px;
+  background: var(--bg-raised);
+  border-radius: 18px;
+  padding: 40px 36px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  box-shadow:
+    0 2px 4px rgba(0, 0, 0, 0.04),
+    0 8px 24px rgba(0, 0, 0, 0.08),
+    0 32px 80px rgba(0, 0, 0, 0.12);
+  border: 1px solid var(--border-subtle);
+}
+
+.greetingIcon {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-xl);
+  background: var(--accent-bg);
+  border: 1px solid var(--accent-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  color: var(--accent);
+  margin-bottom: 4px;
+}
+
+.greetingText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.greetingTitle {
+  font-size: 14px;
+  color: var(--text-secondary);
+  font-family: 'DM Sans', sans-serif;
+}
+
+.greetingName {
+  font-family: 'Syne', sans-serif;
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.5px;
+  line-height: 1.15;
+  margin: 0;
+}
+
+.greetingBody {
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.65;
+  font-family: 'DM Sans', sans-serif;
+}
+
+.greetingInputBlock {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.greetingInputLabel {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  font-family: 'DM Sans', sans-serif;
+}
+
+.greetingInput {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  padding: 10px 14px;
+  font-size: 13px;
+  color: var(--text-primary);
+  outline: none;
+  width: 100%;
+  font-family: 'DM Sans', sans-serif;
+  transition:
+    border-color var(--duration-base) var(--ease-out),
+    background var(--duration-base) var(--ease-out);
+}
+
+.greetingInput:focus {
+  border-color: var(--accent);
+  background: var(--bg-raised);
+}
+
+.greetingInput::placeholder {
+  color: var(--text-muted);
+}
+
+.greetingInputError {
+  border-color: var(--color-danger) !important;
+}
+
+.greetingInputErrorMsg {
+  font-size: 11px;
+  color: var(--color-danger);
+  display: block;
+  margin-top: 2px;
+}
+
+.greetingBtn {
+  margin-top: 4px;
+  width: 100%;
+  background: var(--accent);
+  color: var(--text-inverse);
+  border: none;
+  border-radius: 9px;
+  padding: 11px 20px;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: 'DM Sans', sans-serif;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition:
+    opacity 0.15s,
+    transform 0.15s,
+    box-shadow 0.15s;
+  box-shadow: 0 2px 8px var(--accent-border);
+}
+
+.greetingBtn:hover {
+  opacity: 0.91;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px var(--accent-border);
+}
+
+.greetingBtn:active {
+  transform: scale(0.96);
+}
+
+.greetingFooter {
+  font-size: 11.5px;
+  color: var(--text-muted);
+  font-family: 'DM Sans', sans-serif;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  line-height: 1.5;
+}
+
 /* ── Mobile progress strip hidden on desktop ── */
 .mobileProgressStrip {
   display: none;
@@ -951,12 +1129,10 @@
     flex-direction: column;
   }
 
-  /* ── Left panel hidden on mobile ── */
   .leftPanel {
     display: none;
   }
 
-  /* ── Mobile progress strip ── */
   .mobileProgressStrip {
     display: flex;
     align-items: center;
@@ -1022,12 +1198,10 @@
     transition: width 0.5s cubic-bezier(0.34, 1.2, 0.64, 1);
   }
 
-  /* ── Right panel full width ── */
   .rightPanel {
     padding: 20px 16px 16px;
   }
 
-  /* ── Step header ── */
   .stepTitle {
     font-size: 19px;
   }
@@ -1037,7 +1211,6 @@
     max-width: 100%;
   }
 
-  /* ── Step footer ── */
   .stepFooter {
     flex-direction: column-reverse;
     align-items: stretch;
@@ -1063,22 +1236,18 @@
     flex-shrink: 0;
   }
 
-  /* ── Option cards ── */
   .optionCard {
     padding: 11px 14px;
   }
 
-  /* ── Home details block ── */
   .homeDetailsBlock {
     padding: 14px;
   }
 
-  /* ── Invite block ── */
   .inviteBlock {
     padding: 12px;
   }
 
-  /* ── Transition screen ── */
   .transitionWrap {
     padding: 16px;
     align-items: flex-start;
@@ -1091,5 +1260,24 @@
   .transitionCard .primaryBtn {
     width: 100%;
     justify-content: center;
+  }
+
+  /* ── Greeting screen mobile overrides ── */
+  .greetingWrap {
+    padding: 16px;
+    align-items: flex-start;
+  }
+
+  .greetingCard {
+    padding: 28px 20px;
+    border-radius: 14px;
+  }
+
+  .greetingName {
+    font-size: 22px;
+  }
+
+  .greetingBtn {
+    padding: 12px 20px;
   }
 }

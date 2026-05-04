@@ -1,5 +1,11 @@
 // src/context/AuthContext.jsx
-import { createContext, useContext, useEffect, useState } from 'react'
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  useCallback,
+} from 'react'
 import { supabase } from '../lib/supabase'
 
 const AuthContext = createContext(null)
@@ -32,7 +38,7 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true)
 
   // Build our app user object from Supabase session + profile row
-  const buildUser = async (supabaseUser) => {
+  const buildUser = useCallback(async (supabaseUser) => {
     if (!supabaseUser) {
       setUser(null)
       setLoading(false)
@@ -46,8 +52,6 @@ export function AuthProvider({ children }) {
       .single()
 
     if (error || !profile) {
-      // Profile not found — user was deleted or data is corrupt.
-      // Sign out immediately to invalidate the session.
       console.warn('Profile not found — signing out:', supabaseUser.id)
       await supabase.auth.signOut()
       setUser(null)
@@ -55,7 +59,6 @@ export function AuthProvider({ children }) {
       return
     }
 
-    // Block pending and suspended accounts
     if (profile.status === 'pending' || profile.status === 'suspended') {
       await supabase.auth.signOut()
       setUser({ blockedStatus: profile.status, email: profile.email })
@@ -63,12 +66,8 @@ export function AuthProvider({ children }) {
       return
     }
 
-    // ── Email verification status ──────────────────────────────
-    // Derived from Supabase auth record, not the profile table.
-    // This is the single source of truth for email verification.
     const emailVerified = !!supabaseUser.email_confirmed_at
 
-    // Base user from database
     const baseUser = {
       id: profile.id,
       name: profile.name,
@@ -86,7 +85,6 @@ export function AuthProvider({ children }) {
       emailVerified,
     }
 
-    // Restore step-in state if one was active
     const stepIn = loadStepIn()
     if (stepIn && stepIn.previousRole) {
       setUser({
@@ -101,15 +99,24 @@ export function AuthProvider({ children }) {
     }
 
     setLoading(false)
-  }
+  }, [])
+
+  // ── refreshUser ────────────────────────────────────────────────
+  // Re-fetches the profile for the current session and updates user state.
+  // Call this after any operation that changes the user's profile row
+  // (e.g. linkUserToOrg, linkUserToHome).
+  const refreshUser = useCallback(async () => {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession()
+    if (session?.user) await buildUser(session.user)
+  }, [buildUser])
 
   useEffect(() => {
-    // Check for existing session on app load
     supabase.auth.getSession().then(({ data: { session } }) => {
       buildUser(session?.user ?? null)
     })
 
-    // Listen for auth state changes (login, logout, token refresh)
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -117,7 +124,7 @@ export function AuthProvider({ children }) {
     })
 
     return () => subscription.unsubscribe()
-  }, [])
+  }, [buildUser])
 
   const login = async (email, password) => {
     const { error } = await supabase.auth.signInWithPassword({
@@ -133,7 +140,6 @@ export function AuthProvider({ children }) {
     setUser(null)
   }
 
-  // OL step-in — switches active role and home, persists to localStorage
   const switchRole = (newRole, homeId) => {
     setUser((prev) => {
       const updated = {
@@ -148,7 +154,6 @@ export function AuthProvider({ children }) {
     })
   }
 
-  // Reverts OL back to their real role and home, clears localStorage
   const revertRole = () => {
     clearStepIn()
     setUser((prev) => ({
@@ -160,9 +165,26 @@ export function AuthProvider({ children }) {
     }))
   }
 
+  // ── updateUser ─────────────────────────────────────────────────
+  // Shallow-merges updates into the current user object in memory.
+  // Use this after any DB write that changes the user's profile row
+  // when you don't want to trigger a full profile re-fetch.
+  const updateUser = (updates) => {
+    setUser((prev) => ({ ...prev, ...updates }))
+  }
+
   return (
     <AuthContext.Provider
-      value={{ user, loading, login, logout, switchRole, revertRole }}
+      value={{
+        user,
+        loading,
+        login,
+        logout,
+        switchRole,
+        revertRole,
+        refreshUser,
+        updateUser,
+      }}
     >
       {!loading && children}
     </AuthContext.Provider>

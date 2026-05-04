@@ -4,15 +4,24 @@
 // ProtectedRoute reads isOrgWizardComplete from here.
 // The org wizard reads and writes through here.
 // Re-fetches automatically when user.org_id changes.
+//
+// LOADING RULE: orgSetupLoading is only true on the very first fetch
+// (when orgSetup is null and we have no data yet). Subsequent re-fetches
+// triggered by user.org_id changes run silently — they never set
+// orgSetupLoading = true. This prevents OrgSetupWizard from hitting its
+// `if (orgSetupLoading) return null` guard mid-session, which would unmount
+// the wizard and reset all local step state.
 
 import {
   createContext,
   useContext,
   useState,
+  useRef,
   useEffect,
   useCallback,
 } from 'react'
 import { useAuth } from './AuthContext'
+import { supabase } from '../lib/supabase'
 import { fetchOrgSetup, initOrgSetup } from '../utils/orgSetup'
 
 const OrgSetupContext = createContext(null)
@@ -22,20 +31,44 @@ export function OrgSetupProvider({ children }) {
 
   const [orgSetup, setOrgSetup] = useState(null)
   const [orgSetupLoading, setOrgSetupLoading] = useState(true)
+  const [orgName, setOrgName] = useState('')
+
+  // Track whether we have ever completed a fetch successfully.
+  // Once true, subsequent re-fetches never touch orgSetupLoading.
+  const hasLoadedOnce = useRef(false)
 
   // ── fetchAll ───────────────────────────────────────────────────────────
   const fetchAll = useCallback(async () => {
     if (!user?.org_id) {
       setOrgSetup(null)
+      setOrgName('')
+      // Mark as loaded and clear loading state — even with no org_id,
+      // this counts as a completed fetch. This prevents the next fetch
+      // (when org_id is set after Step 1 save) from setting loading = true.
+      hasLoadedOnce.current = true
       setOrgSetupLoading(false)
       return
     }
 
-    setOrgSetupLoading(true)
+    // First load: show loading spinner so the rest of the app waits.
+    // Subsequent loads (e.g. after linkUserToOrg updates user.org_id):
+    // fetch silently — never unmount the wizard by setting loading = true.
+    if (!hasLoadedOnce.current) {
+      setOrgSetupLoading(true)
+    }
 
-    const setup = await fetchOrgSetup(user.org_id)
+    const [setup, orgRes] = await Promise.all([
+      fetchOrgSetup(user.org_id),
+      supabase.from('orgs').select('name').eq('id', user.org_id).single(),
+    ])
+
     setOrgSetup(setup)
-    setOrgSetupLoading(false)
+    setOrgName(orgRes.data?.name || '')
+
+    if (!hasLoadedOnce.current) {
+      hasLoadedOnce.current = true
+      setOrgSetupLoading(false)
+    }
   }, [user?.org_id])
 
   useEffect(() => {
@@ -44,10 +77,15 @@ export function OrgSetupProvider({ children }) {
 
   // ── refreshOrgSetup ────────────────────────────────────────────────────
   // Called by the wizard after every step save so context stays in sync.
+  // Always runs silently — never sets loading state.
   const refreshOrgSetup = useCallback(async () => {
     if (!user?.org_id) return
-    const setup = await fetchOrgSetup(user.org_id)
+    const [setup, orgRes] = await Promise.all([
+      fetchOrgSetup(user.org_id),
+      supabase.from('orgs').select('name').eq('id', user.org_id).single(),
+    ])
     setOrgSetup(setup)
+    setOrgName(orgRes.data?.name || '')
   }, [user?.org_id])
 
   // ── initSetup ──────────────────────────────────────────────────────────
@@ -75,6 +113,7 @@ export function OrgSetupProvider({ children }) {
         // State
         orgSetup,
         orgSetupLoading,
+        orgName,
         // Derived
         isOrgWizardComplete,
         orgWizardStep,
