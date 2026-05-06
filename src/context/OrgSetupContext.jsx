@@ -42,10 +42,6 @@ export function OrgSetupProvider({ children }) {
     if (!user?.org_id) {
       setOrgSetup(null)
       setOrgName('')
-      // Mark as loaded and clear loading state — even with no org_id,
-      // this counts as a completed fetch. This prevents the next fetch
-      // (when org_id is set after Step 1 save) from setting loading = true.
-      hasLoadedOnce.current = true
       setOrgSetupLoading(false)
       return
     }

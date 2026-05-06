@@ -191,7 +191,7 @@ export async function completeOrgWizard(orgId) {
     .from('org_setup')
     .update({
       is_complete: true,
-      wizard_step: 4,
+      wizard_step: 5,
       updated_at: new Date().toISOString(),
     })
     .eq('org_id', orgId)
