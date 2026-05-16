@@ -195,13 +195,53 @@ function Staff() {
 
   // ── Staff approval ──
   const handleApprove = async (staffMember) => {
+    // Relief staff — OL only
+    if (staffMember.role === 'relief' && !isOLorAdmin) return
+    // Home staff — must be manager of that home or OL
+    if (
+      staffMember.role !== 'relief' &&
+      !isOLorAdmin &&
+      staffMember.home !== user?.home
+    )
+      return
+
     try {
       const { error } = await supabase
         .from('profiles')
         .update({ status: 'active' })
         .eq('id', staffMember.id)
       if (error) throw error
+
       await supabase.rpc('sync_auth_metadata', { user_id: staffMember.id })
+
+      // Send approval email via Resend
+      const homeName =
+        orgHomes.find((h) => h.id === staffMember.home)?.name || null
+
+      // Fetch org name directly from orgs table
+      const { data: orgData } = await supabase
+        .from('orgs')
+        .select('name')
+        .eq('id', user.org_id)
+        .single()
+      const orgName = orgData?.name || null
+
+      await fetch(
+        `${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/api/email/staff-approved`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            toEmail: staffMember.email,
+            staffName: staffMember.name,
+            roleName: ROLE_LABELS[staffMember.role] || staffMember.role,
+            homeName,
+            orgName,
+            loginUrl: `${window.location.origin}/login`,
+          }),
+        }
+      )
+
       setStaffRefresh((n) => n + 1)
       setSelectedStaff(null)
     } catch (err) {
@@ -210,6 +250,16 @@ function Staff() {
   }
 
   const handleDecline = async (staffMember) => {
+    // Relief staff — OL only
+    if (staffMember.role === 'relief' && !isOLorAdmin) return
+    // Home staff — must be manager of that home or OL
+    if (
+      staffMember.role !== 'relief' &&
+      !isOLorAdmin &&
+      staffMember.home !== user?.home
+    )
+      return
+
     try {
       const { error } = await supabase
         .from('profiles')
@@ -456,9 +506,15 @@ function Staff() {
   const activeStaff = visibleStaff.filter(
     (s) => s.status === 'active' && !EXCLUDED_ROLES.includes(s.role)
   )
-  const pendingStaff = visibleStaff.filter(
-    (s) => s.status === 'pending' && !EXCLUDED_ROLES.includes(s.role)
-  )
+  const pendingStaff = visibleStaff.filter((s) => {
+    if (s.status !== 'pending') return false
+    if (EXCLUDED_ROLES.includes(s.role)) return false
+    // Relief staff — OL only
+    if (s.role === 'relief') return isOLorAdmin
+    // Home staff — manager of that home or OL
+    if (!isOLorAdmin && s.home !== user?.home) return false
+    return true
+  })
   const reliefStaff = allStaff.filter((s) => s.role === 'relief')
   const displayed =
     tab === 'active'

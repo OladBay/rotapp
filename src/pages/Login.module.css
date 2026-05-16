@@ -237,6 +237,7 @@
   border-radius: var(--radius-lg) !important;
   font-weight: var(--weight-semibold) !important;
 }
+
 /* ── Mobile ─────────────────────────────────────────────────── */
 @media (max-width: 480px) {
   .page {

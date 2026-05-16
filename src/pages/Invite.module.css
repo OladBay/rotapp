@@ -81,11 +81,39 @@
   font-size: 12px;
   font-weight: 500;
   flex-shrink: 0;
+  transition:
+    background 0.2s,
+    border-color 0.2s,
+    color 0.2s;
+}
+
+.stepDone {
+  background: var(--accent);
+  border: 1.5px solid var(--accent);
+  color: #fff;
+}
+
+.stepActive {
+  background: var(--accent-bg);
+  border: 1.5px solid var(--accent);
+  color: var(--accent);
+}
+
+.stepInactive {
+  background: transparent;
+  border: 1.5px solid var(--border-default);
+  color: var(--text-muted);
 }
 
 .stepLabel {
   font-size: 12px;
+  color: var(--text-secondary);
   white-space: nowrap;
+}
+
+.stepLabelActive {
+  color: var(--text-primary);
+  font-weight: 500;
 }
 
 .stepLine {
@@ -95,45 +123,13 @@
   margin: 0 4px;
 }
 
-/* ── Context strip ──────────────────────────────────────────── */
-.contextStrip {
-  display: flex;
-  gap: 16px;
-  flex-wrap: wrap;
-  background: var(--accent-bg);
-  border: 1px solid var(--accent-border);
-  border-radius: var(--radius-md);
-  padding: 12px 16px;
-  margin-bottom: 24px;
-}
-
-.contextItem {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.contextLabel {
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.9px;
-}
-
-.contextVal {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--accent);
-}
-
 /* ── Typography ─────────────────────────────────────────────── */
 .title {
-  font-family: 'Syne', sans-serif;
   font-size: 22px;
   font-weight: 700;
   color: var(--text-primary);
   margin-bottom: 4px;
+  font-family: 'DM Sans', sans-serif;
   letter-spacing: -0.3px;
 }
 
@@ -142,14 +138,16 @@
   color: var(--text-secondary);
   margin-bottom: 24px;
   line-height: 1.5;
+  font-family: 'DM Sans', sans-serif;
 }
 
 .hint {
   font-size: 12.5px;
   color: var(--text-secondary);
-  line-height: 1.5;
-  margin-bottom: 8px;
+  line-height: 1.6;
   text-align: center;
+  max-width: 340px;
+  font-family: 'DM Sans', sans-serif;
 }
 
 /* ── Form ───────────────────────────────────────────────────── */
@@ -169,6 +167,12 @@
   font-size: 12px;
   font-weight: 500;
   color: var(--text-secondary);
+  font-family: 'DM Sans', sans-serif;
+}
+
+.optional {
+  font-weight: 400;
+  color: var(--text-muted);
 }
 
 .input {
@@ -182,8 +186,9 @@
   width: 100%;
   outline: none;
   transition:
-    border-color var(--duration-base) var(--ease-out),
-    background var(--duration-base) var(--ease-out);
+    border-color 0.15s,
+    background 0.15s;
+  box-sizing: border-box;
 }
 
 .input:focus {
@@ -195,27 +200,178 @@
   color: var(--text-muted);
 }
 
-.checkRow {
+.inputReadOnly {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background: var(--bg-overlay);
+}
+
+/* ── Gender chips ───────────────────────────────────────────── */
+.genderGrid {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.genderChip {
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1.5px solid var(--border-default);
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  font-family: 'DM Sans', sans-serif;
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    background 0.15s,
+    color 0.15s;
+}
+
+.genderChip:hover {
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+
+.genderChipActive {
+  border-color: var(--accent) !important;
+  background: var(--accent-bg) !important;
+  color: var(--accent) !important;
+  box-shadow: 0 0 0 3px var(--accent-border);
+}
+
+/* ── Driver row ─────────────────────────────────────────────── */
+.driverRow {
   display: flex;
   align-items: center;
   gap: 10px;
+  background: var(--bg-elevated);
+  border: 1.5px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  padding: 12px 14px;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
 }
 
-.checkLabel {
+.driverRow:hover {
+  border-color: var(--accent-border);
+  background: var(--accent-bg);
+}
+
+.driverRowActive {
+  border-color: var(--accent) !important;
+  background: var(--accent-bg) !important;
+}
+
+.driverCheck {
+  width: 18px;
+  height: 18px;
+  border-radius: 5px;
+  border: 1.5px solid var(--border-strong);
+  background: var(--bg-raised);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  color: #fff;
+  flex-shrink: 0;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
+}
+
+.driverCheckActive {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.driverLabel {
   font-size: 13px;
   color: var(--text-secondary);
-  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+}
+
+/* ── Review sections ────────────────────────────────────────── */
+.reviewSection {
+  border: 1.5px solid var(--accent-border);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--bg-elevated);
+  margin-bottom: 12px;
+}
+
+.reviewSectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  background: var(--accent-bg);
+  border-bottom: 1px solid var(--accent-border);
+}
+
+.reviewSectionTitle {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  font-weight: 600;
+  color: var(--accent);
+  font-family: 'DM Sans', sans-serif;
+}
+
+.reviewRows {
+  display: flex;
+  flex-direction: column;
+}
+
+.reviewRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 16px;
+}
+
+.reviewDivider {
+  height: 1px;
+  background: var(--border-subtle);
+  margin: 0 16px;
+}
+
+.reviewLabel {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-family: 'DM Sans', sans-serif;
+  flex-shrink: 0;
+  min-width: 80px;
+}
+
+.reviewValue {
+  font-size: 13px;
+  color: var(--text-primary);
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 500;
+  text-align: right;
 }
 
 /* ── Error ──────────────────────────────────────────────────── */
 .error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-size: 13px;
   color: var(--color-danger);
   background: var(--color-danger-bg);
   border: 1px solid var(--color-danger-border);
   border-radius: var(--radius-md);
   padding: 10px 14px;
-  animation: fadeIn var(--duration-base) var(--ease-out);
+  font-family: 'DM Sans', sans-serif;
+  margin-bottom: 4px;
 }
 
 /* ── Buttons ────────────────────────────────────────────────── */
@@ -224,22 +380,26 @@
   color: #fff;
   border: none;
   border-radius: var(--radius-lg);
-  padding: 14px 16px;
-  font-size: var(--text-md);
-  font-weight: var(--weight-semibold);
+  padding: 13px 16px;
+  font-size: 14px;
+  font-weight: 600;
   cursor: pointer;
   font-family: 'DM Sans', sans-serif;
   flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   transition:
-    opacity var(--duration-base) var(--ease-out),
-    transform var(--duration-fast) var(--ease-out);
+    opacity 0.15s,
+    transform 0.1s;
 }
 
-.primaryBtn:hover {
+.primaryBtn:hover:not(:disabled) {
   opacity: 0.88;
 }
 
-.primaryBtn:active {
+.primaryBtn:active:not(:disabled) {
   transform: scale(0.98);
 }
 
@@ -253,7 +413,7 @@
   color: var(--text-secondary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
-  padding: 14px 20px;
+  padding: 13px 20px;
   font-size: 13px;
   cursor: pointer;
   font-family: 'DM Sans', sans-serif;
@@ -261,8 +421,8 @@
   align-items: center;
   gap: 6px;
   transition:
-    background var(--duration-base) var(--ease-out),
-    transform var(--duration-fast) var(--ease-out);
+    background 0.15s,
+    transform 0.1s;
 }
 
 .backBtn:hover {
@@ -279,7 +439,7 @@
   margin-top: 4px;
 }
 
-/* ── Centred screens (loading, invalid, done) ───────────────── */
+/* ── Centred screens ────────────────────────────────────────── */
 .centred {
   display: flex;
   flex-direction: column;
@@ -317,6 +477,19 @@
   font-size: 22px;
 }
 
+.successIcon {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--color-success-bg);
+  border: 1px solid var(--color-success-border);
+  color: var(--color-success);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+}
+
 .pendingIcon {
   width: 56px;
   height: 56px;
@@ -336,6 +509,7 @@
   font-size: 13px;
   color: var(--text-secondary);
   text-align: center;
+  font-family: 'DM Sans', sans-serif;
 }
 
 .footerLink {
@@ -351,11 +525,60 @@
   color: var(--accent);
   font-size: 13px;
   text-decoration: none;
+  margin-top: 4px;
+  font-family: 'DM Sans', sans-serif;
 }
 
 .linkBtn:hover {
   text-decoration: underline;
 }
+
+/* ── Phone input ────────────────────────────────────────────── */
+.phoneWrap {
+  display: flex;
+  align-items: center;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
+}
+
+.phoneWrap:focus-within {
+  border-color: var(--accent);
+  background: var(--bg-raised);
+}
+
+.countrySelect {
+  background: var(--bg-overlay);
+  border: none;
+  border-right: 1px solid var(--border-default);
+  outline: none;
+  padding: 11px 10px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-family: 'DM Sans', sans-serif;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.phoneNumberInput {
+  background: transparent;
+  border: none;
+  outline: none;
+  padding: 11px 14px;
+  font-size: 13px;
+  color: var(--text-primary);
+  font-family: 'DM Sans', sans-serif;
+  width: 100%;
+}
+
+.phoneNumberInput::placeholder {
+  color: var(--text-muted);
+}
+
 /* ── Mobile ─────────────────────────────────────────────────── */
 @media (max-width: 480px) {
   .page {
@@ -387,12 +610,6 @@
     width: 12px;
   }
 
-  .contextStrip {
-    gap: 12px;
-    padding: 10px 12px;
-    margin-bottom: 16px;
-  }
-
   .title {
     font-size: 19px;
   }
@@ -407,6 +624,10 @@
     padding: 13px 14px;
   }
 
+  .genderGrid {
+    gap: 6px;
+  }
+
   .primaryBtn {
     padding: 14px 16px;
     font-size: 14px;
@@ -419,5 +640,17 @@
 
   .btnRow {
     gap: 8px;
+  }
+
+  .reviewRow {
+    padding: 9px 12px;
+  }
+
+  .reviewDivider {
+    margin: 0 12px;
+  }
+
+  .reviewLabel {
+    min-width: 70px;
   }
 }

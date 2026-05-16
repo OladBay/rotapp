@@ -1,66 +1,50 @@
 // src/pages/VerifyPending.jsx
 // ── Single owner of all email verification resend logic ────────────────────
 // Fully self-contained — no session required, no route state dependency.
-// Pre-fills email from session if available. If not, user types it in.
-// Works for all cases: just signed up, came back later, link expired.
+// Looks up the user by email, generates a new verification token via our
+// own backend, and sends it via Resend. No Supabase email dependency.
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import styles from './VerifyPending.module.css'
 
-const COUNTDOWN_KEY = 'rotapp_resend_ts'
 const COUNTDOWN_SECONDS = 60
-
-function getInitialCountdown() {
-  try {
-    const stored = sessionStorage.getItem(COUNTDOWN_KEY)
-    if (!stored) return 0
-    const secondsElapsed = Math.floor((Date.now() - Number(stored)) / 1000)
-    const remaining = COUNTDOWN_SECONDS - secondsElapsed
-    return remaining > 0 ? remaining : 0
-  } catch {
-    return 0
-  }
-}
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 
 function VerifyPending() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
 
-  // Pre-fill from session if available — user can edit if not
   const [email, setEmail] = useState(user?.email || '')
-  const [resendLoading, setResendLoading] = useState(false)
-  const [resendSuccess, setResendSuccess] = useState('')
-  const [resendError, setResendError] = useState('')
-  const [countdown, setCountdown] = useState(getInitialCountdown)
+  const [loading, setLoading] = useState(false)
+  const [success, setSuccess] = useState('')
+  const [error, setError] = useState('')
+  const [countdown, setCountdown] = useState(0)
 
-  // ── If already verified, redirect forward immediately ──────────────────
+  // ── If already verified, redirect forward ─────────────────────────────
   useEffect(() => {
     if (user?.emailVerified) {
       navigate('/org-setup', { replace: true })
     }
   }, [user?.emailVerified, navigate])
 
-  // ── Sync email from session if it loads after mount ────────────────────
+  // ── Sync email from session if it loads after mount ───────────────────
   useEffect(() => {
     if (user?.email && !email) {
       setEmail(user.email)
     }
   }, [user?.email])
 
-  // ── Countdown timer ────────────────────────────────────────────────────
+  // ── Countdown timer ───────────────────────────────────────────────────
   useEffect(() => {
     if (countdown <= 0) return
     const interval = setInterval(() => {
       setCountdown((prev) => {
         if (prev <= 1) {
           clearInterval(interval)
-          try {
-            sessionStorage.removeItem(COUNTDOWN_KEY)
-          } catch {}
           return 0
         }
         return prev - 1
@@ -69,47 +53,82 @@ function VerifyPending() {
     return () => clearInterval(interval)
   }, [countdown])
 
-  // ── Resend handler ─────────────────────────────────────────────────────
-  const handleResend = useCallback(async () => {
-    const trimmedEmail = email.trim()
+  // ── Resend handler ────────────────────────────────────────────────────
+  const handleResend = async () => {
+    const trimmedEmail = email.trim().toLowerCase()
     if (!trimmedEmail) {
-      setResendError('Please enter your email address.')
+      setError('Please enter your email address.')
       return
     }
 
-    // If the session tells us this email is already verified,
-    // skip the Supabase call and tell the user directly.
-    if (user?.emailVerified) {
-      setResendError('Your email is already verified. You can sign in now.')
-      return
-    }
-
-    setResendSuccess('')
-    setResendError('')
-    setResendLoading(true)
+    setSuccess('')
+    setError('')
+    setLoading(true)
 
     try {
-      const { error } = await supabase.auth.resend({
-        type: 'signup',
-        email: trimmedEmail,
-        options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
-        },
+      // 1. Look up user via backend — bypasses RLS
+      const lookupRes = await fetch(`${API_BASE}/api/auth/lookup-unverified`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: trimmedEmail }),
       })
 
-      if (error) throw error
+      if (!lookupRes.ok) throw new Error('Lookup failed')
 
-      setResendSuccess('Verification email sent. Check your inbox.')
-      try {
-        sessionStorage.setItem(COUNTDOWN_KEY, String(Date.now()))
-      } catch {}
+      const lookup = await lookupRes.json()
+
+      if (lookup.alreadyVerified) {
+        setError('This email is already verified. You can sign in now.')
+        setLoading(false)
+        return
+      }
+
+      if (!lookup.found || !lookup.userId) {
+        // Don't reveal whether email exists
+        setSuccess(
+          'If that email is registered, a verification link has been sent.'
+        )
+        setCountdown(COUNTDOWN_SECONDS)
+        setLoading(false)
+        return
+      }
+
+      // 2. Generate a new verification token via backend
+      const tokenRes = await fetch(
+        `${API_BASE}/api/auth/generate-verify-token`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: lookup.userId }),
+        }
+      )
+
+      if (!tokenRes.ok) throw new Error('Failed to generate verification token')
+
+      const { token } = await tokenRes.json()
+      const verifyUrl = `${window.location.origin}/verify-email?token=${token}`
+
+      // 3. Send verification email via Resend
+      const emailRes = await fetch(`${API_BASE}/api/email/ol-verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          toEmail: trimmedEmail,
+          name: '',
+          verifyUrl,
+        }),
+      })
+
+      if (!emailRes.ok) throw new Error('Failed to send verification email')
+
+      setSuccess('Verification email sent. Check your inbox.')
       setCountdown(COUNTDOWN_SECONDS)
     } catch (err) {
-      setResendError(err.message || 'Could not send — please try again.')
+      setError(err.message || 'Could not send — please try again.')
     } finally {
-      setResendLoading(false)
+      setLoading(false)
     }
-  }, [email])
+  }
 
   return (
     <div className={styles.page}>
@@ -134,7 +153,6 @@ function VerifyPending() {
             Check your spam or junk folder if you don't see it.
           </p>
 
-          {/* Email input — pre-filled from session, editable if no session */}
           <div className={styles.emailInputWrap}>
             <FontAwesomeIcon
               icon='envelope'
@@ -147,33 +165,33 @@ function VerifyPending() {
               value={email}
               onChange={(e) => {
                 setEmail(e.target.value)
-                setResendSuccess('')
-                setResendError('')
+                setSuccess('')
+                setError('')
               }}
-              disabled={resendLoading}
+              disabled={loading}
             />
           </div>
 
-          {resendSuccess && (
+          {success && (
             <div className={styles.successNote}>
               <FontAwesomeIcon icon='circle-check' />
-              {resendSuccess}
+              {success}
             </div>
           )}
 
-          {resendError && (
+          {error && (
             <div className={styles.errorNote}>
               <FontAwesomeIcon icon='triangle-exclamation' />
-              {resendError}
+              {error}
             </div>
           )}
 
           <button
             className={styles.resendBtn}
             onClick={handleResend}
-            disabled={resendLoading || countdown > 0}
+            disabled={loading || countdown > 0}
           >
-            {resendLoading
+            {loading
               ? 'Sending…'
               : countdown > 0
                 ? `Resend in ${countdown}s`

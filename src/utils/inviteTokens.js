@@ -17,17 +17,25 @@ export const ROLE_LABELS = {
 // Generate a new invite token
 export async function createInviteToken({
   homeId,
+  orgId,
   role,
   invitedById,
   invitedByName,
+  invitedEmail,
+  contractType,
+  contractedHours,
 }) {
   const { data, error } = await supabase
     .from('invite_tokens')
     .insert({
       home_id: homeId || null,
+      org_id: orgId,
       role,
       invited_by: invitedById,
       invited_by_name: invitedByName,
+      invited_email: invitedEmail,
+      contract_type: contractType,
+      contracted_hours: contractedHours || null,
     })
     .select('token')
     .single()

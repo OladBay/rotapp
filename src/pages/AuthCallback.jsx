@@ -5,6 +5,9 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { supabase } from '../lib/supabase'
 import styles from './AuthCallback.module.css'
 
+const STAFF_ROLES = ['manager', 'deputy', 'senior', 'rcw', 'relief']
+const OL_ROLES = ['operationallead', 'superadmin']
+
 function AuthCallback() {
   const navigate = useNavigate()
   const [status, setStatus] = useState('verifying')
@@ -14,10 +17,44 @@ function AuthCallback() {
     let redirectTimer = null
     let handled = false
 
-    const handleSuccess = () => {
+    const handleSuccess = async () => {
       if (handled) return
       handled = true
       setStatus('success')
+
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
+        const userId = session?.user?.id
+
+        if (userId) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', userId)
+            .single()
+
+          const role = profile?.role
+
+          // Mark email as verified on the profile
+          await supabase
+            .from('profiles')
+            .update({ email_verified: true })
+            .eq('id', userId)
+
+          if (STAFF_ROLES.includes(role)) {
+            redirectTimer = setTimeout(() => {
+              navigate('/login', { replace: true })
+            }, 2500)
+            return
+          }
+        }
+      } catch {
+        // If profile fetch fails, fall through to default OL redirect
+      }
+
+      // OL / superadmin / unknown — go to org-setup
       redirectTimer = setTimeout(() => {
         navigate('/org-setup', { replace: true })
       }, 2500)
@@ -45,14 +82,12 @@ function AuthCallback() {
           if (error) {
             handleError(error.message)
           } else {
-            handleSuccess()
+            await handleSuccess()
           }
           return
         }
 
         // ── Implicit flow — tokens in hash fragment ────────────────────
-        // Parse access_token and refresh_token directly from the hash.
-        // We do not rely on onAuthStateChange — we drive this actively.
         if (hash && hash.includes('access_token')) {
           const hashParams = new URLSearchParams(hash.replace(/^#/, ''))
           const accessToken = hashParams.get('access_token')
@@ -73,25 +108,22 @@ function AuthCallback() {
           if (error) {
             handleError(error.message)
           } else {
-            handleSuccess()
+            await handleSuccess()
           }
           return
         }
 
-        // ── Neither code nor hash — check if session already exists ───
-        // Handles the case where the link was already processed
-        // (e.g. user clicked back after verifying).
+        // ── Neither code nor hash — check existing session ────────────
         const { data, error } = await supabase.auth.getSession()
         if (error) {
           handleError(error.message)
           return
         }
         if (data?.session) {
-          handleSuccess()
+          await handleSuccess()
           return
         }
 
-        // Nothing found — link expired, invalid, or already consumed
         handleError(
           'This verification link has expired or has already been used. Please request a new one.'
         )
@@ -106,6 +138,15 @@ function AuthCallback() {
       clearTimeout(redirectTimer)
     }
   }, [])
+
+  // ── Success message differs by flow ───────────────────────────
+  const successBody =
+    status === 'success'
+      ? "Your email has been confirmed. Your account is awaiting approval from your manager. You'll be redirected to login in a moment."
+      : ''
+
+  const successRedirectNote =
+    status === 'success' ? 'Redirecting to login…' : ''
 
   return (
     <div className={styles.page}>
@@ -128,13 +169,10 @@ function AuthCallback() {
               <FontAwesomeIcon icon='circle-check' />
             </div>
             <h1 className={styles.title}>Email verified</h1>
-            <p className={styles.body}>
-              Your email address has been confirmed. You'll be redirected to set
-              up your organisation in a moment.
-            </p>
+            <p className={styles.body}>{successBody}</p>
             <div className={styles.redirectNote}>
               <FontAwesomeIcon icon='spinner' spin />
-              Redirecting to organisation setup…
+              {successRedirectNote}
             </div>
           </div>
         )}

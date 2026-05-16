@@ -13,6 +13,7 @@ function Login() {
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [unverified, setUnverified] = useState(false)
 
   const { login, user } = useAuth()
   const navigate = useNavigate()
@@ -34,17 +35,33 @@ function Login() {
     setLoading(true)
     try {
       await login(email, password)
-    } catch (err) {
-      // Supabase returns "Email not confirmed" when the user has not
-      // yet verified their email. Intercept this, show friendly copy,
-      // and redirect to /verify-pending so they can resend.
-      if (
-        err.message?.toLowerCase().includes('email not confirmed') ||
-        err.message?.toLowerCase().includes('not confirmed')
-      ) {
-        navigate('/verify-pending', { replace: true })
-        return
+
+      // After login, check if OL/superadmin has verified their email
+      // We do this here — not in buildUser — to avoid auth state loops
+      const {
+        data: { session },
+      } = await supabase.auth.getSession()
+      if (session?.user) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role, email_verified')
+          .eq('id', session.user.id)
+          .single()
+
+        if (
+          profile &&
+          (profile.role === 'operationallead' ||
+            profile.role === 'superadmin') &&
+          !profile.email_verified
+        ) {
+          // Sign them out immediately — no session should exist
+          await supabase.auth.signOut()
+          setLoading(false)
+          setUnverified(true)
+          return
+        }
       }
+    } catch (err) {
       setError(err.message || 'Invalid email or password')
       setLoading(false)
     }
@@ -73,6 +90,31 @@ function Login() {
                 window.location.reload()
               }}
             >
+              Back to login
+            </Button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (user?.blockedStatus === 'unverified' || unverified) {
+    return (
+      <div className={styles.page}>
+        <div className={styles.card}>
+          <div className={styles.logo}>
+            Rot<span className={styles.logoAccent}>app</span>
+          </div>
+          <div className={styles.blockedWrap}>
+            <div className={styles.blockedIcon}>
+              <FontAwesomeIcon icon='envelope' />
+            </div>
+            <h1 className={styles.blockedTitle}>Verify your email</h1>
+            <p className={styles.blockedText}>
+              Please verify your email address before logging in. Check your
+              inbox for a verification link from Rotapp.
+            </p>
+            <Button variant='primary' onClick={() => setUnverified(false)}>
               Back to login
             </Button>
           </div>

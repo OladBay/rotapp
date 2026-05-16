@@ -66,7 +66,7 @@ export function AuthProvider({ children }) {
       return
     }
 
-    const emailVerified = !!supabaseUser.email_confirmed_at
+    const emailVerified = !!profile.email_verified
 
     const baseUser = {
       id: profile.id,

@@ -30,9 +30,9 @@ const COUNTRY_CODES = [
   { code: 'OTHER', dial: '+', flag: '🌍' },
 ]
 
-// ── VerifyScreen ───────────────────────────────────────────────────────────
-// Simple holding screen shown immediately after signup.
-// All resend logic lives in /verify-pending — single owner.
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+
+// ── VerifyScreen ───────────────────────────────────────────────
 function VerifyScreen({ email }) {
   return (
     <div className={styles.page}>
@@ -63,7 +63,7 @@ function VerifyScreen({ email }) {
 }
 
 function OrgSignup() {
-  const [screen, setScreen] = useState('form') // form | verify
+  const [screen, setScreen] = useState('form')
   const [step, setStep] = useState(1)
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
@@ -142,16 +142,13 @@ function OrgSignup() {
         ? `${form.phoneCountry}${form.phoneNumber.trim()}`
         : null
 
-      // Pass name, phone, role and status as metadata.
-      // The handle_new_user trigger reads these and writes them
-      // directly into the profile row at creation time.
-      // No client-side profile update needed — no session exists yet.
+      // 1. Sign up — no email sent (disabled globally)
+      // handle_new_user trigger reads metadata and creates profile row
       const { data: authData, error: signUpError } = await supabase.auth.signUp(
         {
           email: form.email,
           password: form.password,
           options: {
-            emailRedirectTo: `${window.location.origin}/auth/callback`,
             data: {
               name: form.name.trim(),
               phone: fullPhone,
@@ -165,8 +162,43 @@ function OrgSignup() {
       if (signUpError) throw signUpError
       if (!authData.user) throw new Error('Signup failed — no user returned')
 
-      // Immediately sign out — no active session should exist until
-      // the user clicks the verification link.
+      const userId = authData.user.id
+
+      // 2. Generate our own verification token via backend
+      const tokenRes = await fetch(
+        `${API_BASE}/api/auth/generate-verify-token`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId }),
+        }
+      )
+
+      if (!tokenRes.ok) {
+        throw new Error('Failed to generate verification token')
+      }
+
+      const { token } = await tokenRes.json()
+
+      // 3. Build verify URL pointing to our own page
+      const verifyUrl = `${window.location.origin}/verify-email?token=${token}`
+
+      // 4. Send our own verification email via Resend
+      const emailRes = await fetch(`${API_BASE}/api/email/ol-verify`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          toEmail: form.email.trim().toLowerCase(),
+          name: form.name.trim(),
+          verifyUrl,
+        }),
+      })
+
+      if (!emailRes.ok) {
+        throw new Error('Failed to send verification email')
+      }
+
+      // 5. Sign out — session must not exist until email is verified
       await supabase.auth.signOut()
 
       setScreen('verify')

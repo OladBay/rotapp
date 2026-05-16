@@ -23,6 +23,7 @@ import Settings from './pages/Settings'
 import HomeSetupWizard from './pages/HomeSetupWizard'
 import Unauthorised from './pages/Unauthorised'
 import VerifyPending from './pages/VerifyPending'
+import VerifyEmail from './pages/VerifyEmail'
 import NotFound from './pages/NotFound'
 import AuthCallback from './pages/AuthCallback'
 import ProtectedRoute from './components/layout/ProtectedRoute'
@@ -53,11 +54,15 @@ function App() {
                         <Routes>
                           {/* ── Public routes — no shell ───────────── */}
                           <Route path='/login' element={<Login />} />
-                          <Route path='/invite/:token' element={<Invite />} />
+                          <Route path='/invite' element={<Invite />} />
                           <Route path='/org/signup' element={<OrgSignup />} />
                           <Route
                             path='/verify-pending'
                             element={<VerifyPending />}
+                          />
+                          <Route
+                            path='/verify-email'
+                            element={<VerifyEmail />}
                           />
                           <Route
                             path='/unauthorised'
