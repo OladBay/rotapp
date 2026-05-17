@@ -4,6 +4,7 @@ import cors from 'cors'
 import dotenv from 'dotenv'
 import emailRoutes from './routes/email.js'
 import authRoutes from './routes/auth.js'
+import notificationRoutes from './routes/notifications.js'
 
 dotenv.config()
 
@@ -23,6 +24,7 @@ app.use(express.json())
 // Routes
 app.use('/api/email', emailRoutes)
 app.use('/api/auth', authRoutes)
+app.use('/api/notifications', notificationRoutes)
 
 // Health check
 app.get('/health', (_req, res) => {

@@ -10,6 +10,8 @@ export const NOTIFICATION_TYPES = {
   TRANSFER_CANCELLED: 'transfer_cancelled',
   TRANSFER_EXECUTED_OL: 'transfer_executed_ol',
   TRANSFER_OUTGOING: 'transfer_outgoing',
+  STAFF_PENDING: 'staff_pending',
+  STAFF_APPROVED: 'staff_approved',
 }
 
 // ── Read behaviour per type ────────────────────────────────────────
@@ -22,6 +24,28 @@ export const NOTIFICATION_READ_BEHAVIOUR = {
   transfer_cancelled: 'view',
   transfer_executed_ol: 'view',
   transfer_outgoing: 'view',
+  staff_pending: 'action',
+  staff_approved: 'view',
+}
+
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+
+// ── createNotificationViaBackend ───────────────────────────────────
+// All notification writes go through the backend — bypasses RLS.
+// Accepts a single notification or an array of notifications.
+async function createNotificationViaBackend(notifications) {
+  const arr = Array.isArray(notifications) ? notifications : [notifications]
+
+  const res = await fetch(`${API_BASE}/api/notifications/create`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ notifications: arr }),
+  })
+
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}))
+    throw new Error(data.error || 'Failed to create notification')
+  }
 }
 
 // ── createNotification ─────────────────────────────────────────────
@@ -36,6 +60,7 @@ export async function createNotification({
   message,
   createdById,
   createdByName,
+  link,
 }) {
   if (
     !orgId ||
@@ -50,21 +75,17 @@ export async function createNotification({
     throw new Error('createNotification: missing required arguments')
   }
 
-  const { error } = await supabase.from('notifications').insert({
-    org_id: orgId,
-    recipient_id: recipientId,
+  await createNotificationViaBackend({
+    orgId,
+    recipientId,
     type,
-    reference_id: referenceId,
-    reference_table: referenceTable,
+    referenceId,
+    referenceTable,
     message,
-    created_by_id: createdById,
-    created_by_name: createdByName,
+    createdById,
+    createdByName,
+    link: link || null,
   })
-
-  if (error) {
-    console.error('notifications.createNotification error:', error)
-    throw error
-  }
 }
 
 // ── createManyNotifications ────────────────────────────────────────
@@ -90,23 +111,7 @@ export async function createManyNotifications(notifications) {
     }
   }
 
-  const rows = notifications.map((n) => ({
-    org_id: n.orgId,
-    recipient_id: n.recipientId,
-    type: n.type,
-    reference_id: n.referenceId,
-    reference_table: n.referenceTable,
-    message: n.message,
-    created_by_id: n.createdById,
-    created_by_name: n.createdByName,
-  }))
-
-  const { error } = await supabase.from('notifications').insert(rows)
-
-  if (error) {
-    console.error('notifications.createManyNotifications error:', error)
-    throw error
-  }
+  await createNotificationViaBackend(notifications)
 }
 
 // ── markAsRead ─────────────────────────────────────────────────────
@@ -234,6 +239,7 @@ export async function notifyTransferIncoming({
     message: `${initiatedByName} has requested to transfer ${staffName} from ${fromHomeName} to ${toHomeName}.`,
     createdById: initiatedById,
     createdByName: initiatedByName,
+    link: '/staff',
   })
 }
 
@@ -255,6 +261,7 @@ export async function notifyTransferAccepted({
     message: `Your transfer request for ${staffName} to ${toHomeName} was accepted by ${reviewedByName}.`,
     createdById: reviewedById,
     createdByName: reviewedByName,
+    link: '/staff',
   })
 }
 
@@ -276,6 +283,7 @@ export async function notifyTransferRejected({
     message: `Your transfer request for ${staffName} to ${toHomeName} was rejected by ${reviewedByName}.`,
     createdById: reviewedById,
     createdByName: reviewedByName,
+    link: '/staff',
   })
 }
 
@@ -297,6 +305,7 @@ export async function notifyTransferCancelled({
     message: `The transfer request for ${staffName} from ${fromHomeName} has been cancelled by ${cancelledByName}.`,
     createdById: cancelledById,
     createdByName: cancelledByName,
+    link: '/staff',
   })
 }
 
@@ -319,6 +328,7 @@ export async function notifyTransferExecutedOL({
     message: `${executedByName} has moved ${staffName} from ${fromHomeName} to ${toHomeName}.`,
     createdById: executedById,
     createdByName: executedByName,
+    link: '/staff',
   })
 }
 
@@ -340,6 +350,7 @@ export async function notifyTransferOutgoing({
     message: `You have sent a transfer request for ${staffName} to ${toHomeName}. Waiting for approval.`,
     createdById: initiatedById,
     createdByName: initiatedByName,
+    link: '/staff',
   })
 }
 
@@ -364,4 +375,64 @@ export async function fetchHomeManager(homeId) {
   }
 
   return data || null
+}
+
+// ── notifyStaffPending ─────────────────────────────────────────────
+// Notifies manager and/or OL when a staff member signs up
+// and is pending approval. Called from backend update-profile flow.
+export async function notifyStaffPending({
+  orgId,
+  recipientId,
+  staffId,
+  staffName,
+  roleName,
+  homeName,
+  orgName,
+  createdById,
+  createdByName,
+}) {
+  const message = homeName
+    ? `${staffName} has signed up as ${roleName} at ${homeName} and is awaiting your approval.`
+    : `${staffName} has joined the relief pool for ${orgName} and is awaiting your approval.`
+
+  await createNotification({
+    orgId,
+    recipientId,
+    type: NOTIFICATION_TYPES.STAFF_PENDING,
+    referenceId: staffId,
+    referenceTable: 'profiles',
+    message,
+    createdById,
+    createdByName,
+    link: '/staff',
+  })
+}
+
+// ── notifyStaffApproved ────────────────────────────────────────────
+// Notifies a staff member when their account has been approved.
+// Called from Staff.jsx handleApprove after status update succeeds.
+export async function notifyStaffApproved({
+  orgId,
+  recipientId,
+  staffId,
+  approvedById,
+  approvedByName,
+  roleName,
+  homeName,
+}) {
+  const message = homeName
+    ? `Your account as ${roleName} at ${homeName} has been approved. You now have full access.`
+    : `Your account as ${roleName} has been approved. You now have full access.`
+
+  await createNotification({
+    orgId,
+    recipientId,
+    type: NOTIFICATION_TYPES.STAFF_APPROVED,
+    referenceId: staffId,
+    referenceTable: 'profiles',
+    message,
+    createdById: approvedById,
+    createdByName: approvedByName,
+    link: '/calendar',
+  })
 }

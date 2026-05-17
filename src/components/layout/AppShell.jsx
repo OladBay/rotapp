@@ -139,6 +139,14 @@ function notifIcon(type) {
     rota: 'clipboard-list',
     shift: 'calendar-days',
     system: 'circle-info',
+    transfer_incoming: 'right-left',
+    transfer_accepted: 'check',
+    transfer_rejected: 'xmark',
+    transfer_cancelled: 'xmark',
+    transfer_executed_ol: 'right-left',
+    transfer_outgoing: 'right-left',
+    staff_pending: 'user-clock',
+    staff_approved: 'user-check',
   }
   return map[type] || 'bell'
 }
@@ -147,8 +155,14 @@ function notifIcon(type) {
 function AppShell({ children }) {
   const { user, logout } = useAuth()
   const { theme, toggleTheme } = useTheme()
-  const { leaveRequests, cancelRequests, notifications, refreshNotifications } =
-    useRota()
+  const {
+    leaveRequests,
+    cancelRequests,
+    notifications,
+    refreshNotifications,
+    staff,
+    moveRecords,
+  } = useRota()
   const navigate = useNavigate()
   const location = useLocation()
   const { topBar } = useTopBar()
@@ -158,9 +172,23 @@ function AppShell({ children }) {
   const primaryLinks = navLinks.slice(0, PRIMARY_COUNT)
   const overflowLinks = navLinks.slice(PRIMARY_COUNT)
 
+  const isOLorAdmin = ['operationallead', 'superadmin'].includes(
+    user?.activeRole
+  )
+
+  const pendingStaffCount = staff.filter((s) => s.status === 'pending').length
+
+  const pendingTransferCount = isOLorAdmin
+    ? moveRecords.filter((r) => r.status === 'pending').length
+    : moveRecords.filter(
+        (r) => r.to_home_id === user?.home && r.status === 'pending'
+      ).length
+
   const pendingApprovals =
     getPendingRequestCount(leaveRequests) +
-    getPendingCancelCount(cancelRequests)
+    getPendingCancelCount(cancelRequests) +
+    pendingStaffCount +
+    pendingTransferCount
   const unreadCount = getUnreadCount(notifications)
 
   const [notifOpen, setNotifOpen] = useState(false)
@@ -412,6 +440,7 @@ function AppShell({ children }) {
                             <button
                               key={notif.id}
                               className={`${styles.notifItem} ${!notif.read_at ? styles.notifUnread : ''}`}
+                              onMouseDown={(e) => e.stopPropagation()}
                               onClick={() => handleNotifClick(notif)}
                             >
                               <span className={styles.notifIcon}>
@@ -522,6 +551,7 @@ function AppShell({ children }) {
                         <button
                           key={notif.id}
                           className={`${styles.notifItem} ${!notif.read_at ? styles.notifUnread : ''}`}
+                          onMouseDown={(e) => e.stopPropagation()}
                           onClick={() => handleNotifClick(notif)}
                         >
                           <span className={styles.notifIcon}>

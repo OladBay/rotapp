@@ -252,4 +252,87 @@ router.post('/staff-approved', async (req, res) => {
   }
 })
 
+// ── POST /api/email/staff-pending-manager ─────────────────────
+router.post('/staff-pending-manager', async (req, res) => {
+  const {
+    toEmail,
+    managerName,
+    staffName,
+    roleName,
+    homeName,
+    orgName,
+    staffPageUrl,
+  } = req.body
+
+  if (!toEmail || !staffName || !roleName) {
+    return res.status(400).json({ error: 'Missing required fields' })
+  }
+
+  const resend = new Resend(process.env.RESEND_API_KEY)
+
+  try {
+    await resend.emails.send({
+      from: 'Rotapp <invites@myrotapp.com>',
+      to: toEmail,
+      subject: `New staff account pending approval — ${staffName}`,
+      html: `
+        <div style="font-family: 'DM Sans', Arial, sans-serif; max-width: 480px; margin: 0 auto; padding: 40px 24px;">
+          <div style="margin-bottom: 32px;">
+            <span style="font-size: 24px; font-weight: 800; color: #1a1a1a; letter-spacing: -0.5px;">
+              Rot<span style="color: #2a7f62;">app</span>
+            </span>
+          </div>
+
+          <h1 style="font-size: 22px; font-weight: 700; color: #1a1a1a; margin: 0 0 12px;">
+            New account pending your approval
+          </h1>
+
+          <p style="font-size: 15px; color: #555; line-height: 1.6; margin: 0 0 24px;">
+            Hi ${managerName || 'there'},<br/><br/>
+            A new staff member has signed up and is awaiting your approval before they can access Rotapp.
+          </p>
+
+          <div style="background: #f5f6fa; border-radius: 12px; padding: 20px 24px; margin-bottom: 24px;">
+            <table style="width: 100%; border-collapse: collapse;">
+              <tr>
+                <td style="font-size: 12px; color: #888; padding: 6px 0; text-transform: uppercase; letter-spacing: 0.8px;">Name</td>
+                <td style="font-size: 14px; color: #1a1a1a; font-weight: 500; padding: 6px 0; text-align: right;">${staffName}</td>
+              </tr>
+              <tr style="border-top: 1px solid #e5e7eb;">
+                <td style="font-size: 12px; color: #888; padding: 6px 0; text-transform: uppercase; letter-spacing: 0.8px;">Role</td>
+                <td style="font-size: 14px; color: #1a1a1a; font-weight: 500; padding: 6px 0; text-align: right;">${roleName}</td>
+              </tr>
+              <tr style="border-top: 1px solid #e5e7eb;">
+                <td style="font-size: 12px; color: #888; padding: 6px 0; text-transform: uppercase; letter-spacing: 0.8px;">${homeName ? 'Home' : 'Pool'}</td>
+                <td style="font-size: 14px; color: #1a1a1a; font-weight: 500; padding: 6px 0; text-align: right;">${homeName || `Relief pool — ${orgName}`}</td>
+              </tr>
+            </table>
+          </div>
+
+          <p style="font-size: 15px; color: #555; line-height: 1.6; margin: 0 0 32px;">
+            Log in to Rotapp and go to <strong>Manage Staff → Pending</strong> to review and approve this account.
+          </p>
+
+          <a href="${staffPageUrl}"
+            style="display: inline-block; background: #2a7f62; color: #ffffff; text-decoration: none;
+                   padding: 14px 28px; border-radius: 10px; font-size: 15px; font-weight: 600;">
+            Review pending staff →
+          </a>
+
+          <p style="font-size: 13px; color: #999; margin-top: 32px; line-height: 1.6; border-top: 1px solid #e5e7eb; padding-top: 24px;">
+            If you weren't expecting this, someone may have used your organisation's invite link. You can decline the account from the Manage Staff page.
+          </p>
+        </div>
+      `,
+    })
+
+    return res.status(200).json({ success: true })
+  } catch (err) {
+    console.error('Resend error:', err)
+    return res
+      .status(500)
+      .json({ error: 'Failed to send pending manager email' })
+  }
+})
+
 export default router

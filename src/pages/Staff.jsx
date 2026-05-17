@@ -32,6 +32,7 @@ import {
   notifyTransferCancelled,
   notifyTransferExecutedOL,
   notifyTransferOutgoing,
+  notifyStaffApproved,
   markManyAsRead,
   markReferenceAsRead,
   getUnreadCountByTypes,
@@ -214,7 +215,6 @@ function Staff() {
 
       await supabase.rpc('sync_auth_metadata', { user_id: staffMember.id })
 
-      // Send approval email via Resend
       const homeName =
         orgHomes.find((h) => h.id === staffMember.home)?.name || null
 
@@ -226,6 +226,7 @@ function Staff() {
         .single()
       const orgName = orgData?.name || null
 
+      // Send approval email via Resend
       await fetch(
         `${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/api/email/staff-approved`,
         {
@@ -241,6 +242,17 @@ function Staff() {
           }),
         }
       )
+
+      // Send in-app notification to approved staff member
+      await notifyStaffApproved({
+        orgId: user.org_id,
+        recipientId: staffMember.id,
+        staffId: staffMember.id,
+        approvedById: user.id,
+        approvedByName: user.name,
+        roleName: ROLE_LABELS[staffMember.role] || staffMember.role,
+        homeName,
+      })
 
       setStaffRefresh((n) => n + 1)
       setSelectedStaff(null)

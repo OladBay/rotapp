@@ -3,11 +3,7 @@ import { useState, useEffect } from 'react'
 import { useSearchParams, Link } from 'react-router-dom'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import { supabase } from '../lib/supabase'
-import {
-  fetchInviteToken,
-  markTokenUsed,
-  ROLE_LABELS,
-} from '../utils/inviteTokens'
+import { fetchInviteToken, ROLE_LABELS } from '../utils/inviteTokens'
 import styles from './Invite.module.css'
 
 const CONTRACT_LABELS = {
@@ -196,6 +192,7 @@ function Invite() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           userId,
+          inviteToken: token,
           updates: {
             name: form.name.trim(),
             home: tokenData.home_id || null,
@@ -211,6 +208,14 @@ function Invite() {
             status: 'pending',
             email_verified: true,
           },
+          notify: {
+            orgId: tokenData.org_id,
+            staffName: form.name.trim(),
+            roleName: ROLE_LABELS[tokenData.role],
+            homeName: homeName || null,
+            orgName: orgName || null,
+            homeId: tokenData.home_id || null,
+          },
         }),
       })
 
@@ -219,8 +224,7 @@ function Invite() {
         throw new Error(profileData.error || 'Failed to update profile')
       }
 
-      // 4. Mark token as used
-      await markTokenUsed(token, userId)
+      // Token is marked as used by the backend in update-profile
 
       // 5. Send pending approval email via Resend
       await fetch(`${API_BASE}/api/email/staff-pending`, {
