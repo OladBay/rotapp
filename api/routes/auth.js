@@ -357,4 +357,130 @@ router.post('/update-profile/verify', async (req, res) => {
   }
 })
 
+// ── POST /api/auth/approve-staff ───────────────────────────────
+// Approves a pending staff member
+// Validates requester has permission before updating
+router.post('/approve-staff', async (req, res) => {
+  const { staffId, requesterId, requesterRole, requesterHome } = req.body
+
+  if (!staffId || !requesterId || !requesterRole) {
+    return res.status(400).json({ error: 'Missing required fields' })
+  }
+
+  try {
+    const supabaseAdmin = getAdminClient()
+
+    // Fetch the staff member being approved
+    const { data: staffMember, error: fetchError } = await supabaseAdmin
+      .from('profiles')
+      .select('id, role, home, org_id, status')
+      .eq('id', staffId)
+      .single()
+
+    if (fetchError || !staffMember) {
+      return res.status(404).json({ error: 'Staff member not found' })
+    }
+
+    // Permission check
+    const isOLorAdmin = ['operationallead', 'superadmin'].includes(
+      requesterRole
+    )
+    const isRelief = staffMember.role === 'relief'
+
+    if (isRelief && !isOLorAdmin) {
+      return res.status(403).json({ error: 'Only OL can approve relief staff' })
+    }
+
+    if (!isRelief && !isOLorAdmin && staffMember.home !== requesterHome) {
+      return res
+        .status(403)
+        .json({ error: 'You can only approve staff in your home' })
+    }
+
+    // Update status to active
+    const { error: updateError } = await supabaseAdmin
+      .from('profiles')
+      .update({ status: 'active' })
+      .eq('id', staffId)
+
+    if (updateError) {
+      console.error('approve-staff update error:', updateError)
+      return res.status(500).json({ error: updateError.message })
+    }
+
+    // Sync auth metadata
+    const { error: rpcError } = await supabaseAdmin.rpc('sync_auth_metadata', {
+      user_id: staffId,
+    })
+
+    if (rpcError) {
+      console.error('approve-staff sync_auth_metadata error:', rpcError)
+      // Don't fail — profile is already active
+    }
+
+    return res.status(200).json({ success: true })
+  } catch (err) {
+    console.error('approve-staff exception:', err)
+    return res.status(500).json({ error: 'Failed to approve staff' })
+  }
+})
+
+// ── POST /api/auth/decline-staff ───────────────────────────────
+// Declines a pending staff member
+// Validates requester has permission before updating
+router.post('/decline-staff', async (req, res) => {
+  const { staffId, requesterId, requesterRole, requesterHome } = req.body
+
+  if (!staffId || !requesterId || !requesterRole) {
+    return res.status(400).json({ error: 'Missing required fields' })
+  }
+
+  try {
+    const supabaseAdmin = getAdminClient()
+
+    // Fetch the staff member being declined
+    const { data: staffMember, error: fetchError } = await supabaseAdmin
+      .from('profiles')
+      .select('id, role, home, status')
+      .eq('id', staffId)
+      .single()
+
+    if (fetchError || !staffMember) {
+      return res.status(404).json({ error: 'Staff member not found' })
+    }
+
+    // Permission check
+    const isOLorAdmin = ['operationallead', 'superadmin'].includes(
+      requesterRole
+    )
+    const isRelief = staffMember.role === 'relief'
+
+    if (isRelief && !isOLorAdmin) {
+      return res.status(403).json({ error: 'Only OL can decline relief staff' })
+    }
+
+    if (!isRelief && !isOLorAdmin && staffMember.home !== requesterHome) {
+      return res
+        .status(403)
+        .json({ error: 'You can only decline staff in your home' })
+    }
+
+    // Update status to declined
+    const { error: updateError } = await supabaseAdmin
+      .from('profiles')
+      .update({ status: 'declined' })
+      .eq('id', staffId)
+
+    if (updateError) {
+      console.error('decline-staff update error:', updateError)
+      return res.status(500).json({ error: updateError.message })
+    }
+
+    return res.status(200).json({ success: true })
+  } catch (err) {
+    console.error('decline-staff exception:', err)
+    return res.status(500).json({ error: 'Failed to decline staff' })
+  }
+})
+
 export default router

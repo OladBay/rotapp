@@ -196,29 +196,31 @@ function Staff() {
 
   // ── Staff approval ──
   const handleApprove = async (staffMember) => {
-    // Relief staff — OL only
-    if (staffMember.role === 'relief' && !isOLorAdmin) return
-    // Home staff — must be manager of that home or OL
-    if (
-      staffMember.role !== 'relief' &&
-      !isOLorAdmin &&
-      staffMember.home !== user?.home
-    )
-      return
-
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({ status: 'active' })
-        .eq('id', staffMember.id)
-      if (error) throw error
+      const res = await fetch(
+        `${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/api/auth/approve-staff`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            staffId: staffMember.id,
+            requesterId: user.id,
+            requesterRole: user.activeRole,
+            requesterHome: user.home || null,
+          }),
+        }
+      )
 
-      await supabase.rpc('sync_auth_metadata', { user_id: staffMember.id })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        console.error('Approve failed:', data.error)
+        return
+      }
 
       const homeName =
         orgHomes.find((h) => h.id === staffMember.home)?.name || null
 
-      // Fetch org name directly from orgs table
+      // Fetch org name
       const { data: orgData } = await supabase
         .from('orgs')
         .select('name')
@@ -226,7 +228,7 @@ function Staff() {
         .single()
       const orgName = orgData?.name || null
 
-      // Send approval email via Resend
+      // Send approval email
       await fetch(
         `${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/api/email/staff-approved`,
         {
@@ -243,7 +245,7 @@ function Staff() {
         }
       )
 
-      // Send in-app notification to approved staff member
+      // Send in-app notification
       await notifyStaffApproved({
         orgId: user.org_id,
         recipientId: staffMember.id,
@@ -262,22 +264,27 @@ function Staff() {
   }
 
   const handleDecline = async (staffMember) => {
-    // Relief staff — OL only
-    if (staffMember.role === 'relief' && !isOLorAdmin) return
-    // Home staff — must be manager of that home or OL
-    if (
-      staffMember.role !== 'relief' &&
-      !isOLorAdmin &&
-      staffMember.home !== user?.home
-    )
-      return
-
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .update({ status: 'declined' })
-        .eq('id', staffMember.id)
-      if (error) throw error
+      const res = await fetch(
+        `${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/api/auth/decline-staff`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            staffId: staffMember.id,
+            requesterId: user.id,
+            requesterRole: user.activeRole,
+            requesterHome: user.home || null,
+          }),
+        }
+      )
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        console.error('Decline failed:', data.error)
+        return
+      }
+
       setStaffRefresh((n) => n + 1)
       setSelectedStaff(null)
     } catch (err) {
